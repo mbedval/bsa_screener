@@ -86,25 +86,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="card">
-            <h2>22-Day Close Price Projection</h2>
+            <h2>22-Day Price Projection & Target Trajectory</h2>
             <table>
                 <thead>
                     <tr>
-                        <th>Day 1-5</th>
-                        <th>Day 6-10</th>
-                        <th>Day 11-15</th>
-                        <th>Day 16-20</th>
-                        <th>Day 21-22</th>
+                        <th style="text-align: left; padding-left: 15px;">Forecast Horizon</th>
+                        <th>Projected Target</th>
+                        <th>Expected Trading Range</th>
+                        <th>Projected Move</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>{proj_1_5}</td>
-                        <td>{proj_6_10}</td>
-                        <td>{proj_11_15}</td>
-                        <td>{proj_16_20}</td>
-                        <td>{proj_21_22}</td>
-                    </tr>
+                    {proj_rows_html}
                 </tbody>
             </table>
         </div>
@@ -132,7 +125,7 @@ def generate_html_report(ticker: str) -> str:
                            a.projection_22d, a.option_insights, a.news_footprint, a.updated_at,
                            m.company_name, m.sector, m.exchange
                     FROM analysis_summaries a
-                    JOIN stock_meta m ON a.ticker = m.ticker
+                    JOIN ticker_master m ON a.ticker = m.ticker
                     WHERE a.ticker = %s
                 """, (ticker,))
                 row = cur.fetchone()
@@ -143,18 +136,51 @@ def generate_html_report(ticker: str) -> str:
 
         close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
         
+        from engine.analysis.options import analyze_options_chain
+        from engine.analysis.footprint import analyze_footprint_and_news
+
         # Parse JSON
         proj_list = json.loads(proj_raw) if proj_raw else []
-        opt_data = json.loads(opt_raw) if opt_raw else {}
-        foot_data = json.loads(foot_raw) if foot_raw else {}
+        opt_data = analyze_options_chain(ticker)
+        foot_data = analyze_footprint_and_news(ticker)
+        beh_s = round((foot_data["sentiment_score"] * 0.4) + ((foot_data["accumulation_score"] - 50.0) / 50.0 * 0.6), 2)
+        hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
 
-        # Format projection columns
-        p5 = lambda l: ", ".join(f"₹{x:.1f}" for x in l)
-        proj_1_5 = p5(proj_list[0:5])
-        proj_6_10 = p5(proj_list[5:10])
-        proj_11_15 = p5(proj_list[10:15])
-        proj_16_20 = p5(proj_list[15:20])
-        proj_21_22 = p5(proj_list[20:])
+        # Generate clean projection row metrics
+        periods = [
+            ("Week 1 (Day 1 - 5)", proj_list[0:5]),
+            ("Week 2 (Day 6 - 10)", proj_list[5:10]),
+            ("Week 3 (Day 11 - 15)", proj_list[10:15]),
+            ("Week 4 (Day 16 - 20)", proj_list[15:20]),
+            ("Monthly Close (Day 21 - 22)", proj_list[20:22]),
+        ]
+        
+        proj_rows_html = ""
+        for name_p, p_slice in periods:
+            if p_slice:
+                tgt = p_slice[-1]
+                p_min = min(p_slice)
+                p_max = max(p_slice)
+                delta_pct = ((tgt - close) / close) * 100 if close > 0 else 0.0
+                sign = "+" if delta_pct >= 0 else ""
+                color = "#15803d" if delta_pct >= 0 else "#b91c1c"
+                proj_rows_html += f"""
+                <tr>
+                    <td style="text-align: left; padding-left: 15px; font-weight: 600; color: #334155;">{name_p}</td>
+                    <td style="font-weight: 700; color: #0f172a;">₹{tgt:.2f}</td>
+                    <td style="color: #64748b;">₹{p_min:.2f} – ₹{p_max:.2f}</td>
+                    <td style="font-weight: 600; color: {color};">{sign}{delta_pct:.2f}%</td>
+                </tr>
+                """
+            else:
+                proj_rows_html += f"""
+                <tr>
+                    <td style="text-align: left; padding-left: 15px; font-weight: 600; color: #334155;">{name_p}</td>
+                    <td style="font-weight: 700; color: #0f172a;">₹{close:.2f}</td>
+                    <td style="color: #64748b;">₹{close:.2f} – ₹{close:.2f}</td>
+                    <td style="font-weight: 600; color: #64748b;">0.00%</td>
+                </tr>
+                """
 
         # Reasons list formatting
         reasons_li = "".join(f"<li>{r.strip()}</li>" for r in reasons.split(";") if r.strip())
@@ -185,11 +211,7 @@ def generate_html_report(ticker: str) -> str:
             phase=foot_data.get("phase", "Markup"),
             accumulation_score=foot_data.get("accumulation_score", 50),
             distribution_score=foot_data.get("distribution_score", 50),
-            proj_1_5=proj_1_5,
-            proj_6_10=proj_6_10,
-            proj_11_15=proj_11_15,
-            proj_16_20=proj_16_20,
-            proj_21_22=proj_21_22
+            proj_rows_html=proj_rows_html
         )
 
         with open(file_path, "w", encoding="utf-8") as f:

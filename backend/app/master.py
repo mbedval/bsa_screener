@@ -91,12 +91,14 @@ class UserIn(BaseModel):
     first_name: str
     last_name: str
     watchlist_id: Optional[int] = None
+    is_subscribed: bool = False
 
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     watchlist_id: Optional[int] = None
+    is_subscribed: Optional[bool] = None
 
 
 class AlternativeNameIn(BaseModel):
@@ -463,7 +465,7 @@ def list_users() -> list[dict]:
             SELECT
                 u.email, u.first_name, u.last_name,
                 u.watchlist_id, w.name AS watchlist_name,
-                u.created_at
+                u.is_subscribed, u.created_at
             FROM users u
             LEFT JOIN watchlist w ON w.id = u.watchlist_id
             ORDER BY u.email
@@ -478,11 +480,11 @@ def create_user(body: UserIn) -> dict:
         try:
             cur.execute(
                 """
-                INSERT INTO users (email, first_name, last_name, watchlist_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO users (email, first_name, last_name, watchlist_id, is_subscribed)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (body.email.lower(), body.first_name, body.last_name, body.watchlist_id),
+                (body.email.lower(), body.first_name, body.last_name, body.watchlist_id, body.is_subscribed),
             )
             row = cur.fetchone()
             conn.commit()
@@ -503,6 +505,8 @@ def update_user(email: str, body: UserUpdate) -> dict:
         updates.append("last_name = %s"); params.append(body.last_name)
     if body.watchlist_id is not None:
         updates.append("watchlist_id = %s"); params.append(body.watchlist_id)
+    if body.is_subscribed is not None:
+        updates.append("is_subscribed = %s"); params.append(body.is_subscribed)
     if not updates:
         raise HTTPException(400, "No fields to update.")
     params.append(email.lower())
@@ -698,3 +702,79 @@ def delete_excluded_ticker(id: int) -> None:
         if not cur.fetchone():
             raise _not_found("Excluded Ticker", id)
         conn.commit()
+
+
+# ─── Newsletter Dispatch Router ──────────────────────────────────────────────
+from pathlib import Path
+from engine.reports.pdf_generator import generate_pdf_report
+from engine.utils.email_sender import send_email_with_attachment
+
+@router.post("/users/{email}/newsletter-send")
+def send_user_newsletter(email: str):
+    """Generates PDF reports for a user's watchlist and emails them if they are subscribed."""
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        # Check user details & subscription status
+        cur.execute("SELECT first_name, watchlist_id, is_subscribed FROM users WHERE email = %s", (email.lower(),))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise _not_found("User", email)
+            
+        first_name, watchlist_id, is_subscribed = user_row["first_name"], user_row["watchlist_id"], user_row["is_subscribed"]
+        
+        if not is_subscribed:
+            raise HTTPException(400, f"User '{email}' is not subscribed to the newsletter.")
+            
+        if not watchlist_id:
+            raise HTTPException(400, f"User '{email}' does not have an assigned watchlist.")
+            
+        # Get watchlist tickers
+        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = %s", (watchlist_id,))
+        tickers = [row["ticker"] for row in cur.fetchall()]
+        
+    if not tickers:
+        raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
+        
+    pdf_paths = []
+    pdf_dir = Path("output/pdf")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate reports
+    for ticker in tickers:
+        pdf_path = pdf_dir / f"{ticker}_report.pdf"
+        if not pdf_path.exists():
+            generate_pdf_report(ticker)
+        if pdf_path.exists():
+            pdf_paths.append(str(pdf_path.resolve()))
+            
+    if not pdf_paths:
+        raise HTTPException(500, "Failed to generate PDF reports for the watchlist.")
+        
+    # Build inline HTML summary table
+    from send_newsletters import build_newsletter_html_table
+    table_html = build_newsletter_html_table(tickers)
+
+    # Send email
+    subject = f"Your BSA Daily Watchlist Reports - {datetime.now().strftime('%Y-%m-%d')}"
+    body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; color: #333; background-color: #f8fafc; padding: 20px;">
+            <div style="background-color: #ffffff; padding: 24px; border-radius: 8px; border: 1px solid #e2e8f0; max-width: 900px; margin: 0 auto;">
+                <h3 style="color: #0f172a; margin-top: 0;">Hello {first_name},</h3>
+                <p style="font-size: 14px; color: #475569;">Please find below the daily summary and attached PDF analysis reports for the tickers in your watchlist.</p>
+                
+                <h4 style="color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 6px; margin-top: 24px;">Watchlist Performance Snapshot</h4>
+                {table_html}
+                
+                <p style="font-size: 12px; color: #64748b; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                    This email was sent automatically by the <strong>BSA Screener Engine</strong>.
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    
+    sent = send_email_with_attachment(subject, body, pdf_paths, [email])
+    if not sent:
+        raise HTTPException(500, "Failed to deliver newsletter email via SMTP server.")
+        
+    return {"status": "success", "detail": f"Sent {len(pdf_paths)} reports to {email}"}

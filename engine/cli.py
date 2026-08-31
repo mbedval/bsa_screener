@@ -82,6 +82,35 @@ def main():
     if args.report:
         ticker = args.report.upper().strip()
         logger.info(f"Generating reports for: {ticker}")
+        
+        # Check if analyzed first, if not run it
+        from engine.database.connection import get_db_connection
+        has_summary = False
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM analysis_summaries WHERE ticker = %s", (ticker,))
+                    has_summary = cur.fetchone() is not None
+        except Exception:
+            pass
+
+        if not has_summary:
+            logger.info(f"No previous analysis found for {ticker}. Running download and analysis first...")
+            dl_ok = download_ticker_data(ticker)
+            if dl_ok:
+                is_fno = False
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
+                        row = cur.fetchone()
+                        if row:
+                            is_fno = row[0]
+                if is_fno:
+                    download_and_insert_derivatives(ticker)
+                analyze_and_summarize_ticker(ticker)
+            else:
+                logger.error(f"Download failed for {ticker}, cannot generate report.")
+
         html_path = generate_html_report(ticker)
         if html_path:
             logger.info(f"HTML Report: {html_path}")

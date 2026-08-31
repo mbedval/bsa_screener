@@ -30,7 +30,6 @@ RAW_DATA_TABLES = {
     "indicators_daily": {"label": "Indicators daily", "group": "Raw data"},
     "raw_fno_derivatives": {"label": "FNO Derivatives", "group": "Raw data"},
     "fundamentals": {"label": "Fundamentals", "group": "Raw data"},
-    "stock_meta": {"label": "Stock metadata", "group": "Raw data"},
     "subscribers": {"label": "Subscribers", "group": "Reference"},
     "delivery_to_trade": {"label": "Delivery to trade", "group": "Analysis"},
 }

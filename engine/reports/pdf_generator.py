@@ -61,7 +61,7 @@ def generate_pdf_report(ticker: str) -> str:
                            a.projection_22d, a.option_insights, a.news_footprint, a.updated_at,
                            m.company_name, m.sector, m.exchange
                     FROM analysis_summaries a
-                    JOIN stock_meta m ON a.ticker = m.ticker
+                    JOIN ticker_master m ON a.ticker = m.ticker
                     WHERE a.ticker = %s
                 """, (ticker,))
                 row = cur.fetchone()
@@ -72,10 +72,15 @@ def generate_pdf_report(ticker: str) -> str:
 
         close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
         
+        from engine.analysis.options import analyze_options_chain
+        from engine.analysis.footprint import analyze_footprint_and_news
+
         # Parse JSON
         proj_list = json.loads(proj_raw) if proj_raw else []
-        opt_data = json.loads(opt_raw) if opt_raw else {}
-        foot_data = json.loads(foot_raw) if foot_raw else {}
+        opt_data = analyze_options_chain(ticker)
+        foot_data = analyze_footprint_and_news(ticker)
+        beh_s = round((foot_data["sentiment_score"] * 0.4) + ((foot_data["accumulation_score"] - 50.0) / 50.0 * 0.6), 2)
+        hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
         
         timestamp_str = updated.strftime("%Y-%m-%d %H:%M:%S") if updated else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -197,27 +202,49 @@ def generate_pdf_report(ticker: str) -> str:
             pdf.cell(0, 6, val, 0, 1)
         pdf.ln(10)
         
-        # Projection Table
+        # Projection Table (Row-based with Target, Range, and Expected Move)
         pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 6, "22-Day Forecast Trajectory:", 0, 1)
-        pdf.ln(2)
-        
+        pdf.cell(0, 6, "22-Day Forecast Trajectory & Target Ranges:", 0, 1)
+        pdf.ln(3)
+
+        pdf.set_fill_color(241, 245, 249)
         pdf.set_font('Arial', 'B', 9)
-        pdf.cell(38, 7, "Day 1 - 5", 1, 0, 'C')
-        pdf.cell(38, 7, "Day 6 - 10", 1, 0, 'C')
-        pdf.cell(38, 7, "Day 11 - 15", 1, 0, 'C')
-        pdf.cell(38, 7, "Day 16 - 20", 1, 0, 'C')
-        pdf.cell(28, 7, "Day 21 - 22", 1, 1, 'C')
+        pdf.cell(48, 7, "  Forecast Horizon", 1, 0, 'L', True)
+        pdf.cell(42, 7, "Projected Target", 1, 0, 'C', True)
+        pdf.cell(52, 7, "Expected Trading Range", 1, 0, 'C', True)
+        pdf.cell(38, 7, "Projected Move", 1, 1, 'C', True)
+
+        periods = [
+            ("Week 1 (Day 1 - 5)", proj_list[0:5]),
+            ("Week 2 (Day 6 - 10)", proj_list[5:10]),
+            ("Week 3 (Day 11 - 15)", proj_list[10:15]),
+            ("Week 4 (Day 16 - 20)", proj_list[15:20]),
+            ("Monthly Close (Day 21 - 22)", proj_list[20:22]),
+        ]
+
+        for p_name, p_slice in periods:
+            if p_slice:
+                tgt = p_slice[-1]
+                p_min = min(p_slice)
+                p_max = max(p_slice)
+                delta_pct = ((tgt - close) / close) * 100 if close > 0 else 0.0
+                sign = "+" if delta_pct >= 0 else ""
+                
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(48, 7, f"  {p_name}", 1, 0, 'L')
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(42, 7, f"Rs. {tgt:.2f}", 1, 0, 'C')
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(52, 7, f"Rs. {p_min:.2f} - Rs. {p_max:.2f}", 1, 0, 'C')
+                pdf.cell(38, 7, f"{sign}{delta_pct:.2f}%", 1, 1, 'C')
+            else:
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(48, 7, f"  {p_name}", 1, 0, 'L')
+                pdf.cell(42, 7, f"Rs. {close:.2f}", 1, 0, 'C')
+                pdf.cell(52, 7, f"Rs. {close:.2f} - Rs. {close:.2f}", 1, 0, 'C')
+                pdf.cell(38, 7, "0.00%", 1, 1, 'C')
         
-        p5 = lambda l: ", ".join(f"{x:.0f}" for x in l)
-        pdf.set_font('Arial', '', 9)
-        pdf.cell(38, 7, p5(proj_list[0:5]), 1, 0, 'C')
-        pdf.cell(38, 7, p5(proj_list[5:10]), 1, 0, 'C')
-        pdf.cell(38, 7, p5(proj_list[10:15]), 1, 0, 'C')
-        pdf.cell(38, 7, p5(proj_list[15:20]), 1, 0, 'C')
-        pdf.cell(28, 7, p5(proj_list[20:]), 1, 1, 'C')
-        
-        pdf.ln(15)
+        pdf.ln(12)
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(0, 6, "End of Analysis Report.", 0, 1, 'C')
 

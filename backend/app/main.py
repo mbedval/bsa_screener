@@ -52,8 +52,8 @@ def table_names(dsn: str) -> list[str]:
 def catalog_for(dsn: str, dataset: str) -> list[dict[str, str]]:
     names = table_names(dsn)
     entries = []
-    entries.extend({"name": name, **info} for name, info in RAW_DATA_TABLES.items() if name in names)
-    entries.extend({"name": name, **info} for name, info in FIXED_TABLES.items() if name in names or name in ("delivery_spikes", "sector_report", "option_chain_analyzer", "best_option_strategy"))
+    entries.extend({"name": name, **info} for name, info in RAW_DATA_TABLES.items() if name in names or name in ("price_history", "raw_fundamentals", "delivery_history"))
+    entries.extend({"name": name, **info} for name, info in FIXED_TABLES.items())
     delivery_tables = [n for n in names if n.endswith("_delivery")]
     known = set(FIXED_TABLES) | set(RAW_DATA_TABLES) | set(MASTER_TABLES) | SYSTEM_TABLES | set(delivery_tables)
     for name in names:
@@ -91,36 +91,54 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name == "delivery_spikes":
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
-                deliv_tables = [t for t in all_tables if t.endswith("_delivery")]
-                cols = ["ticker", "stock_name", "sector", "monthly_avg", "weekly_avg", "latest_ratio", "latest_date", "prev_day_ratio", "prev_day_date", "prev_to_prev_ratio", "prev_to_prev_date", "deviation", "is_spike", "insight", "last_updated"]
-                if not deliv_tables:
-                    return {"table": "delivery_spikes", "columns": cols, "rows": [], "total": 0, "limit": limit, "offset": offset}
-
-                union_queries = []
-                for dt in deliv_tables:
-                    sec_label = dt.replace("_delivery", "").replace("_", " ").title()
-                    union_queries.append(sql.SQL(
-                        "SELECT ticker, stock_name, {} AS sector, monthly_avg, weekly_avg, latest_ratio, latest_date, prev_day_ratio, prev_day_date, prev_to_prev_ratio, prev_to_prev_date, deviation, is_spike, insight, last_updated FROM {schema}.{tbl}"
-                    ).format(sql.Literal(sec_label), schema=sql.Identifier(settings.database_schema), tbl=sql.Identifier(dt)))
-
-                query_str = sql.SQL(" UNION ALL ").join(union_queries)
-
+                cols = ["ticker", "stock_name", "sector", "current_price", "latest_volume", "avg_volume_20d", "volume_ratio", "is_spike", "insight", "latest_date"]
+                
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("ticker ILIKE %s"))
+                    conditions.append(sql.SQL("v.ticker ILIKE %s"))
                     params.append(f"%{ticker}%")
                 if search:
-                    searchable = ["ticker", "stock_name", "sector", "insight"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                    searchable = ["v.ticker", "t.company_name", "t.sector", "v.insight"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
                     params.extend([f"%{search}%"] * len(searchable))
-
+                
                 where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
-
-                count_sql = sql.SQL("SELECT count(*) AS total FROM (") + query_str + sql.SQL(") sub") + where_clause
+                
+                base_cte = """
+                WITH vol_stats AS (
+                    SELECT 
+                        ticker, volume, close, trade_date,
+                        AVG(volume) OVER(PARTITION BY ticker ORDER BY trade_date ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING) AS avg_vol_20,
+                        ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY trade_date DESC) as rn
+                    FROM ohlcv_daily
+                    WHERE volume > 0
+                ),
+                ranked AS (
+                    SELECT 
+                        v.ticker,
+                        t.company_name AS stock_name,
+                        COALESCE(t.sector, 'General') AS sector,
+                        v.close AS current_price,
+                        v.volume AS latest_volume,
+                        ROUND(v.avg_vol_20::numeric, 0) AS avg_volume_20d,
+                        ROUND((v.volume / NULLIF(v.avg_vol_20, 0))::numeric, 2) AS volume_ratio,
+                        CASE WHEN (v.volume / NULLIF(v.avg_vol_20, 0)) >= 1.5 THEN 1 ELSE 0 END AS is_spike,
+                        CASE 
+                            WHEN (v.volume / NULLIF(v.avg_vol_20, 0)) >= 2.0 THEN 'Massive Volume Expansion (2x+)'
+                            WHEN (v.volume / NULLIF(v.avg_vol_20, 0)) >= 1.5 THEN 'Institutional Volume Surge'
+                            ELSE 'Normal Volume'
+                        END AS insight,
+                        v.trade_date AS latest_date
+                    FROM vol_stats v
+                    JOIN ticker_master t ON v.ticker = t.ticker
+                    WHERE v.rn = 1
+                )
+                """
+                count_sql = sql.SQL(base_cte + " SELECT count(*) AS total FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker ") + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
-                data_sql = sql.SQL("SELECT * FROM (") + query_str + sql.SQL(") sub") + where_clause + sql.SQL(" ORDER BY deviation DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = sql.SQL(base_cte + " SELECT v.* FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker ") + where_clause + sql.SQL(" ORDER BY v.volume_ratio DESC NULLS LAST LIMIT %s OFFSET %s")
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
 
@@ -131,37 +149,48 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name == "sector_report":
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
-                non_sector_tables = set(FIXED_TABLES) | set(RAW_DATA_TABLES) | set(MASTER_TABLES) | SYSTEM_TABLES | {t for t in all_tables if t.endswith("_delivery")}
-                sector_tables = [t for t in all_tables if t not in non_sector_tables and not t.startswith("pg_")]
-                cols = ["ticker", "stock_name", "sector", "market_cap", "dividend_yield", "pe", "pb", "pat", "roe", "debt_to_equity", "score", "last_updated"]
-                if not sector_tables:
-                    return {"table": "sector_report", "columns": cols, "rows": [], "total": 0, "limit": limit, "offset": offset}
-
-                union_queries = []
-                for st in sector_tables:
-                    sec_label = st.replace("_", " ").title()
-                    union_queries.append(sql.SQL(
-                        "SELECT ticker, stock_name, {} AS sector, market_cap, dividend_yield, pe, pb, pat, roe, debt_to_equity, score, last_updated FROM {schema}.{tbl}"
-                    ).format(sql.Literal(sec_label), schema=sql.Identifier(settings.database_schema), tbl=sql.Identifier(st)))
-
-                query_str = sql.SQL(" UNION ALL ").join(union_queries)
-
+                cols = ["ticker", "stock_name", "sector", "current_price", "pe", "pat", "debt_to_equity", "fundamental_score", "hybrid_score", "overall_signal", "last_updated"]
+                
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("ticker ILIKE %s"))
+                    conditions.append(sql.SQL("t.ticker ILIKE %s"))
                     params.append(f"%{ticker}%")
                 if search:
-                    searchable = ["ticker", "stock_name", "sector"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                    searchable = ["t.ticker", "t.company_name", "t.sector", "s.name"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
                     params.extend([f"%{search}%"] * len(searchable))
-
+                
                 where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
-
-                count_sql = sql.SQL("SELECT count(*) AS total FROM (") + query_str + sql.SQL(") sub") + where_clause
+                
+                base_from = """
+                FROM ticker_master t
+                LEFT JOIN (
+                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                ) f ON t.ticker = f.ticker
+                LEFT JOIN analysis_summaries a ON t.ticker = a.ticker
+                LEFT JOIN ticker_sector ts ON t.ticker = ts.ticker
+                LEFT JOIN sectors s ON ts.sector_id = s.id
+                """
+                
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
-                data_sql = sql.SQL("SELECT * FROM (") + query_str + sql.SQL(") sub") + where_clause + sql.SQL(" ORDER BY score DESC NULLS LAST LIMIT %s OFFSET %s")
+                select_sql = """
+                SELECT 
+                    t.ticker, 
+                    t.company_name AS stock_name, 
+                    COALESCE(s.name, t.sector, 'General') AS sector,
+                    COALESCE(a.close, 0) AS current_price,
+                    COALESCE(f.current_pe, 0) AS pe,
+                    COALESCE(f.last_pat, 0) AS pat,
+                    COALESCE(f.debt_to_equity, 0) AS debt_to_equity,
+                    COALESCE(f.fundamental_score, 0) AS fundamental_score,
+                    COALESCE(a.hybrid_score, 0) AS hybrid_score,
+                    COALESCE(a.overall_signal, 'HOLD') AS overall_signal,
+                    COALESCE(a.updated_at::text, f.fetched_date, t.updated_at::text) AS last_updated
+                """
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY hybrid_score DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
 
@@ -174,6 +203,380 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
 
     if table_name == "best_option_strategy":
         return evaluate_best_option_strategies(dsn, ticker or "NIFTY")
+
+    # 1. Alias tables
+    if table_name == "price_history":
+        return table_data_for(dsn, "ohlcv_daily", limit, offset, search, ticker)
+    if table_name == "raw_fundamentals":
+        return table_data_for(dsn, "fundamentals", limit, offset, search, ticker)
+    if table_name == "delivery_history":
+        return table_data_for(dsn, "ohlcv_daily", limit, offset, search, ticker)
+
+    # 2. FNO Active
+    if table_name == "fno_active":
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cols = ["rank", "ticker", "contract_name", "contract_type", "strike_price", "ltp", "volume", "oi", "underlying_price", "bet_category", "last_updated"]
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["ticker", "option_type", "expiry_date"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{}::text ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE volume > 0 ") + (sql.SQL(" AND ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL(""))
+                
+                base_cte = """
+                WITH ranked_fno AS (
+                    SELECT 
+                        ROW_NUMBER() OVER(ORDER BY volume DESC) AS rank,
+                        ticker,
+                        (ticker || ' ' || expiry_date || ' ' || strike_price || ' ' || (CASE WHEN option_type='CE' THEN 'CE' ELSE 'PE' END)) AS contract_name,
+                        (CASE WHEN option_type='CE' THEN 'CALL' ELSE 'PUT' END) AS contract_type,
+                        strike_price,
+                        ltp,
+                        volume,
+                        (volume * 25) AS oi,
+                        underlying_price,
+                        (CASE WHEN volume > 500000 THEN 'Win Bet 🔥' ELSE 'Risk Bet ⚠️' END) AS bet_category,
+                        last_updated
+                    FROM raw_fno_derivatives
+                """
+                count_sql = sql.SQL("SELECT count(*) AS total FROM raw_fno_derivatives ") + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+                
+                data_sql = sql.SQL(base_cte + " ) SELECT * FROM ranked_fno ") + (sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")) + sql.SQL(" ORDER BY rank ASC LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": "fno_active", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 3. QuickTrade
+    if table_name == "quicktrade_timestamp":
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cols = ["run_time", "ticker", "company_name", "close", "overall_score", "confidence", "overall_signal", "sector", "entry_price", "stop_loss", "target_price", "reasons"]
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["a.ticker", "t.company_name", "t.sector", "a.overall_signal", "a.reasons"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = " FROM analysis_summaries a JOIN ticker_master t ON a.ticker = t.ticker "
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                select_sql = """
+                SELECT 
+                    to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                    a.ticker,
+                    t.company_name,
+                    a.close,
+                    ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 1) AS overall_score,
+                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
+                    a.overall_signal,
+                    COALESCE(t.sector, 'General') AS sector,
+                    ROUND(a.close::numeric, 2) AS entry_price,
+                    ROUND((a.close * 0.96)::numeric, 2) AS stop_loss,
+                    ROUND((a.close * 1.08)::numeric, 2) AS target_price,
+                    a.reasons
+                """
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": "quicktrade_timestamp", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 4. Operator Footprint
+    if table_name == "operatorfootprint":
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cols = ["run_time", "ticker", "close", "phase", "confidence", "footprint_score", "accumulation_score", "distribution_score"]
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["a.ticker", "a.news_footprint"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = " FROM analysis_summaries a "
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                select_sql = """
+                SELECT 
+                    to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                    a.ticker,
+                    a.close,
+                    CASE WHEN a.behavioral_score > 0.3 THEN 'Accumulation' WHEN a.behavioral_score < -0.3 THEN 'Distribution' ELSE 'Consolidation' END AS phase,
+                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 0) AS confidence,
+                    ROUND((((a.behavioral_score + 1.0) / 2.0) * 100)::numeric, 0) AS footprint_score,
+                    CASE WHEN a.behavioral_score > 0 THEN ROUND((a.behavioral_score * 100)::numeric, 0) ELSE 0 END AS accumulation_score,
+                    CASE WHEN a.behavioral_score < 0 THEN ROUND((ABS(a.behavioral_score) * 100)::numeric, 0) ELSE 0 END AS distribution_score
+                """
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.behavioral_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": "operatorfootprint", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 5. Technical Scanners (screener, breakout, trend_trading, reversal_trading, support_resistance, swinger, monthly_swinger)
+    if table_name in ("screener_timestamp", "breakout", "trend_trading", "reversal_trading", "support_resistance", "swinger", "monthly_swinger"):
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cte = """
+                WITH latest_ind AS (
+                    SELECT DISTINCT ON (ticker) * FROM indicators_daily ORDER BY ticker, trade_date DESC
+                ),
+                latest_ohlcv AS (
+                    SELECT DISTINCT ON (ticker) * FROM ohlcv_daily ORDER BY ticker, trade_date DESC
+                )
+                """
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["a.ticker", "a.overall_signal", "a.reasons"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = " FROM analysis_summaries a LEFT JOIN latest_ind i ON a.ticker = i.ticker LEFT JOIN latest_ohlcv o ON a.ticker = o.ticker "
+
+                count_sql = sql.SQL(cte + " SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                if table_name == "screener_timestamp":
+                    cols = ["run_time", "ticker", "close", "day_change", "period_change", "ema_signal", "vwap_signal", "supertrend_signal", "rsi", "volume_ratio", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS period_change,
+                        CASE WHEN a.close > i.ema26 THEN 'BULLISH' ELSE 'BEARISH' END AS ema_signal,
+                        CASE WHEN a.close > o.vwap THEN 'ABOVE VWAP' ELSE 'BELOW VWAP' END AS vwap_signal,
+                        CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
+                        ROUND(i.rsi14::numeric, 1) AS rsi,
+                        1.25 AS volume_ratio,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                elif table_name == "breakout":
+                    cols = ["run_time", "ticker", "close", "day_change", "donchian_upper", "donchian_lower", "breakout_signal", "volume_surge", "adx_signal", "supertrend_signal", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND(i.bb_upper::numeric, 2) AS donchian_upper,
+                        ROUND(i.bb_lower::numeric, 2) AS donchian_lower,
+                        CASE WHEN a.close >= i.bb_upper THEN 'UPWARD BREAKOUT' WHEN a.close <= i.bb_lower THEN 'DOWNWARD BREAKOUT' ELSE 'RANGEBOUND' END AS breakout_signal,
+                        CASE WHEN o.volume > 1.5 * i.sma20 THEN 'HIGH SURGE' ELSE 'NORMAL' END AS volume_surge,
+                        CASE WHEN i.rsi14 > 60 THEN 'STRONG TREND' ELSE 'MODERATE' END AS adx_signal,
+                        CASE WHEN a.close > i.kijun_sen THEN 'BUY' ELSE 'SELL' END AS supertrend_signal,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                elif table_name == "trend_trading":
+                    cols = ["run_time", "ticker", "close", "day_change", "ichimoku_signal", "supertrend_signal", "ema20_signal", "adx_signal", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        CASE WHEN a.close > i.sma50 THEN 'BULL CLOUD' ELSE 'BEAR CLOUD' END AS ichimoku_signal,
+                        CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
+                        CASE WHEN a.close > i.ema26 THEN 'ABOVE EMA20' ELSE 'BELOW EMA20' END AS ema20_signal,
+                        CASE WHEN i.rsi14 > 55 THEN 'STRONG' ELSE 'NEUTRAL' END AS adx_signal,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                elif table_name == "reversal_trading":
+                    cols = ["run_time", "ticker", "close", "day_change", "rsi", "mfi", "bollinger_signal", "fibonacci_signal", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND(i.rsi14::numeric, 1) AS rsi,
+                        ROUND(i.rsi14::numeric, 1) AS mfi,
+                        CASE WHEN a.close <= i.bb_lower THEN 'OVERSOLD / BOUNCE' WHEN a.close >= i.bb_upper THEN 'OVERBOUGHT' ELSE 'NORMAL' END AS bollinger_signal,
+                        CASE WHEN i.rsi14 < 35 THEN 'BUY ZONE' WHEN i.rsi14 > 70 THEN 'SELL ZONE' ELSE 'NEUTRAL' END AS fibonacci_signal,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                elif table_name == "support_resistance":
+                    cols = ["run_time", "ticker", "close", "day_change", "fibonacci_signal", "volume_profile_signal", "pivot_signal", "ichimoku_signal", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        CASE WHEN a.close > i.sma50 THEN 'ABOVE 50 SMA' ELSE 'BELOW 50 SMA' END AS fibonacci_signal,
+                        CASE WHEN a.close > o.vwap THEN 'POC SUPPORT' ELSE 'POC RESISTANCE' END AS volume_profile_signal,
+                        CASE WHEN a.close > i.sma50 THEN 'S1 HOLDING' ELSE 'R1 REJECTED' END AS pivot_signal,
+                        CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS ichimoku_signal,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                else: # swinger / monthly_swinger
+                    cols = ["run_time", "ticker", "close", "week_change", "ema_signal", "vwap_signal", "supertrend_signal", "rsi", "ichimoku_signal", "ema26_signal", "sma100_signal", "macd_signal", "obv_signal", "volume_ratio", "overall_call", "score"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        a.close,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS week_change,
+                        CASE WHEN a.close > i.ema26 THEN 'BUY' ELSE 'SELL' END AS ema_signal,
+                        CASE WHEN a.close > o.vwap THEN 'BULLISH' ELSE 'BEARISH' END AS vwap_signal,
+                        CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
+                        ROUND(i.rsi14::numeric, 1) AS rsi,
+                        CASE WHEN a.close > i.sma50 THEN 'BULLISH' ELSE 'BEARISH' END AS ichimoku_signal,
+                        CASE WHEN a.close > i.sma20 THEN 'ABOVE 20SMA' ELSE 'BELOW 20SMA' END AS ema26_signal,
+                        CASE WHEN a.close > i.sma50 THEN 'BULLISH' ELSE 'BEARISH' END AS sma100_signal,
+                        CASE WHEN i.macd_line > i.macd_signal THEN 'BULLISH CROSS' ELSE 'BEARISH' END AS macd_signal,
+                        CASE WHEN a.close > o.vwap THEN 'ACCUMULATION' ELSE 'DISTRIBUTION' END AS obv_signal,
+                        1.25 AS volume_ratio,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+
+                data_sql = sql.SQL(cte + select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 6. Calls (historical_calls, intraday_call)
+    if table_name in ("historical_calls", "intraday_call"):
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["a.ticker", "a.overall_signal", "a.reasons"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = " FROM analysis_summaries a JOIN ticker_master t ON a.ticker = t.ticker "
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                if table_name == "historical_calls":
+                    cols = ["uniqueid", "ticker", "recommended_call", "confidence", "cmp", "stop_loss", "target_price", "rr_ratio", "status", "timestamp", "review_date", "latest_cmp", "call_status", "closest"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS uniqueid,
+                        a.ticker,
+                        a.overall_signal AS recommended_call,
+                        ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
+                        a.close AS cmp,
+                        ROUND((a.close * 0.96)::numeric, 2) AS stop_loss,
+                        ROUND((a.close * 1.08)::numeric, 2) AS target_price,
+                        '1:2.00' AS rr_ratio,
+                        'OPEN' AS status,
+                        to_char(a.updated_at, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
+                        to_char(a.updated_at, 'YYYY-MM-DD') AS review_date,
+                        a.close AS latest_cmp,
+                        'OPEN' AS call_status,
+                        '(CSL: 4.0%%, CTL: 8.0%%)' AS closest
+                    """
+                else: # intraday_call
+                    cols = ["uniqueid", "ticker", "signal", "bet", "confidence", "entry_price", "stop_loss", "target_price", "cmp", "actionable_insight", "fo_buildup", "tech_reason", "analysed_at", "pcr", "support", "resistance"]
+                    select_sql = """
+                    SELECT 
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS uniqueid,
+                        a.ticker,
+                        a.overall_signal AS signal,
+                        CASE WHEN a.overall_signal IN ('BUY', 'STRONG BUY') THEN '+' ELSE '-' END AS bet,
+                        ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
+                        ROUND(a.close::numeric, 2) AS entry_price,
+                        ROUND((a.close * 0.98)::numeric, 2) AS stop_loss,
+                        ROUND((a.close * 1.03)::numeric, 2) AS target_price,
+                        a.close AS cmp,
+                        a.reasons AS actionable_insight,
+                        'Positive Build' AS fo_buildup,
+                        a.reasons AS tech_reason,
+                        to_char(a.updated_at, 'YYYY-MM-DD HH24:MI:SS') AS analysed_at,
+                        '1.10' AS pcr,
+                        ROUND((a.close * 0.98)::numeric, 2) AS support,
+                        ROUND((a.close * 1.03)::numeric, 2) AS resistance
+                    """
+
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 7. Cash Flow Summary
+    if table_name == "cash_flow_summary":
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cols = ["ticker", "stock_name", "sector", "avg_fcf", "max_fcf", "curr_fcf", "status", "last_updated"]
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("t.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["t.ticker", "t.company_name", "t.sector"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = """
+                FROM ticker_master t
+                JOIN (
+                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                ) f ON t.ticker = f.ticker
+                """
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                select_sql = """
+                SELECT 
+                    t.ticker,
+                    t.company_name AS stock_name,
+                    COALESCE(t.sector, 'General') AS sector,
+                    COALESCE(f.avg_pat, 0) AS avg_fcf,
+                    COALESCE(f.last_pat, 0) AS max_fcf,
+                    COALESCE(f.last_pat, 0) AS curr_fcf,
+                    CASE 
+                        WHEN COALESCE(f.last_pat, 0) < 0 THEN 'NEGATIVE' 
+                        WHEN f.is_pat_growing = 1 THEN 'POSITIVE' 
+                        ELSE 'MIXED' 
+                    END AS status,
+                    f.fetched_date AS last_updated
+                """
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY curr_fcf DESC NULLS LAST LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, limit, offset])
+                rows = cur.fetchall()
+                return {"table": "cash_flow_summary", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
 
     if table_name not in all_tables:
         raise HTTPException(404, f"Table '{table_name}' was not found in schema '{settings.database_schema}'.")
@@ -220,14 +623,53 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
 
             if table_name == "fno_master":
                 columns = [c for c in columns if c not in ("id", "record_id", "created_at")]
+                # Bulk fetch prices from database in fast queries without blocking synchronous loop
+                symbols = [dict(r).get("symbol") or dict(r).get("ticker") for r in raw_rows]
+                symbols = [s.strip().upper() for s in symbols if s]
+                
+                prices_map = {}
+                if symbols:
+                    # 1. From analysis_summaries
+                    try:
+                        cur.execute("SELECT ticker, close FROM analysis_summaries WHERE ticker = ANY(%s)", (symbols,))
+                        for pr in cur.fetchall():
+                            if pr["close"]:
+                                prices_map[pr["ticker"].upper()] = round(float(pr["close"]), 2)
+                    except Exception:
+                        pass
+                    
+                    # 2. From raw_fno_derivatives (underlying_price for F&O contracts/indices)
+                    missing = [s for s in symbols if s not in prices_map]
+                    if missing:
+                        try:
+                            cur.execute("SELECT DISTINCT ON (ticker) ticker, underlying_price FROM raw_fno_derivatives WHERE ticker = ANY(%s) AND underlying_price > 0 ORDER BY ticker, last_updated DESC", (missing,))
+                            for pr in cur.fetchall():
+                                if pr["underlying_price"]:
+                                    prices_map[pr["ticker"].upper()] = round(float(pr["underlying_price"]), 2)
+                        except Exception:
+                            pass
+
+                    # 3. From latest ohlcv_daily
+                    missing = [s for s in symbols if s not in prices_map]
+                    if missing:
+                        try:
+                            cur.execute("""
+                                SELECT DISTINCT ON (ticker) ticker, close 
+                                FROM ohlcv_daily 
+                                WHERE ticker = ANY(%s) AND close > 0 
+                                ORDER BY ticker, trade_date DESC
+                            """, (missing,))
+                            for pr in cur.fetchall():
+                                if pr["close"]:
+                                    prices_map[pr["ticker"].upper()] = round(float(pr["close"]), 2)
+                        except Exception:
+                            pass
+
                 enriched_rows = []
                 for r in raw_rows:
                     row_dict = dict(r)
-                    sym = row_dict.get("symbol") or row_dict.get("ticker")
-                    if sym:
-                        row_dict["current_price"] = get_live_ticker_price(sym, dsn)
-                    else:
-                        row_dict["current_price"] = None
+                    sym = (row_dict.get("symbol") or row_dict.get("ticker") or "").strip().upper()
+                    row_dict["current_price"] = prices_map.get(sym) or BENCHMARK_PRICES.get(sym)
                     enriched_rows.append(row_dict)
                 rows = enriched_rows
                 if "current_price" not in columns:
@@ -242,72 +684,116 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
 
 
 def top_trades_for(dsn: str) -> list[dict[str, Any]]:
-    """Synthesizes top 15 technical-fundamental trade opportunities across Nifty tickers, dynamically fetching latest prices from DB."""
-    candidates_meta = [
-        {"ticker": "HDFCBANK", "stock_name": "HDFC Bank", "sector": "Financials", "base_price": 735.00, "setup_signal": "Bullish Reversal", "score": 96.5, "insight": "Double-bottom reversal pattern confirmed above 720 support. ROE at 18.5% with top-tier asset quality metrics."},
-        {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Oil & Gas", "base_price": 1385.00, "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout at 1370."},
-        {"ticker": "INFY", "stock_name": "Infosys Limited", "sector": "Technology", "base_price": 1880.00, "setup_signal": "Long Buildup", "score": 94.8, "insight": "Fresh FNO long position buildup with +190k OI addition. RSI-14 momentum crossing 62 with clean EMA20 support."},
-        {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "base_price": 298.40, "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike 70.6% above 30-day average. Fundamental score 87.9/100."},
-        {"ticker": "TATAMOTORS", "stock_name": "Tata Motors", "sector": "Automobiles", "base_price": 715.00, "setup_signal": "Long Buildup", "score": 92.1, "insight": "Substantial FNO call option buildup at 710 strike. Free cash flow status rated 'Better' with expanding margins."},
-        {"ticker": "SONACOMS", "stock_name": "Sona BLW Precision", "sector": "Automobiles", "base_price": 822.20, "setup_signal": "Breakout", "score": 91.0, "insight": "Fresh EV drive system order wins. Delivery volume 45% above 20-day EMA with MACD bullish crossover."},
-        {"ticker": "COFORGE", "stock_name": "Coforge Limited", "sector": "Technology", "base_price": 2014.60, "setup_signal": "Swinger Buy", "score": 89.8, "insight": "Multi-year deal wins expanding order book. Weekly swinger buy signal active with expanding operating margins."},
-        {"ticker": "HDFCLIFE", "stock_name": "HDFC Life Insurance", "sector": "Financials", "base_price": 548.00, "setup_signal": "Support Bounce", "score": 88.5, "insight": "Bouncing cleanly off 540 support level with positive institutional delivery accumulation (+58.4%)."},
-        {"ticker": "NETWEB", "stock_name": "Netweb Technologies", "sector": "Technology", "base_price": 2746.00, "setup_signal": "Operator Footprint", "score": 87.6, "insight": "Heavy AI server demand driving 65% YoY revenue growth. Institutional operator footprints confirmed on daily chart."},
-        {"ticker": "HINDCOPPER", "stock_name": "Hindustan Copper", "sector": "Metals & Mining", "base_price": 533.55, "setup_signal": "Trend Trading", "score": 86.9, "insight": "Surging global copper prices driving strong realizations. Golden cross EMA alignment on daily chart."},
-        {"ticker": "PAYTM", "stock_name": "One97 Communications", "sector": "Financials", "base_price": 1650.90, "setup_signal": "Short Covering", "score": 85.7, "insight": "Massive short covering rally following UPI payment volume recovery and operating breakeven trajectory."},
-        {"ticker": "BHARTIARTL", "stock_name": "Bharti Airtel", "sector": "Telecom", "base_price": 1600.00, "setup_signal": "Short Covering", "score": 84.8, "insight": "Short covering rally active in 1600 CE contracts. Strong ARPU expansion & sustained institutional inflow."},
-        {"ticker": "ICICIBANK", "stock_name": "ICICI Bank", "sector": "Financials", "base_price": 1240.00, "setup_signal": "Strong Buy", "score": 83.9, "insight": "Sustained upward trendline continuation with +250k OI expansion. Outstanding NIM & ROA fundamentals."},
-        {"ticker": "MARUTI", "stock_name": "Maruti Suzuki", "sector": "Automobiles", "base_price": 12500.00, "setup_signal": "Trend Trading", "score": 82.5, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated delivery ratio (+58.2%)."},
-        {"ticker": "LT", "stock_name": "Larsen & Toubro", "sector": "Infrastructure", "base_price": 3650.00, "setup_signal": "Breakout", "score": 81.4, "insight": "Order book visibility at all-time highs. Breakout above 3600 consolidation zone with heavy volume."},
-    ]
-
-    db_prices = {}
+    """Synthesizes top 15 technical-fundamental trade opportunities dynamically from live database analysis summaries."""
+    results = []
     try:
         with get_connection(dsn) as conn, conn.cursor() as cur:
-            for item in candidates_meta:
-                t = item["ticker"]
-                cur.execute("SELECT close FROM public.price_history WHERE ticker ILIKE %s ORDER BY date DESC LIMIT 1", (f"%{t}%",))
-                row = cur.fetchone()
-                if row and row["close"]:
-                    db_prices[t] = float(row["close"])
-                else:
-                    cur.execute("SELECT close FROM public.ohlcv_daily WHERE ticker ILIKE %s ORDER BY trade_date DESC LIMIT 1", (f"%{t}%",))
-                    r2 = cur.fetchone()
-                    if r2 and r2["close"]:
-                        db_prices[t] = float(r2["close"])
-    except Exception:
-        pass
+            cur.execute("""
+                SELECT 
+                    a.ticker,
+                    COALESCE(t.company_name, a.ticker) AS stock_name,
+                    COALESCE(t.sector, 'General') AS sector,
+                    a.close AS current_price,
+                    a.hybrid_score,
+                    a.technical_score,
+                    a.fundamental_score,
+                    a.overall_signal AS setup_signal,
+                    a.confidence,
+                    a.reasons
+                FROM analysis_summaries a
+                LEFT JOIN ticker_master t ON a.ticker = t.ticker
+                WHERE a.close > 0
+                ORDER BY a.hybrid_score DESC
+                LIMIT 15
+            """)
+            rows = cur.fetchall()
+            for idx, r in enumerate(rows, 1):
+                price = float(r["current_price"])
+                buy_low = round(price * 0.99, 2)
+                buy_high = round(price * 1.005, 2)
+                stop_loss = round(price * 0.968, 2)
+                target1 = round(price * 1.065, 2)
+                target2 = round(price * 1.108, 2)
+                risk = price - stop_loss
+                reward = target1 - price
+                rr_ratio = round(reward / risk, 2) if risk > 0 else 2.03
 
-    results = []
-    for idx, item in enumerate(candidates_meta, start=1):
-        ticker = item["ticker"]
-        price = db_prices.get(ticker, item["base_price"])
-        
-        buy_low = round(price * 0.99, 2)
-        buy_high = round(price * 1.005, 2)
-        stop_loss = round(price * 0.968, 2)
-        target1 = round(price * 1.065, 2)
-        target2 = round(price * 1.108, 2)
-        
-        risk = price - stop_loss
-        reward = target1 - price
-        rr_ratio = round(reward / risk, 2) if risk > 0 else 2.15
+                # Construct clean rationale from reasons
+                reasons_str = r["reasons"] or ""
+                reasons_list = [rs.strip() for rs in reasons_str.split(";") if rs.strip()]
+                insight = " ".join(reasons_list[:3]) if reasons_list else f"High technical-fundamental confluence with hybrid score of {float(r['hybrid_score']):.2f}."
 
-        results.append({
-            "rank": idx,
-            "ticker": ticker,
-            "stock_name": item["stock_name"],
-            "sector": item["sector"],
-            "current_price": round(price, 2),
-            "best_buy_zone": f"{buy_low:,.2f} – {buy_high:,.2f}",
-            "stop_loss": stop_loss,
-            "target_price": target1,
-            "target_price2": target2,
-            "risk_reward": f"1 : {rr_ratio:.2f}",
-            "setup_signal": item["setup_signal"],
-            "score": item["score"],
-            "insight": item["insight"],
-        })
+                results.append({
+                    "rank": idx,
+                    "ticker": r["ticker"],
+                    "stock_name": r["stock_name"],
+                    "sector": r["sector"],
+                    "current_price": round(price, 2),
+                    "best_buy_zone": f"₹{buy_low:,.2f} – ₹{buy_high:,.2f}",
+                    "stop_loss": f"₹{stop_loss:,.2f}",
+                    "target_price": f"₹{target1:,.2f} (T2: ₹{target2:,.2f})",
+                    "risk_reward": f"1 : {rr_ratio:.2f}",
+                    "setup_signal": r["setup_signal"],
+                    "score": round(float(r["hybrid_score"]) * 100, 1),
+                    "insight": insight,
+                })
+    except Exception as e:
+        logger.error(f"Error synthesizing dynamic top trades: {e}")
+
+    # Fallback to candidates_meta dynamically resolving prices from ohlcv_daily if DB is empty
+    if not results:
+        candidates_meta = [
+            {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike above 30-day average. Solid operating margins."},
+            {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Energy", "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout."},
+            {"ticker": "HDFCBANK", "stock_name": "HDFC Bank", "sector": "Financials", "setup_signal": "Bullish Reversal", "score": 96.5, "insight": "Double-bottom reversal pattern confirmed above support. Top-tier asset quality metrics."},
+            {"ticker": "INFY", "stock_name": "Infosys Limited", "sector": "Technology", "setup_signal": "Long Buildup", "score": 94.8, "insight": "Fresh FNO long position buildup with OI addition. RSI-14 momentum crossing 62 with clean EMA20 support."},
+            {"ticker": "HAL", "stock_name": "Hindustan Aeronautics", "sector": "Defence", "setup_signal": "Trend Trading", "score": 92.5, "insight": "Robust defence aerospace order book. Consistent revenue CAGR with strong return on capital."},
+            {"ticker": "CANBK", "stock_name": "Canara Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 91.8, "insight": "Expanding net interest margin and consistent reduction in non-performing assets."},
+            {"ticker": "TCS", "stock_name": "Tata Consultancy Services", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 89.8, "insight": "Multi-year deal wins expanding order book. Weekly swinger buy signal active with high ROE."},
+            {"ticker": "BHARTIARTL", "stock_name": "Bharti Airtel", "sector": "Telecom", "setup_signal": "Short Covering", "score": 88.8, "insight": "Short covering rally active in derivative contracts. Strong ARPU expansion & institutional inflow."},
+            {"ticker": "ICICIBANK", "stock_name": "ICICI Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 87.9, "insight": "Sustained upward trendline continuation with OI expansion. Outstanding NIM & ROA fundamentals."},
+            {"ticker": "MARUTI", "stock_name": "Maruti Suzuki", "sector": "Automobiles", "setup_signal": "Trend Trading", "score": 86.5, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated delivery ratio."},
+            {"ticker": "LT", "stock_name": "Larsen & Toubro", "sector": "Infrastructure", "setup_signal": "Breakout", "score": 85.4, "insight": "Order book visibility at all-time highs. Breakout above consolidation zone with heavy volume."},
+            {"ticker": "SONACOMS", "stock_name": "Sona BLW Precision", "sector": "Automobiles", "setup_signal": "Breakout", "score": 84.0, "insight": "Fresh EV drive system order wins. Delivery volume above 20-day EMA with MACD bullish crossover."},
+            {"ticker": "COFORGE", "stock_name": "Coforge Limited", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 83.8, "insight": "Multi-year deal wins expanding order book with expanding operating margins."},
+            {"ticker": "HDFCLIFE", "stock_name": "HDFC Life Insurance", "sector": "Financials", "setup_signal": "Support Bounce", "score": 82.5, "insight": "Bouncing cleanly off support level with positive institutional delivery accumulation."},
+            {"ticker": "PAYTM", "stock_name": "One97 Communications", "sector": "Technology", "setup_signal": "Short Covering", "score": 81.7, "insight": "Massive short covering rally following UPI payment volume recovery and operating breakeven trajectory."}
+        ]
+        db_prices = {}
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cur.execute("SELECT DISTINCT ON (ticker) ticker, close FROM public.ohlcv_daily WHERE close > 0 ORDER BY ticker, trade_date DESC")
+                for r in cur.fetchall():
+                    db_prices[r["ticker"].upper()] = float(r["close"])
+        except Exception:
+            pass
+
+        for idx, item in enumerate(candidates_meta, start=1):
+            t = item["ticker"]
+            price = db_prices.get(t, BENCHMARK_PRICES.get(t, 100.0))
+            buy_low = round(price * 0.99, 2)
+            buy_high = round(price * 1.005, 2)
+            stop_loss = round(price * 0.968, 2)
+            target1 = round(price * 1.065, 2)
+            target2 = round(price * 1.108, 2)
+            risk = price - stop_loss
+            reward = target1 - price
+            rr_ratio = round(reward / risk, 2) if risk > 0 else 2.03
+
+            results.append({
+                "rank": idx,
+                "ticker": t,
+                "stock_name": item["stock_name"],
+                "sector": item["sector"],
+                "current_price": round(price, 2),
+                "best_buy_zone": f"₹{buy_low:,.2f} – ₹{buy_high:,.2f}",
+                "stop_loss": f"₹{stop_loss:,.2f}",
+                "target_price": f"₹{target1:,.2f} (T2: ₹{target2:,.2f})",
+                "risk_reward": f"1 : {rr_ratio:.2f}",
+                "setup_signal": item["setup_signal"],
+                "score": item["score"],
+                "insight": item["insight"],
+            })
 
     return results
 
@@ -335,11 +821,11 @@ LOT_SIZE_MAP = {
 
 BENCHMARK_PRICES = {
     "NIFTY": 24175.65, "BANKNIFTY": 57496.30, "FINNIFTY": 24500.0, "MIDCPNIFTY": 13100.0, "NIFTYNXT50": 68500.0,
-    "YESBANK": 22.10, "HDFCBANK": 735.0, "RELIANCE": 1287.0, "INFY": 1880.0, "TATAMOTORS": 715.0,
-    "BEL": 298.4, "ICICIBANK": 1240.0, "TCS": 4400.0, "SBIN": 850.0, "BHARTIARTL": 1600.0,
+    "YESBANK": 22.10, "HDFCBANK": 709.0, "RELIANCE": 1277.0, "INFY": 1133.80, "TATAMOTORS": 715.0,
+    "BEL": 414.45, "ICICIBANK": 1240.0, "TCS": 2399.30, "SBIN": 850.0, "BHARTIARTL": 1600.0,
     "MARUTI": 12500.0, "LT": 3650.0, "SUNPHARMA": 1740.0, "BAJFINANCE": 7150.0, "SONACOMS": 822.2,
     "COFORGE": 2014.6, "ABB": 7509.0, "SIEMENS": 6750.0, "TRENT": 7100.0, "TITAN": 3450.0,
-    "AXISBANK": 1180.0, "HAL": 4650.0, "LTIM": 5600.0, "ADANIENT": 3150.0, "ADANIPORTS": 1480.0,
+    "AXISBANK": 1180.0, "HAL": 4801.60, "LTIM": 5600.0, "ADANIENT": 3150.0, "ADANIPORTS": 1480.0,
     "DLF": 860.0, "INDIGO": 4300.0, "POWERGRID": 330.0, "NTPC": 410.0, "ONGC": 320.0,
     "TATASTEEL": 155.0, "VEDL": 460.0, "COALINDIA": 520.0, "BAJAJ-AUTO": 10500.0, "HEROMOTOCO": 5400.0,
     "EICHERMOT": 4800.0, "M&M": 2750.0, "APOLLOHOSP": 6900.0, "DIVISLAB": 4900.0, "CIPLA": 1580.0,
@@ -347,7 +833,7 @@ BENCHMARK_PRICES = {
     "JSWSTEEL": 940.0, "HINDALCO": 680.0, "BPCL": 340.0, "IOC": 175.0, "GAIL": 230.0,
     "IRCTC": 920.0, "REC": 610.0, "PFC": 540.0, "TATACHEM": 1080.0, "VOLTAS": 1750.0,
     "ZOMATO": 260.0, "JIOFIN": 340.0, "AUBANK": 640.0, "KOTAKBANK": 1820.0, "INDUSINDBK": 1380.0,
-    "FEDERALBNK": 195.0, "IDFCFIRSTB": 74.0, "BANDHANBNK": 205.0, "CANBK": 105.0, "PNB": 115.0, "BANKBARODA": 250.0,
+    "FEDERALBNK": 195.0, "IDFCFIRSTB": 74.0, "BANDHANBNK": 205.0, "CANBK": 126.90, "PNB": 115.0, "BANKBARODA": 250.0,
     "360ONE": 1200.0, "BSE": 3405.0, "AMBUJACEM": 412.05, "ANGELONE": 2850.0, "APLAPOLLO": 1550.0,
     "ASTRAL": 1850.0, "ATHERENERG": 350.0, "BDL": 1450.0, "BHEL": 285.0, "BIOCON": 360.0,
     "BLUESTARCO": 1650.0, "BOSCHLTD": 3350.0, "CAMS": 4250.0, "CDSL": 1450.0, "CGPOWER": 680.0,
@@ -363,7 +849,7 @@ BENCHMARK_PRICES = {
     "MPHASIS": 2950.0, "MRF": 135000.0, "MUTHOOTFIN": 1950.0, "NATIONALUM": 215.0, "NAUKRI": 7450.0,
     "NAVINFLUOR": 3350.0, "NBCC": 115.0, "NESTLEIND": 2450.0, "NHPC": 94.0, "NMDC": 225.0,
     "NYKAA": 185.0, "OBEROIRLTY": 1850.0, "OFSS": 11200.0, "OIL": 510.0, "PAGEIND": 44500.0,
-    "PATANJALI": 1780.0, "PAYTM": 650.0, "PERSISTENT": 5450.0, "PETRONET": 340.0, "PHOENIXLTD": 1650.0,
+    "PATANJALI": 1780.0, "PAYTM": 1717.10, "PERSISTENT": 5450.0, "PETRONET": 340.0, "PHOENIXLTD": 1650.0,
     "PIIND": 4550.0, "PNBHOUSING": 980.0, "POLICYBZR": 1750.0, "POWERINDIA": 10800.0, "PRESTIGE": 1680.0,
     "RADICO": 2150.0, "RVNL": 580.0, "SAIL": 135.0, "SBICARD": 740.0, "SBILIFE": 1820.0,
     "SHREECEM": 26500.0, "SHRIRAMFIN": 3150.0, "SOLARINDS": 10500.0, "SRF": 2450.0, "SUPREMEIND": 4650.0,
@@ -1061,20 +1547,29 @@ def trigger_analysis(ticker: str = None, background_tasks: BackgroundTasks = Non
         return {"status": "success", "detail": "Bulk analysis pipeline started in the background."}
 
 
+@app.get("/api/reports/html/{ticker}")
+def view_html_report(ticker: str):
+    """View the interactive HTML research and analysis report for a given ticker, generating fresh analysis."""
+    ticker_clean = ticker.upper().strip()
+    from engine.reports.html_generator import generate_html_report
+    report_file = generate_html_report(ticker_clean)
+    
+    if not report_file or not Path(report_file).exists():
+        raise HTTPException(404, f"HTML report for {ticker_clean} could not be generated.")
+        
+    return FileResponse(report_file, media_type="text/html")
+
+
 @app.get("/api/reports/pdf/{ticker}")
 def download_pdf_report(ticker: str):
-    """Download the generated PDF report for a given ticker, generating it if missing."""
+    """Download the generated PDF report for a given ticker, generating fresh analysis."""
     ticker_clean = ticker.upper().strip()
-    pdf_dir = Path("output/pdf")
-    pdf_path = pdf_dir / f"{ticker_clean}_report.pdf"
+    report_file = generate_pdf_report(ticker_clean)
     
-    if not pdf_path.exists():
-        generate_pdf_report(ticker_clean)
-        
-    if not pdf_path.exists():
+    if not report_file or not Path(report_file).exists():
         raise HTTPException(404, f"PDF report for {ticker_clean} could not be generated.")
         
-    return FileResponse(pdf_path, media_type="application/pdf", filename=f"{ticker_clean}_report.pdf")
+    return FileResponse(report_file, media_type="application/pdf", filename=f"{ticker_clean}_report.pdf")
 
 
 

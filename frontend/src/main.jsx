@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, ChevronDown, ChevronRight,
-  Database, Edit2, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, Plus,
+  Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, Plus,
   RefreshCw, Search, Settings2, Shield, TableProperties, Tag,
-  Trash2, TrendingUp, User, Users, X
+  Download, Trash2, TrendingUp, User, Users, X
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
 import './styles.css'
@@ -1554,6 +1554,7 @@ function Dashboard({ apiBase, setActive }) {
   const [error, setError] = useState('')
   const [sortKey, setSortKey] = useState('rank')
   const [sortAsc, setSortAsc] = useState(true)
+  const [detailTicker, setDetailTicker] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -1573,45 +1574,51 @@ function Dashboard({ apiBase, setActive }) {
       })
   }, [apiBase])
 
-  const handleSort = key => {
-    setSortAsc(k => sortKey === key ? !sortAsc : true)
-    setSortKey(key)
-  }
-
   const sortedTrades = useMemo(() => {
-    if (!sortKey) return trades
-    return [...trades].sort((a, b) => {
-      const valA = a[sortKey] ?? ''
-      const valB = b[sortKey] ?? ''
+    if (!trades.length) return []
+    const list = [...trades]
+    list.sort((a, b) => {
+      let valA = a[sortKey] ?? ''
+      let valB = b[sortKey] ?? ''
       if (typeof valA === 'number' && typeof valB === 'number') {
         return (valA - valB) * (sortAsc ? 1 : -1)
       }
       return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
     })
+    return list
   }, [trades, sortKey, sortAsc])
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
+  }
 
   return (
     <div className="top-trades-dashboard">
-      <section className="panel data-panel">
-        <div className="panel-heading" style={{ padding: '12px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ background: 'rgba(126,200,240,0.15)', color: '#7ec8f0', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>
-              MARKET INTELLIGENCE
-            </span>
-            <h2 style={{ fontSize: 16, margin: 0, color: '#fff', fontWeight: 700 }}>
-              Top 15 Best Trade Opportunities
-            </h2>
-          </div>
+      <header className="page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <span className="eyebrow" style={{ color: '#52c41a' }}>HIGH-CONVICTION OPPORTUNITIES</span>
+          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Technical-Fundamental Trades</h1>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
+            Algorithmically screened high-probability setups across Nifty momentum, institutional accumulation, and technical-fundamental confluence.
+          </p>
         </div>
+      </header>
+
+      <section className="panel data-panel">
         <div className="table-wrap">
-          <table>
+          <table className="top-trades-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}># Rank</th>
-                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker & Stock Name</th>
+                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
-                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>Current Price (LTP)</th>
-                <th>Best Buy Zone</th>
+                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
+                <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
                 <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
@@ -1626,9 +1633,36 @@ function Dashboard({ apiBase, setActive }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#7ec8f0' }}>#{t.rank}</td>
                   <td>
-                    <div>
-                      <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
-                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDetailTicker(t.ticker)
+                        }}
+                        title={`View Interactive Detail Report for ${t.ticker}`}
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.12)',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          color: '#38bdf8',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 7px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          transition: 'all .15s ease',
+                        }}
+                      >
+                        <FileText size={11} />
+                        <span>Detail</span>
+                      </button>
                     </div>
                   </td>
                   <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
@@ -1658,10 +1692,10 @@ function Dashboard({ apiBase, setActive }) {
           </table>
         </div>
       </section>
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
     </div>
   )
 }
-
 
 // Helper to identify internal timestamp / audit date fields to omit from display
 const isInternalTimestamp = key =>
@@ -1697,6 +1731,144 @@ const reorderColumns = (cols) => {
   return ordered
 }
 
+// ─── Interactive Report Detail Modal with Iframe ──────────────────────────────
+function ReportDetailModal({ ticker, onClose }) {
+  if (!ticker) return null
+
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(3, 7, 18, 0.85)',
+        backdropFilter: 'blur(5px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999,
+        padding: 16,
+      }}
+    >
+      <div
+        className="modal-card"
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 'min(1200px, 96vw)',
+          height: '92vh',
+          backgroundColor: '#0f172a',
+          borderRadius: 14,
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Modal Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 20px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(15, 23, 42, 0.98)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.15)', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center' }}>
+              <FileText size={18} style={{ color: '#38bdf8' }} />
+            </div>
+            <div>
+              <span style={{ fontSize: 17, fontWeight: 700, color: '#f8fafc', fontFamily: "'DM Mono'" }}>
+                {ticker}
+              </span>
+              <span style={{ fontSize: 13, color: '#94a3b8', marginLeft: 8 }}>
+                Interactive Research & Analysis Detail
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a
+              href={`/api/reports/html/${ticker}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                color: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              <ExternalLink size={13} />
+              Open New Tab
+            </a>
+            <a
+              href={`/api/reports/pdf/${ticker}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                color: '#94a3b8',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              <Download size={13} />
+              PDF
+            </a>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                padding: 6,
+                borderRadius: 6,
+                marginLeft: 6,
+              }}
+              title="Close (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Iframe */}
+        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
+          <iframe
+            src={`/api/reports/html/${ticker}`}
+            title={`${ticker} Research Report`}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Generic table view ───────────────────────────────────────────────────────
 function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker }) {
   const [sort, setSort] = useState({ key: '', asc: true })
@@ -1704,6 +1876,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   const [selectedSector, setSelectedSector] = useState('ALL')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
+  const [detailTicker, setDetailTicker] = useState(null)
 
   const displayColumns = useMemo(() => {
     if (!data?.columns) return []
@@ -1764,7 +1937,16 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
         if (!sigCol) return true
         const val = String(row[sigCol] ?? '').trim().toLowerCase()
         const target = selectedSignal.toLowerCase()
-        return val === target || (target === 'buy' && val === 'bullish') || (target === 'sell' && val === 'bearish') || (target === 'strong buy' && val === 'strong_bullish') || (target === 'strong sell' && val === 'strong_bearish')
+        if (target === 'positive') {
+          return val === 'positive' || val.includes('buy') || val.includes('bullish') || val === 'good' || val === 'better' || val === 'accumulation'
+        }
+        if (target === 'negative') {
+          return val === 'negative' || val.includes('sell') || val.includes('bearish') || val === 'bad' || val === 'distribution'
+        }
+        if (target === 'mixed') {
+          return val === 'mixed' || val.includes('neutral') || val.includes('hold')
+        }
+        return val === target || (target === 'buy' && (val === 'buy' || val === 'bullish')) || (target === 'sell' && (val === 'sell' || val === 'bearish')) || (target === 'strong buy' && val === 'strong_bullish') || (target === 'strong sell' && val === 'strong_bearish')
       })
     }
     if (selectedSector && selectedSector !== 'ALL') {
@@ -1793,6 +1975,17 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   const hasSignalCol = useMemo(() => {
     return displayColumns.some(c => /signal|call|recommended_call|status|phase/i.test(c) && c !== 'record_id')
   }, [displayColumns])
+
+  const hasPositiveMixedSignals = useMemo(() => {
+    if (isCashFlowTable) return true
+    if (!data?.rows) return false
+    const sigCol = displayColumns.find(c => /signal|call|recommended_call|status|phase/i.test(c) && c !== 'record_id')
+    if (!sigCol) return false
+    return data.rows.some(r => {
+      const v = String(r[sigCol] ?? '').toUpperCase()
+      return v === 'POSITIVE' || v === 'MIXED' || v === 'NEGATIVE'
+    })
+  }, [data?.rows, displayColumns, isCashFlowTable])
 
   const handleFilterClick = filterVal => {
     if (selectedSignal === filterVal) {
@@ -1871,11 +2064,11 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
           {hasSignalCol && (
             <div className="filter-bar">
               <button className={`filter-btn ${selectedSignal === 'ALL' ? 'active' : ''}`} onClick={() => { setSelectedSignal('ALL'); setPage(1); }}>All</button>
-              {isCashFlowTable ? (
+              {hasPositiveMixedSignals ? (
                 <>
-                  <button className={`filter-btn sell ${selectedSignal === 'Bad' ? 'active' : ''}`} onClick={() => handleFilterClick('Bad')}>Bad</button>
-                  <button className={`filter-btn buy ${selectedSignal === 'Good' ? 'active' : ''}`} onClick={() => handleFilterClick('Good')}>Good</button>
-                  <button className={`filter-btn strong-buy ${selectedSignal === 'Better' ? 'active' : ''}`} onClick={() => handleFilterClick('Better')}>Better</button>
+                  <button className={`filter-btn buy ${selectedSignal === 'Positive' ? 'active' : ''}`} onClick={() => handleFilterClick('Positive')}>Positive</button>
+                  <button className={`filter-btn neutral ${selectedSignal === 'Mixed' ? 'active' : ''}`} onClick={() => handleFilterClick('Mixed')}>Mixed</button>
+                  <button className={`filter-btn sell ${selectedSignal === 'Negative' ? 'active' : ''}`} onClick={() => handleFilterClick('Negative')}>Negative</button>
                 </>
               ) : (
                 <>
@@ -1895,7 +2088,14 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
         </span>
       </div>
 
-      {loading && <div className="state">Loading data…</div>}
+      {loading && (
+        <div className="state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '50px 20px' }}>
+          <RefreshCw size={26} className="spin-icon" style={{ color: '#38bdf8' }} />
+          <div style={{ fontSize: 14, color: '#94a3b8', fontWeight: 500 }}>
+            Fetching and resolving live records, please wait...
+          </div>
+        </div>
+      )}
       {error && <div className="state error">{error}</div>}
       {!loading && !error && data && (
         <div className="table-wrap">
@@ -1941,27 +2141,86 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
 
                       const badge = typeof value === 'string' && /signal|call|status|phase|spike|bet/.test(key) && key !== 'record_id'
                       if (key === 'ticker' || key === 'symbol') {
+                        const cleanT = cleanTicker(value)
                         if (isFnoMaster) {
                           return (
                             <td key={key}>
-                              <b
-                                className="fno-ticker-badge"
-                                style={{
-                                  color: '#66e4ca',
-                                  fontFamily: "'DM Mono'",
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <TrendingUp size={13} />
-                                {cleanTicker(value)}
-                              </b>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <b
+                                  className="fno-ticker-badge"
+                                  style={{
+                                    color: '#66e4ca',
+                                    fontFamily: "'DM Mono'",
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <TrendingUp size={13} />
+                                  {cleanT}
+                                </b>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDetailTicker(cleanT)
+                                  }}
+                                  title={`View Interactive Detail & Analysis Report for ${cleanT}`}
+                                  style={{
+                                    background: 'rgba(56, 189, 248, 0.12)',
+                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    color: '#38bdf8',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 7px',
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    transition: 'all .15s ease',
+                                  }}
+                                >
+                                  <FileText size={11} />
+                                  <span>Detail</span>
+                                </button>
+                              </div>
                             </td>
                           )
                         }
-                        return <td key={key}><b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'" }}>{cleanTicker(value)}</b></td>
+                        return (
+                          <td key={key}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                              <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'" }}>{cleanT}</b>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDetailTicker(cleanT)
+                                }}
+                                title={`View Interactive Detail & Analysis Report for ${cleanT}`}
+                                style={{
+                                  background: 'rgba(56, 189, 248, 0.12)',
+                                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                                  color: '#38bdf8',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  transition: 'all .15s ease',
+                                }}
+                              >
+                                <FileText size={11} />
+                                <span>Detail</span>
+                              </button>
+                            </div>
+                          </td>
+                        )
                       }
                       if (key === 'current_price') {
                         const isIndex = row.instrument_type === 'OPTIDX' || ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50'].includes(row.symbol)
@@ -2035,6 +2294,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
           )}
         </div>
       )}
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
     </section>
   )
 }

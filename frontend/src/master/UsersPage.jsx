@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit2, Plus, Trash2, User } from 'lucide-react'
+import { Edit2, Mail, Plus, Trash2, User } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
@@ -18,8 +18,18 @@ export default function UsersPage() {
   const [editing, setEditing]       = useState(null)
   const [confirm, setConfirm]       = useState(null)
   const [saving, setSaving]         = useState(false)
-  const [form, setForm]             = useState({ email: '', first_name: '', last_name: '', watchlist_id: '' })
+  const [form, setForm]             = useState({ email: '', first_name: '', last_name: '', watchlist_id: '', is_subscribed: false })
   const { show, ToastContainer }    = useToast()
+
+  const triggerNewsletter = async email => {
+    try {
+      show('Generating PDF reports and sending email newsletter...', 'info')
+      const res = await api.users.sendNewsletter(email)
+      show(res.detail || 'Newsletter sent successfully!', 'success')
+    } catch (e) {
+      show(e.message, 'error')
+    }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -58,8 +68,8 @@ export default function UsersPage() {
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const openNew  = () => { setEditing(null); setForm({ email: '', first_name: '', last_name: '', watchlist_id: '' }); setShowForm(true) }
-  const openEdit = u  => { setEditing(u); setForm({ email: u.email, first_name: u.first_name, last_name: u.last_name, watchlist_id: u.watchlist_id || '' }); setShowForm(true) }
+  const openNew  = () => { setEditing(null); setForm({ email: '', first_name: '', last_name: '', watchlist_id: '', is_subscribed: false }); setShowForm(true) }
+  const openEdit = u  => { setEditing(u); setForm({ email: u.email, first_name: u.first_name, last_name: u.last_name, watchlist_id: u.watchlist_id || '', is_subscribed: !!u.is_subscribed }); setShowForm(true) }
 
   const save = async () => {
     if (!form.email.trim() || !form.first_name.trim() || !form.last_name.trim()) return
@@ -98,13 +108,14 @@ export default function UsersPage() {
                 <th onClick={() => handleSort('first_name')} style={{cursor:'pointer'}}>First name {sortKey === 'first_name' && (sortAsc ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('last_name')} style={{cursor:'pointer'}}>Last name {sortKey === 'last_name' && (sortAsc ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('watchlist_name')} style={{cursor:'pointer'}}>Watchlist {sortKey === 'watchlist_name' && (sortAsc ? '↑' : '↓')}</th>
-                <th style={{width:90}}/>
+                <th onClick={() => handleSort('is_subscribed')} style={{cursor:'pointer'}}>Newsletter {sortKey === 'is_subscribed' && (sortAsc ? '↑' : '↓')}</th>
+                <th style={{width:120}}/>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={5}><div className="state">Loading…</div></td></tr>}
+              {loading && <tr><td colSpan={6}><div className="state">Loading…</div></td></tr>}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={5}><div className="state">No users found.</div></td></tr>
+                <tr><td colSpan={6}><div className="state">No users found.</div></td></tr>
               )}
               {!loading && paged.map(u => (
                 <tr key={u.email} className="data-row">
@@ -125,8 +136,16 @@ export default function UsersPage() {
                     }
                   </td>
                   <td>
+                    {u.is_subscribed
+                      ? <span className="badge success" style={{fontSize:11}}>Subscribed</span>
+                      : <span className="badge danger" style={{fontSize:11}}>No</span>
+                    }
+                  </td>
+                  <td>
                     <div className="row-actions">
-
+                      {u.is_subscribed && u.watchlist_id && (
+                        <button className="icon-btn sm" title="Send Daily Watchlist Reports Now" onClick={() => triggerNewsletter(u.email)} style={{color:'#66e4ca'}}><Mail size={13}/></button>
+                      )}
                       <button className="icon-btn sm" title="Edit" onClick={() => openEdit(u)}><Edit2 size={13}/></button>
                       <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(u)}><Trash2 size={13}/></button>
                     </div>
@@ -169,6 +188,17 @@ export default function UsersPage() {
                 <option key={w.id} value={w.id}>{w.name} ({(w.tickers || []).length} tickers)</option>
               ))}
             </Select>
+          </FormGroup>
+          <FormGroup label="Daily newsletter subscription">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={form.is_subscribed}
+                onChange={e => setForm(f => ({ ...f, is_subscribed: e.target.checked }))}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>Subscribe user to daily email newsletter containing watchlist reports</span>
+            </label>
           </FormGroup>
           <div className="form-actions">
             <button className="btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>

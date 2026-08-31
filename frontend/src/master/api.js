@@ -64,6 +64,7 @@ export const users = {
   create: (data)        => _req('POST',   `${BASE}/users`,             data),
   update: (email, data) => _req('PUT',    `${BASE}/users/${email}`,    data),
   remove: (email)       => _req('DELETE', `${BASE}/users/${email}`),
+  sendNewsletter: (email) => _req('POST',  `${BASE}/users/${email}/newsletter-send`),
 }
 
 // ── Alternative Names (Ticker Aliases) ────────────────────────────────────────

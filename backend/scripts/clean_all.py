@@ -9,7 +9,7 @@ from app.database import get_connection
 from scripts.seed_demo import SCANNER_COLUMNS, SECTORS
 
 BASE_TABLES = {
-    "ohlcv_daily", "indicators_daily", "fundamentals", "stock_meta",
+    "ohlcv_daily", "indicators_daily", "fundamentals",
     "historical_calls", "intraday_call", "price_history", "raw_fundamentals",
     "delivery_history", "cash_flow_summary", "delivery_to_trade", "subscribers",
     *SCANNER_COLUMNS.keys(), *SECTORS, *(f"{sector}_delivery" for sector in SECTORS),

@@ -107,9 +107,9 @@ def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Upsert stock_meta
+                # Upsert ticker_master metadata (company_name, sector, exchange)
                 cur.execute("""
-                    INSERT INTO stock_meta (ticker, company_name, sector, exchange, updated_at)
+                    INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (ticker) DO UPDATE SET
                         company_name = EXCLUDED.company_name,
@@ -164,6 +164,14 @@ def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
 
         # 3. Fundamentals
         download_fundamental_data(ticker_clean, formatted, tk)
+
+        # 4. Auto-analyze and summarize immediately
+        try:
+            from engine.analysis.orchestrator import analyze_and_summarize_ticker
+            analyze_and_summarize_ticker(ticker_clean)
+        except Exception as e:
+            logger.error(f"Error auto-analyzing after download for {ticker_clean}: {e}")
+
         return True
 
     except Exception as e:
@@ -269,5 +277,5 @@ def download_all_tickers(max_workers: int = 8):
             if res:
                 success_count += 1
             logger.info(f"[{i}/{len(tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
-            
-    logger.info(f"Pipeline completed: {success_count}/{len(tickers)} downloaded successfully.")
+    failed_count = len(tickers) - success_count
+    logger.info(f"Pipeline completed. Attempted: {len(tickers)}, Succeeded: {success_count}, Failed: {failed_count}")

@@ -75,6 +75,8 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
                 for tbl, col, time_col in [
+                    ("ohlcv_daily", "close", "trade_date"),
+                    ("analysis_summaries", "close", "updated_at"),
                     ("raw_fno_derivatives", "underlying_price", "last_updated"),
                     ("fno_active", "underlying_price", "last_updated"),
                     ("quicktrade_timestamp", "close", "run_time"),
@@ -84,9 +86,6 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
                     ("breakout", "close", "run_time"),
                     ("trend_trading", "close", "run_time"),
                     ("reversal_trading", "close", "run_time"),
-                    ("support_resistance", "close", "run_time"),
-                    ("price_history", "close", "trade_date"),
-                    ("ohlcv_daily", "close", "date"),
                 ]:
                     try:
                         cur.execute(

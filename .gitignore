@@ -1,3 +1,10 @@
 .venv
 *__.py
 frontend/node_modules
+*.pyc
+backend/output/htmls/*
+backend/output/pdf/*
+output/htmls/*
+output/pdf/*
+backend/app/__pycache__/*
+

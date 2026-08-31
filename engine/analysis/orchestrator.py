@@ -40,20 +40,12 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         fund_res = analyze_fundamental(ticker)
         foot_res = analyze_footprint_and_news(ticker)
         
-        opt_res = {}
-        if is_fno:
-            opt_res = analyze_options_chain(ticker)
-        else:
-            opt_res = {
-                "atm_strike": 0.0, "support": 0.0, "resistance": 0.0,
-                "pcr": 1.0, "buildup": "N/A", "insights": "Not an F&O instrument."
-            }
-
+        opt_res = analyze_options_chain(ticker)
         proj_22d = calculate_22d_projection(ticker, tech_res["score"])
 
         # Compute aggregate scores
         # Behavioral score based on news sentiment and accumulation index
-        behavioral_score = round((foot_res["sentiment_score"] * 0.5) + ((foot_res["accumulation_score"] - 50.0) / 50.0 * 0.5), 2)
+        behavioral_score = round((foot_res["sentiment_score"] * 0.4) + ((foot_res["accumulation_score"] - 50.0) / 50.0 * 0.6), 2)
         
         # Hybrid score = 50% Technical + 50% Behavioral
         hybrid_score = round((tech_res["score"] * 0.5) + (behavioral_score * 0.5), 2)
@@ -130,6 +122,7 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
 
 def analyze_all_tickers(max_workers: int = 8):
     """Orchestrates analysis sequentially or concurrently for all tickers in database."""
+    import time
     tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -140,6 +133,7 @@ def analyze_all_tickers(max_workers: int = 8):
         logger.warning("No tickers found to analyze.")
         return
 
+    start_time = time.time()
     logger.info(f"Starting analysis process for {len(tickers)} tickers...")
     success_count = 0
     for i, ticker in enumerate(tickers, 1):
@@ -147,4 +141,7 @@ def analyze_all_tickers(max_workers: int = 8):
         if res:
             success_count += 1
         logger.info(f"[{i}/{len(tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
-    logger.info(f"Analysis process completed: {success_count}/{len(tickers)} analyzed successfully.")
+        
+    elapsed = time.time() - start_time
+    failed_count = len(tickers) - success_count
+    logger.info(f"Analysis process completed. Attempted: {len(tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")

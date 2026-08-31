@@ -48,7 +48,8 @@ def analyze_footprint_and_news(ticker: str) -> dict:
         except Exception as e:
             logger.debug(f"Failed to fetch news for {ticker}: {e}")
 
-        # 2. Footprint / Volume Anomalies
+        # 2. Footprint / Volume Anomalies & Smart Money Accumulation Ratio
+        clean_t = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # Fetch recent candles
@@ -57,29 +58,48 @@ def analyze_footprint_and_news(ticker: str) -> dict:
                     FROM ohlcv_daily
                     WHERE ticker = %s
                     ORDER BY trade_date DESC LIMIT 20
-                """, (ticker,))
+                """, (clean_t,))
                 rows = cur.fetchall()
 
-        if rows and len(rows) >= 5:
+        if rows and len(rows) >= 2:
             latest_close, latest_vol = float(rows[0][0]), int(rows[0][1])
             prev_close = float(rows[1][0])
-            avg_vol = sum(int(r[1]) for r in rows[1:]) / len(rows[1:])
+            avg_vol = sum(int(r[1]) for r in rows[1:]) / len(rows[1:]) if len(rows) > 1 else latest_vol
             
-            price_up = latest_close > prev_close
-            
-            if avg_vol > 0:
-                vol_ratio = latest_vol / avg_vol
-                if vol_ratio > 1.5:
-                    if price_up:
-                        phase = "Accumulation"
-                        accumulation_score = min(100, int(50 + 20 * vol_ratio))
-                        distribution_score = max(0, int(50 - 10 * vol_ratio))
-                    else:
-                        phase = "Distribution"
-                        distribution_score = min(100, int(50 + 20 * vol_ratio))
-                        accumulation_score = max(0, int(50 - 10 * vol_ratio))
+            price_up = latest_close >= prev_close
+            vol_ratio = (latest_vol / avg_vol) if avg_vol > 0 else 1.0
+
+            # Calculate up-day vs down-day volume across the 20-day window
+            up_vol = sum(int(rows[i][1]) for i in range(len(rows)-1) if float(rows[i][0]) >= float(rows[i+1][0]))
+            down_vol = sum(int(rows[i][1]) for i in range(len(rows)-1) if float(rows[i][0]) < float(rows[i+1][0]))
+            total_vol = up_vol + down_vol
+
+            if total_vol > 0:
+                raw_ratio = (up_vol / total_vol)
+                accumulation_score = int(round(max(15, min(95, raw_ratio * 100))))
+                distribution_score = 100 - accumulation_score
+            else:
+                accumulation_score = 55 if price_up else 45
+                distribution_score = 100 - accumulation_score
+
+            if vol_ratio > 1.3:
+                phase = "Accumulation" if price_up else "Distribution"
+            elif accumulation_score >= 58:
+                phase = "Accumulation" if price_up else "Markup"
+            elif accumulation_score <= 42:
+                phase = "Distribution" if not price_up else "Markdown"
+            else:
+                phase = "Markup" if price_up else "Markdown"
+
+            # If news sentiment is zero, ground sentiment score based on accumulation index
+            if sentiment_score == 0.0:
+                sentiment_score = round(((accumulation_score - 50) / 100.0) * 1.5, 2)
+                if sentiment_score >= 0.15:
+                    sentiment_label = "Bullish"
+                elif sentiment_score <= -0.15:
+                    sentiment_label = "Bearish"
                 else:
-                    phase = "Markup" if price_up else "Markdown"
+                    sentiment_label = "Neutral"
 
         return {
             "phase": phase,
