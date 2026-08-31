@@ -1,0 +1,3 @@
+.venv
+*__.py
+frontend/node_modules

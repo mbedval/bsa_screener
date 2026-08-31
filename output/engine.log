@@ -1,0 +1,4 @@
+2026-08-31 20:53:49,049 [INFO] bsa_cli: Running on-demand pipeline for ticker: INFY
+2026-08-31 20:53:50,662 [ERROR] bsa_cli: Data download failed for INFY
+2026-08-31 20:54:22,013 [INFO] bsa_cli: Running on-demand pipeline for ticker: INFY
+2026-08-31 20:54:25,519 [INFO] bsa_cli: Analysis completed and upserted for INFY
