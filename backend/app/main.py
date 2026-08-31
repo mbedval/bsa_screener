@@ -1,3 +1,5 @@
+import logging
+import json
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,8 @@ from .catalog import FIXED_TABLES, MASTER_TABLES, RAW_DATA_TABLES, SYSTEM_TABLES
 from .config import settings
 from .database import get_connection
 from .master import router as master_router
+
+logger = logging.getLogger("bsa_main")
 
 app = FastAPI(title="BSA Data Portal API", version="2.0.0")
 app.add_middleware(
@@ -1571,6 +1575,262 @@ def download_pdf_report(ticker: str):
         
     return FileResponse(report_file, media_type="application/pdf", filename=f"{ticker_clean}_report.pdf")
 
+
+@app.get("/api/charts/stock/{ticker}")
+def get_stock_chart_data(ticker: str):
+    """Provides historical OHLCV daily candlestick bars and overlay indicators for interactive charts."""
+    clean_t = ticker.upper().strip()
+    try:
+        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT company_name, sector, is_fno
+                FROM ticker_master
+                WHERE ticker = %s
+            """, (clean_t,))
+            meta = cur.fetchone() or {"company_name": clean_t, "sector": "General", "is_fno": False}
+
+            cur.execute("""
+                SELECT 
+                    o.trade_date,
+                    o.open,
+                    o.high,
+                    o.low,
+                    o.close,
+                    o.volume,
+                    i.sma20,
+                    i.sma50,
+                    i.rsi14,
+                    i.macd_line,
+                    i.macd_signal,
+                    i.macd_hist,
+                    i.bb_upper,
+                    i.bb_mid,
+                    i.bb_lower,
+                    i.atr14
+                FROM ohlcv_daily o
+                LEFT JOIN indicators_daily i ON o.ticker = i.ticker AND o.trade_date = i.trade_date
+                WHERE o.ticker = %s
+                ORDER BY o.trade_date ASC
+            """, (clean_t,))
+            rows = cur.fetchall()
+            
+            candles = []
+            sma20_data = []
+            sma50_data = []
+            rsi_data = []
+            macd_data = []
+            bb_upper_data = []
+            bb_lower_data = []
+            volume_data = []
+
+            for r in rows:
+                date_str = r["trade_date"].strftime("%Y-%m-%d") if hasattr(r["trade_date"], "strftime") else str(r["trade_date"])
+                c_close = float(r["close"] or 0)
+                c_open = float(r["open"] or c_close)
+                c_high = float(r["high"] or max(c_open, c_close))
+                c_low = float(r["low"] or min(c_open, c_close))
+                vol = float(r["volume"] or 0)
+
+                candles.append({
+                    "time": date_str,
+                    "open": round(c_open, 2),
+                    "high": round(c_high, 2),
+                    "low": round(c_low, 2),
+                    "close": round(c_close, 2),
+                })
+                
+                vol_color = "rgba(34, 197, 94, 0.45)" if c_close >= c_open else "rgba(239, 68, 68, 0.45)"
+                volume_data.append({
+                    "time": date_str,
+                    "value": vol,
+                    "color": vol_color,
+                })
+
+                if r["sma20"] is not None:
+                    sma20_data.append({"time": date_str, "value": round(float(r["sma20"]), 2)})
+                if r["sma50"] is not None:
+                    sma50_data.append({"time": date_str, "value": round(float(r["sma50"]), 2)})
+                if r["rsi14"] is not None:
+                    rsi_data.append({"time": date_str, "value": round(float(r["rsi14"]), 2)})
+                if r["macd_line"] is not None:
+                    macd_data.append({
+                        "time": date_str,
+                        "macd": round(float(r["macd_line"]), 2),
+                        "signal": round(float(r["macd_signal"] or 0), 2),
+                        "hist": round(float(r["macd_hist"] or 0), 2),
+                    })
+                if r["bb_upper"] is not None:
+                    bb_upper_data.append({"time": date_str, "value": round(float(r["bb_upper"]), 2)})
+                if r["bb_lower"] is not None:
+                    bb_lower_data.append({"time": date_str, "value": round(float(r["bb_lower"]), 2)})
+
+            # Also fetch F&O strike OI if available
+            cur.execute("""
+                SELECT strike_price, option_type, volume, ltp
+                FROM raw_fno_derivatives
+                WHERE ticker = %s
+                ORDER BY strike_price ASC
+            """, (clean_t,))
+            fno_rows = cur.fetchall()
+
+            # Also fetch 22-day projection if available
+            cur.execute("""
+                SELECT projection_22d, hybrid_score, overall_signal, technical_score, fundamental_score, behavioral_score
+                FROM analysis_summaries
+                WHERE ticker = %s
+            """, (clean_t,))
+            summary_row = cur.fetchone()
+            proj_22d = json.loads(summary_row["projection_22d"]) if summary_row and summary_row["projection_22d"] else []
+
+            return {
+                "ticker": clean_t,
+                "company_name": meta["company_name"],
+                "sector": meta["sector"],
+                "is_fno": meta["is_fno"],
+                "candles": candles,
+                "volume": volume_data,
+                "sma20": sma20_data,
+                "sma50": sma50_data,
+                "rsi": rsi_data,
+                "macd": macd_data,
+                "bb_upper": bb_upper_data,
+                "bb_lower": bb_lower_data,
+                "fno_strikes": [dict(r) for r in fno_rows],
+                "projection_22d": proj_22d,
+                "summary": dict(summary_row) if summary_row else {},
+            }
+    except Exception as e:
+        logger.error(f"Error fetching chart data for {ticker}: {e}")
+        raise HTTPException(500, f"Error generating chart data: {e}")
+
+
+@app.get("/api/charts/sector-overview")
+def get_sector_overview():
+    """Provides sector breakdown, average performance, and breadth distribution for market heatmaps."""
+    try:
+        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    COALESCE(t.sector, 'General') AS sector,
+                    COUNT(a.ticker) AS stock_count,
+                    ROUND(AVG(a.hybrid_score)::numeric, 2) AS avg_score,
+                    ROUND(AVG(a.close)::numeric, 2) AS avg_price,
+                    SUM(CASE WHEN a.overall_signal IN ('BUY', 'STRONG BUY') THEN 1 ELSE 0 END) AS bullish_count,
+                    SUM(CASE WHEN a.overall_signal IN ('SELL', 'STRONG SELL') THEN 1 ELSE 0 END) AS bearish_count,
+                    SUM(CASE WHEN a.overall_signal = 'HOLD' THEN 1 ELSE 0 END) AS neutral_count
+                FROM analysis_summaries a
+                JOIN ticker_master t ON a.ticker = t.ticker
+                GROUP BY t.sector
+                ORDER BY avg_score DESC
+            """)
+            sectors = cur.fetchall()
+            return {"sectors": [dict(s) for s in sectors]}
+    except Exception as e:
+        logger.error(f"Error fetching sector overview: {e}")
+        raise HTTPException(500, f"Error fetching sector overview: {e}")
+
+
+# ─── Research Board ───────────────────────────────────────────────────────────
+
+@app.get("/api/research/tickers")
+def get_research_tickers():
+    """Return all tickers from ticker_master for the Research Board dropdown."""
+    try:
+        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT ticker, company_name, sector
+                FROM ticker_master
+                ORDER BY ticker ASC
+            """)
+            rows = cur.fetchall()
+            return {"tickers": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error fetching research tickers: {e}")
+        raise HTTPException(500, f"Error fetching tickers: {e}")
+
+
+@app.get("/api/research/compare")
+def get_research_compare(
+    ticker: str,
+    range1_start: str,
+    range1_end: str,
+    range2_start: str,
+    range2_end: str,
+):
+    """
+    Return daily OHLCV data for two user-defined date ranges for a given ticker.
+    Both series are normalised to 100 at their respective start date so they can
+    be overlaid on the same chart for direct comparison.
+
+    Query params:
+        ticker        - e.g. BEL
+        range1_start  - YYYY-MM-DD  (base/reference period start)
+        range1_end    - YYYY-MM-DD
+        range2_start  - YYYY-MM-DD  (comparison period start)
+        range2_end    - YYYY-MM-DD
+    """
+    clean_t = ticker.upper().strip()
+    try:
+        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+            # Meta
+            cur.execute(
+                "SELECT company_name, sector FROM ticker_master WHERE ticker = %s",
+                (clean_t,),
+            )
+            meta_row = cur.fetchone()
+            meta = dict(meta_row) if meta_row else {"company_name": clean_t, "sector": "—"}
+
+            def fetch_range(start: str, end: str):
+                cur.execute("""
+                    SELECT o.trade_date, o.open, o.high, o.low, o.close, o.volume,
+                           i.rsi14, i.macd_line, i.macd_signal
+                    FROM ohlcv_daily o
+                    LEFT JOIN indicators_daily i
+                        ON o.ticker = i.ticker AND o.trade_date = i.trade_date
+                    WHERE o.ticker = %s
+                      AND o.trade_date BETWEEN %s AND %s
+                    ORDER BY o.trade_date ASC
+                """, (clean_t, start, end))
+                return cur.fetchall()
+
+            rows1 = fetch_range(range1_start, range1_end)
+            rows2 = fetch_range(range2_start, range2_end)
+
+            def normalise(rows):
+                """Convert rows to dicts; add pct_change and normalised (base=100) close."""
+                out = []
+                base_close = None
+                for r in rows:
+                    c = float(r["close"] or 0)
+                    if base_close is None:
+                        base_close = c if c > 0 else None
+                    normalised = round((c / base_close) * 100, 4) if base_close else None
+                    date_str = r["trade_date"].strftime("%Y-%m-%d") if hasattr(r["trade_date"], "strftime") else str(r["trade_date"])
+                    out.append({
+                        "date": date_str,
+                        "open": round(float(r["open"] or c), 2),
+                        "high": round(float(r["high"] or c), 2),
+                        "low": round(float(r["low"] or c), 2),
+                        "close": round(c, 2),
+                        "volume": int(r["volume"] or 0),
+                        "normalised": normalised,
+                        "rsi14": round(float(r["rsi14"]), 2) if r["rsi14"] is not None else None,
+                        "macd": round(float(r["macd_line"]), 2) if r["macd_line"] is not None else None,
+                    })
+                return out
+
+            series1 = normalise(rows1)
+            series2 = normalise(rows2)
+
+            return {
+                "ticker": clean_t,
+                "meta": meta,
+                "range1": {"start": range1_start, "end": range1_end, "data": series1},
+                "range2": {"start": range2_start, "end": range2_end, "data": series2},
+            }
+    except Exception as e:
+        logger.error(f"Error in research compare for {ticker}: {e}")
+        raise HTTPException(500, f"Error comparing periods: {e}")
 
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"

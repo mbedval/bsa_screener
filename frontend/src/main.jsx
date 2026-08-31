@@ -7,6 +7,7 @@ import {
   Download, Trash2, TrendingUp, User, Users, X
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage } from './visualizer/index.jsx'
 import './styles.css'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -394,6 +395,23 @@ function App() {
           <button className={`nav-item ${active === 'dashboard' ? 'selected' : ''}`} onClick={() => setActive('dashboard')}>
             <LayoutDashboard /> Overview
           </button>
+          <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
+            <TrendingUp /> Charts & Visualizer
+          </button>
+          <section className={`nav-section ${expandedSection === 'Research Board' ? 'expanded' : 'collapsed'}`}>
+            <div className="nav-label" onClick={() => toggleSection('Research Board')} role="button" tabIndex={0}>
+              <BarChart3 />
+              <span style={{ flex: 1 }}>Research Board</span>
+              {expandedSection === 'Research Board' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+            </div>
+            {expandedSection === 'Research Board' && (
+              <div className="nav-section-items">
+                <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
+                  <Activity /> Period Comparison
+                </button>
+              </div>
+            )}
+          </section>
 
           {/* Navigation sections ordered: MASTER DATA -> RAW DATA -> CALLS -> DERIVATIVE -> Other catalog sections */}
           {(() => {
@@ -466,7 +484,7 @@ function App() {
       </aside>
 
       <main>
-        {!MASTER_PAGES.includes(active) && (
+        {!MASTER_PAGES.includes(active) && !active.startsWith('research:') && (
           <header>
             <div>
               <p className="eyebrow">{appInfo.eyebrow}</p>
@@ -493,6 +511,7 @@ function App() {
 
 
         {active === 'dashboard' && <Dashboard apiBase={apiBase} setActive={setActive} />}
+        {active === 'charts_visualizations' && <ChartsVisualizationsPage onSelectStock={t => {}} />}
         {active.startsWith('master:') && (
           <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} />
         )}
@@ -510,7 +529,9 @@ function App() {
           <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} />
         ) : active === 'best_option_strategy' ? (
           <BestOptionStrategyPage apiBase={apiBase} />
-        ) : !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && active !== 'dashboard' && (
+        ) : active === 'research:compare' ? (
+          <ResearchBoardPage />
+        ) : !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:') && active !== 'dashboard' && active !== 'charts_visualizations' && (
           <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} />
         )}
       </main>
@@ -1555,6 +1576,7 @@ function Dashboard({ apiBase, setActive }) {
   const [sortKey, setSortKey] = useState('rank')
   const [sortAsc, setSortAsc] = useState(true)
   const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -1633,7 +1655,7 @@ function Dashboard({ apiBase, setActive }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#7ec8f0' }}>#{t.rank}</td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div>
                         <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
@@ -1652,8 +1674,8 @@ function Dashboard({ apiBase, setActive }) {
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 7px',
+                          gap: 3,
+                          padding: '2px 6px',
                           borderRadius: 4,
                           fontSize: 11,
                           fontWeight: 600,
@@ -1662,6 +1684,31 @@ function Dashboard({ apiBase, setActive }) {
                       >
                         <FileText size={11} />
                         <span>Detail</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setVisualizerTicker(t.ticker)
+                        }}
+                        title={`View Interactive Candlestick Chart for ${t.ticker}`}
+                        style={{
+                          background: 'rgba(168, 85, 247, 0.12)',
+                          border: '1px solid rgba(168, 85, 247, 0.3)',
+                          color: '#c084fc',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          transition: 'all .15s ease',
+                        }}
+                      >
+                        <TrendingUp size={11} />
+                        <span>Chart</span>
                       </button>
                     </div>
                   </td>
@@ -1693,6 +1740,7 @@ function Dashboard({ apiBase, setActive }) {
         </div>
       </section>
       {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
     </div>
   )
 }
@@ -1731,9 +1779,10 @@ const reorderColumns = (cols) => {
   return ordered
 }
 
-// ─── Interactive Report Detail Modal with Iframe ──────────────────────────────
+// ─── Interactive Report Detail Modal with Iframe & Live Chart ─────────────────
 function ReportDetailModal({ ticker, onClose }) {
   if (!ticker) return null
+  const [activeTab, setActiveTab] = useState('report')
 
   return (
     <div
@@ -1745,8 +1794,8 @@ function ReportDetailModal({ ticker, onClose }) {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(3, 7, 18, 0.85)',
-        backdropFilter: 'blur(5px)',
+        backgroundColor: 'rgba(3, 7, 18, 0.88)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1758,14 +1807,14 @@ function ReportDetailModal({ ticker, onClose }) {
         className="modal-card"
         onClick={e => e.stopPropagation()}
         style={{
-          width: 'min(1200px, 96vw)',
+          width: 'min(1280px, 96vw)',
           height: '92vh',
-          backgroundColor: '#0f172a',
+          backgroundColor: '#090d16',
           borderRadius: 14,
           border: '1px solid rgba(56, 189, 248, 0.3)',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.85)',
           overflow: 'hidden',
         }}
       >
@@ -1775,12 +1824,14 @@ function ReportDetailModal({ ticker, onClose }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '14px 20px',
+            padding: '12px 20px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            backgroundColor: 'rgba(15, 23, 42, 0.98)',
+            backgroundColor: '#0f172a',
+            flexWrap: 'wrap',
+            gap: 10,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ background: 'rgba(56, 189, 248, 0.15)', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center' }}>
               <FileText size={18} style={{ color: '#38bdf8' }} />
             </div>
@@ -1789,8 +1840,50 @@ function ReportDetailModal({ ticker, onClose }) {
                 {ticker}
               </span>
               <span style={{ fontSize: 13, color: '#94a3b8', marginLeft: 8 }}>
-                Interactive Research & Analysis Detail
+                Deep Research & Visual Analytics
               </span>
+            </div>
+
+            {/* Tab switch */}
+            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: 2, marginLeft: 12 }}>
+              <button
+                onClick={() => setActiveTab('report')}
+                style={{
+                  background: activeTab === 'report' ? '#38bdf8' : 'transparent',
+                  color: activeTab === 'report' ? '#0f172a' : '#cbd5e1',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <FileText size={13} />
+                Research Report
+              </button>
+              <button
+                onClick={() => setActiveTab('chart')}
+                style={{
+                  background: activeTab === 'chart' ? '#38bdf8' : 'transparent',
+                  color: activeTab === 'chart' ? '#0f172a' : '#cbd5e1',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <TrendingUp size={13} />
+                Live Chart Studio
+              </button>
             </div>
           </div>
 
@@ -1806,7 +1899,7 @@ function ReportDetailModal({ ticker, onClose }) {
                 textDecoration: 'none',
                 color: '#38bdf8',
                 backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                padding: '6px 12px',
+                padding: '5px 10px',
                 borderRadius: 6,
                 border: '1px solid rgba(56, 189, 248, 0.3)',
                 fontSize: 12,
@@ -1827,7 +1920,7 @@ function ReportDetailModal({ ticker, onClose }) {
                 textDecoration: 'none',
                 color: '#94a3b8',
                 backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                padding: '6px 12px',
+                padding: '5px 10px',
                 borderRadius: 6,
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 fontSize: 12,
@@ -1847,7 +1940,7 @@ function ReportDetailModal({ ticker, onClose }) {
                 display: 'inline-flex',
                 padding: 6,
                 borderRadius: 6,
-                marginLeft: 6,
+                marginLeft: 4,
               }}
               title="Close (Esc)"
             >
@@ -1856,14 +1949,22 @@ function ReportDetailModal({ ticker, onClose }) {
           </div>
         </div>
 
-        {/* Modal Iframe */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
-          <iframe
-            src={`/api/reports/html/${ticker}`}
-            title={`${ticker} Research Report`}
-            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-          />
-        </div>
+        {/* Modal Body */}
+        {activeTab === 'report' ? (
+          <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
+            <iframe
+              src={`/api/reports/html/${ticker}`}
+              title={`${ticker} Research Report`}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            />
+          </div>
+        ) : (
+          <div style={{ flex: 1, padding: 16, overflowY: 'auto', backgroundColor: '#090d16' }}>
+            <ChartErrorBoundary>
+              <StockChartVisualizer ticker={ticker} height={520} />
+            </ChartErrorBoundary>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1877,6 +1978,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
 
   const displayColumns = useMemo(() => {
     if (!data?.columns) return []
@@ -2207,8 +2309,8 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: 4,
-                                  padding: '2px 7px',
+                                  gap: 3,
+                                  padding: '2px 6px',
                                   borderRadius: 4,
                                   fontSize: 11,
                                   fontWeight: 600,
@@ -2217,6 +2319,31 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                               >
                                 <FileText size={11} />
                                 <span>Detail</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setVisualizerTicker(cleanT)
+                                }}
+                                title={`View Interactive Candlestick Chart for ${cleanT}`}
+                                style={{
+                                  background: 'rgba(168, 85, 247, 0.12)',
+                                  border: '1px solid rgba(168, 85, 247, 0.3)',
+                                  color: '#c084fc',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  transition: 'all .15s ease',
+                                }}
+                              >
+                                <TrendingUp size={11} />
+                                <span>Chart</span>
                               </button>
                             </div>
                           </td>
@@ -2295,6 +2422,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
         </div>
       )}
       {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
     </section>
   )
 }
