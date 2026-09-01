@@ -106,7 +106,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-def generate_html_report(ticker: str) -> str:
+def generate_html_report(ticker: str, dataset: str = "intelligence") -> str:
     """
     Generate an HTML report for a specific ticker based on analysis summaries in PostgreSQL.
     Saves file under output/htmls/ and returns the absolute path.
@@ -115,8 +115,19 @@ def generate_html_report(ticker: str) -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
     file_path = output_dir / f"{ticker}_report.html"
 
+    target_dsn = None
+    if dataset == "us_intelligence":
+        from engine.database.connection import os
+        target_dsn = os.getenv("POSTGRES_DSN_US") or os.getenv("US_POSTGRES_DSN") or "postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db_us"
+
     try:
-        with get_db_connection() as conn:
+        if target_dsn:
+            import psycopg2
+            conn = psycopg2.connect(target_dsn)
+        else:
+            conn = get_db_connection().__enter__()
+
+        with conn:
             with conn.cursor() as cur:
                 # Query analysis details
                 cur.execute("""
@@ -136,15 +147,16 @@ def generate_html_report(ticker: str) -> str:
 
         close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
         
-        from engine.analysis.options import analyze_options_chain
-        from engine.analysis.footprint import analyze_footprint_and_news
-
-        # Parse JSON
         proj_list = json.loads(proj_raw) if proj_raw else []
-        opt_data = analyze_options_chain(ticker)
-        foot_data = analyze_footprint_and_news(ticker)
-        beh_s = round((foot_data["sentiment_score"] * 0.4) + ((foot_data["accumulation_score"] - 50.0) / 50.0 * 0.6), 2)
-        hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
+        opt_data = {}
+        foot_data = {}
+        if dataset != "us_intelligence":
+            from engine.analysis.options import analyze_options_chain
+            from engine.analysis.footprint import analyze_footprint_and_news
+            opt_data = analyze_options_chain(ticker)
+            foot_data = analyze_footprint_and_news(ticker)
+            beh_s = round((foot_data.get("sentiment_score", 0) * 0.4) + ((foot_data.get("accumulation_score", 50) - 50.0) / 50.0 * 0.6), 2)
+            hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
 
         # Generate clean projection row metrics
         periods = [

@@ -23,17 +23,18 @@ async function _req(method, url, body) {
 
 // ── Sectors ──────────────────────────────────────────────────────────────────
 export const sectors = {
-  list: ()              => _req('GET',    `${BASE}/sectors`),
-  create: (data)        => _req('POST',   `${BASE}/sectors`,       data),
-  update: (id, data)    => _req('PUT',    `${BASE}/sectors/${id}`, data),
-  remove: (id)          => _req('DELETE', `${BASE}/sectors/${id}`),
-  tickers: (id)         => _req('GET',    `${BASE}/sectors/${id}/tickers`),
-  summary: ()           => _req('GET',    `${BASE}/sectors-summary`),
-  importFile: async (file, customSector) => {
+  list: (dataset)       => _req('GET',    `${BASE}/sectors${dataset ? '?dataset=' + dataset : ''}`),
+  create: (data, dataset) => _req('POST', `${BASE}/sectors${dataset ? '?dataset=' + dataset : ''}`, data),
+  update: (id, data, dataset) => _req('PUT', `${BASE}/sectors/${id}${dataset ? '?dataset=' + dataset : ''}`, data),
+  remove: (id, dataset) => _req('DELETE', `${BASE}/sectors/${id}${dataset ? '?dataset=' + dataset : ''}`),
+  tickers: (id, dataset) => _req('GET',   `${BASE}/sectors/${id}/tickers${dataset ? '?dataset=' + dataset : ''}`),
+  summary: (dataset)    => _req('GET',    `${BASE}/sectors-summary${dataset ? '?dataset=' + dataset : ''}`),
+  importFile: async (file, customSector, dataset) => {
     const fd = new FormData()
     fd.append('file', file)
     if (customSector) fd.append('custom_sector', customSector)
-    const r = await fetch(`${BASE}/sectors/import-file`, {
+    const url = `${BASE}/sectors/import-file${dataset ? '?dataset=' + dataset : ''}`
+    const r = await fetch(url, {
       method: 'POST',
       body: fd,
     })
@@ -50,20 +51,21 @@ export const sectors = {
 
 // ── Tickers ───────────────────────────────────────────────────────────────────
 export const tickers = {
-  list: (params = {}) => {
+  list: (params = {}, dataset) => {
     const q = new URLSearchParams()
     if (params.search)    q.set('search',    params.search)
     if (params.sector_id) q.set('sector_id', params.sector_id)
     if (params.is_fno !== undefined) q.set('is_fno', params.is_fno)
     if (params.limit)     q.set('limit',     params.limit)
     if (params.offset)    q.set('offset',    params.offset)
+    if (dataset)          q.set('dataset',   dataset)
     const qs = q.toString()
     return _req('GET', `${BASE}/tickers${qs ? '?' + qs : ''}`)
   },
-  create: (data)           => _req('POST',   `${BASE}/tickers`,                  data),
-  update: (ticker, data)   => _req('PUT',    `${BASE}/tickers/${ticker}`,         data),
-  remove: (ticker)         => _req('DELETE', `${BASE}/tickers/${ticker}`),
-  setSectors: (ticker, ids) => _req('POST',  `${BASE}/tickers/${ticker}/sectors`, { sector_ids: ids }),
+  create: (data, dataset) => _req('POST', `${BASE}/tickers${dataset ? '?dataset=' + dataset : ''}`, data),
+  update: (ticker, data, dataset) => _req('PUT', `${BASE}/tickers/${ticker}${dataset ? '?dataset=' + dataset : ''}`, data),
+  remove: (ticker, dataset) => _req('DELETE', `${BASE}/tickers/${ticker}${dataset ? '?dataset=' + dataset : ''}`),
+  setSectors: (ticker, ids, dataset) => _req('POST', `${BASE}/tickers/${ticker}/sectors${dataset ? '?dataset=' + dataset : ''}`, { sector_ids: ids }),
 }
 
 // ── Watchlists ────────────────────────────────────────────────────────────────

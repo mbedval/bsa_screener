@@ -55,7 +55,7 @@ python3 -m venv .venv
 
 The engine CLI runs all background pipeline jobs and supports batch downloading, analysis, on-demand reviews, and report compiles.
 
-### Batch Operations
+### Batch Operations (Indian NSE Market — `bsa_db`)
 * **Download historical data & fundamentals for all master tickers**:
   ```bash
   .venv/bin/python3 -m engine.cli --mode download-all
@@ -69,7 +69,27 @@ The engine CLI runs all background pipeline jobs and supports batch downloading,
   .venv/bin/python3 -m engine.cli --mode analyze-all
   ```
 
-### Single Ticker On-Demand Operation
+### Explicit US Stock Data Download & Analysis (`bsa_db_us`)
+To download prices, compute technical indicators, and run quantitative scoring explicitly for the **US Stock Market** database (`bsa_db_us`):
+
+1. **Re-initialize & Seed US Market Database (if needed)**:
+   ```bash
+   python3 reinit_db_us.py
+   ```
+2. **Download US Stock Market Data (S&P 500 / Nasdaq-100 Tickers)**:
+   ```bash
+   POSTGRES_DSN=postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db_us .venv/bin/python3 -c "from engine.downloaders.us_market_data import download_all_us_tickers; download_all_us_tickers()"
+   ```
+3. **Execute Quantitative Scoring & Call Efficiency Engine for US Database**:
+   ```bash
+   POSTGRES_DSN=postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db_us .venv/bin/python3 -c "from engine.analysis.orchestrator import analyze_all_tickers; analyze_all_tickers()"
+   ```
+4. **Download & Analyze a Single US Ticker On-Demand (e.g. `AAPL` or `NVDA`)**:
+   ```bash
+   POSTGRES_DSN=postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db_us .venv/bin/python3 -c "from engine.downloaders.us_market_data import download_us_ticker_data; download_us_ticker_data('AAPL')"
+   ```
+
+### Single Ticker On-Demand Operation (NSE Market)
 * **Download and analyze a single stock (e.g. INFY) with HTML report**:
   ```bash
   .venv/bin/python3 -m engine.cli --ticker INFY
@@ -118,3 +138,6 @@ The application is now running. Open your browser and navigate to:
 - `/api/analysis/trigger?ticker=INFY` (`POST`): Triggers real-time live downloading and scoring for the stock.
 - `/api/reports/pdf/{ticker}` (`GET`): Downloads the generated PDF report.
 - `/api/master/` (`GET`/`POST`/`PUT`/`DELETE`): Full CRUD capabilities on sectors, watchlist mappings, and master ticker registry.
+
+
+python3 download_Analyse_us_market.py

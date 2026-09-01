@@ -82,39 +82,169 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
                 """, (ticker,))
                 prev_record = cur.fetchone()
                 
+                should_update_summary = True
                 if prev_record:
                     prev_close, prev_hybrid, prev_signal = prev_record
-                    # If close and scores are identical, skip updating database (Deduplication Rule)
                     if (prev_close and abs(prev_close - close) < 0.01 and 
                         prev_hybrid and abs(prev_hybrid - hybrid_score) < 0.01 and 
                         prev_signal == signal):
-                        logger.info(f"Deduplication rule: Skipping identical analysis summary for {ticker}.")
-                        return True
+                        should_update_summary = False
 
-                # Upsert records
+                if should_update_summary:
+                    # Upsert records in analysis_summaries (live current analysis state)
+                    cur.execute("""
+                        INSERT INTO analysis_summaries (
+                            ticker, close, technical_score, fundamental_score, behavioral_score,
+                            hybrid_score, overall_signal, confidence, reasons, projection_22d,
+                            option_insights, news_footprint, updated_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            close = EXCLUDED.close,
+                            technical_score = EXCLUDED.technical_score,
+                            fundamental_score = EXCLUDED.fundamental_score,
+                            behavioral_score = EXCLUDED.behavioral_score,
+                            hybrid_score = EXCLUDED.hybrid_score,
+                            overall_signal = EXCLUDED.overall_signal,
+                            confidence = EXCLUDED.confidence,
+                            reasons = EXCLUDED.reasons,
+                            projection_22d = EXCLUDED.projection_22d,
+                            option_insights = EXCLUDED.option_insights,
+                            news_footprint = EXCLUDED.news_footprint,
+                            updated_at = now()
+                    """, (
+                        ticker, close, tech_res["score"], fund_res["score"], behavioral_score,
+                        hybrid_score, signal, confidence, reasons_str, proj_json, opt_json, foot_json
+                    ))
+
+                # ── Persistent Historical Call Lifecycle & Efficiency Tracking ────────
+                # Check for an active OPEN call for this ticker
                 cur.execute("""
-                    INSERT INTO analysis_summaries (
-                        ticker, close, technical_score, fundamental_score, behavioral_score,
-                        hybrid_score, overall_signal, confidence, reasons, projection_22d,
-                        option_insights, news_footprint, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        close = EXCLUDED.close,
-                        technical_score = EXCLUDED.technical_score,
-                        fundamental_score = EXCLUDED.fundamental_score,
-                        behavioral_score = EXCLUDED.behavioral_score,
-                        hybrid_score = EXCLUDED.hybrid_score,
-                        overall_signal = EXCLUDED.overall_signal,
-                        confidence = EXCLUDED.confidence,
-                        reasons = EXCLUDED.reasons,
-                        projection_22d = EXCLUDED.projection_22d,
-                        option_insights = EXCLUDED.option_insights,
-                        news_footprint = EXCLUDED.news_footprint,
-                        updated_at = now()
-                """, (
-                    ticker, close, tech_res["score"], fund_res["score"], behavioral_score,
-                    hybrid_score, signal, confidence, reasons_str, proj_json, opt_json, foot_json
-                ))
+                    SELECT id, recommended_call, entry_price, stop_loss, target_price, created_at, min_cmp, max_cmp
+                    FROM historical_calls
+                    WHERE ticker = %s AND status = 'OPEN'
+                    ORDER BY created_at DESC LIMIT 1
+                """, (ticker,))
+                active_call = cur.fetchone()
+
+                now = datetime.now()
+
+                if active_call:
+                    call_id, rec_call, entry_price, stop_loss, target_price, created_at, prev_min, prev_max = active_call
+                    entry_price = float(entry_price)
+                    stop_loss = float(stop_loss)
+                    target_price = float(target_price)
+
+                    # Update lowest and highest CMP recorded over 30-day lifecycle
+                    new_min = min(float(prev_min), close) if prev_min is not None else close
+                    new_max = max(float(prev_max), close) if prev_max is not None else close
+
+                    # Calculate call age in days (30 calendar days = 22 trading days horizon)
+                    days_active = (now - created_at).days if created_at else 0
+                    
+                    is_closed = False
+                    outcome = "OPEN"
+
+                    if rec_call in ("BUY", "STRONG BUY"):
+                        csl = new_min  # Closest to Stop Loss (lowest CMP during lifecycle)
+                        ctl = new_max  # Closest to Target Price (highest CMP during lifecycle)
+                        
+                        dist_sl = abs(csl - stop_loss)
+                        dist_tgt = abs(target_price - ctl)
+
+                        if close >= target_price or ctl >= target_price:
+                            is_closed, outcome = True, "PASSED"
+                        elif close <= stop_loss or csl <= stop_loss:
+                            is_closed, outcome = True, "FAILED"
+                        elif days_active >= 30:
+                            is_closed = True
+                            # Balancer rule: if (Stop - CSL) < (Target - CTL) => Partial Fail else Partial Pass
+                            if dist_sl < dist_tgt:
+                                outcome = "PARTIAL FAIL"
+                            else:
+                                outcome = "PARTIAL SUCCESS"
+                        
+                        csl_pct = round(abs((csl - entry_price) / entry_price) * 100, 1)
+                        ctl_pct = round(abs((ctl - entry_price) / entry_price) * 100, 1)
+                        closest_str = f"(CSL: {csl_pct}%, CTL: {ctl_pct}%)"
+
+                    else: # SELL / STRONG SELL
+                        csl = new_max  # For short sell, highest CMP is closest to Stop Loss
+                        ctl = new_min  # For short sell, lowest CMP is closest to Target Price
+
+                        dist_sl = abs(stop_loss - csl)
+                        dist_tgt = abs(ctl - target_price)
+
+                        if close <= target_price or ctl <= target_price:
+                            is_closed, outcome = True, "PASSED"
+                        elif close >= stop_loss or csl >= stop_loss:
+                            is_closed, outcome = True, "FAILED"
+                        elif days_active >= 30:
+                            is_closed = True
+                            if dist_sl < dist_tgt:
+                                outcome = "PARTIAL FAIL"
+                            else:
+                                outcome = "PARTIAL SUCCESS"
+
+                        csl_pct = round(abs((csl - entry_price) / entry_price) * 100, 1)
+                        ctl_pct = round(abs((ctl - entry_price) / entry_price) * 100, 1)
+                        closest_str = f"(CSL: {csl_pct}%, CTL: {ctl_pct}%)"
+
+                    # Update call record with min/max CMP and closest info
+                    cur.execute("""
+                        UPDATE historical_calls
+                        SET min_cmp = %s, max_cmp = %s, closest_info = %s,
+                            status = CASE WHEN %s::boolean THEN 'CLOSED' ELSE status END,
+                            closed_at = CASE WHEN %s::boolean THEN NOW() ELSE closed_at END,
+                            final_cmp = CASE WHEN %s::boolean THEN %s ELSE final_cmp END,
+                            outcome = %s
+                        WHERE id = %s
+                    """, (new_min, new_max, closest_str, is_closed, is_closed, is_closed, close, outcome, call_id))
+
+                # If no active OPEN call exists and signal is actionable, snapshot a NEW persistent call
+                if not active_call and signal in ("BUY", "STRONG BUY", "SELL", "STRONG SELL"):
+                    if signal in ("BUY", "STRONG BUY"):
+                        sl = round(close * 0.96, 2)   # 4% Stop Loss
+                        tgt = round(close * 1.08, 2)  # 8% Target Price
+                    else:
+                        sl = round(close * 1.04, 2)
+                        tgt = round(close * 0.92, 2)
+
+                    cur.execute("""
+                        INSERT INTO historical_calls (
+                            ticker, recommended_call, confidence, entry_price, stop_loss, target_price,
+                            rr_ratio, status, created_at, review_date, outcome, min_cmp, max_cmp, closest_info
+                        ) VALUES (%s, %s, %s, %s, %s, %s, '1:2.00', 'OPEN', NOW(), CURRENT_DATE, 'OPEN', %s, %s, '(CSL: 0.0%%, CTL: 0.0%%)')
+                    """, (ticker, signal, confidence, close, sl, tgt, close, close))
+
+                # Recompute Call Efficiency Statistics per Ticker
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) AS total_calls,
+                        COUNT(CASE WHEN outcome = 'PASSED' THEN 1 END) AS passed,
+                        COUNT(CASE WHEN outcome = 'FAILED' THEN 1 END) AS failed,
+                        COUNT(CASE WHEN outcome = 'PARTIAL SUCCESS' THEN 1 END) AS partial_success,
+                        COUNT(CASE WHEN outcome = 'PARTIAL FAIL' THEN 1 END) AS partial_fail
+                    FROM historical_calls
+                    WHERE ticker = %s
+                """, (ticker,))
+                eff = cur.fetchone()
+                if eff and eff[0] > 0:
+                    tot, p, f, ps, pf = eff
+                    succ_rate = round(((p + (ps * 0.5)) / tot) * 100, 1)
+                    cur.execute("""
+                        INSERT INTO call_efficiency (
+                            ticker, total_calls, passed, failed, partial_success, partial_fail, success_rate_pct, last_updated
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            total_calls = EXCLUDED.total_calls,
+                            passed = EXCLUDED.passed,
+                            failed = EXCLUDED.failed,
+                            partial_success = EXCLUDED.partial_success,
+                            partial_fail = EXCLUDED.partial_fail,
+                            success_rate_pct = EXCLUDED.success_rate_pct,
+                            last_updated = NOW()
+                    """, (ticker, tot, p, f, ps, pf, succ_rate))
+
                 conn.commit()
         return True
 

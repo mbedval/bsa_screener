@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  Activity, ArrowRight, Ban, BarChart3, BookMarked, ChevronDown, ChevronRight,
+  Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, Plus,
-  RefreshCw, Search, Settings2, Shield, TableProperties, Tag,
+  RefreshCw, Search, Settings2, Share2, Shield, TableProperties, Tag,
   Download, Trash2, TrendingUp, User, Users, X
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage } from './visualizer/index.jsx'
 import './styles.css'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -287,8 +287,15 @@ function App() {
 
   useEffect(() => {
     const handlePopState = () => setPath(window.location.pathname.replace(/^\/|\/$/g, ''))
+    const handleNavTable = (e) => {
+      if (e.detail) setActive(e.detail)
+    }
     window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
+    window.addEventListener('navigate_table', handleNavTable)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('navigate_table', handleNavTable)
+    }
   }, [])
 
   const navigateTo = (newPath) => {
@@ -427,8 +434,14 @@ function App() {
             </div>
             {expandedSection === 'Research Board' && (
               <div className="nav-section-items">
+                <button className={`nav-item ${active === 'research:patterns' ? 'selected' : ''}`} onClick={() => setActive('research:patterns')}>
+                  <TrendingUp size={14} /> Pattern Viewer
+                </button>
+                <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
+                  <Layers size={14} /> Indices Pattern Viewer
+                </button>
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
-                  <Activity /> Period Comparison
+                  <Activity size={14} /> Period Comparison
                 </button>
               </div>
             )}
@@ -496,11 +509,18 @@ function App() {
         </nav>
         <div className="connection" title={dbInfo?.host ? `Connected to ${dbInfo.host}` : ''}>
           <i className={error ? 'offline' : ''} />
-          <span>
-            {error
-              ? 'Database unavailable'
-              : `PostgreSQL connected ${dbInfo?.host ? `(${maskHost(dbInfo.host)})` : ''}`}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span>
+              {error
+                ? 'Database unavailable'
+                : `PostgreSQL connected ${dbInfo?.host ? `(${maskHost(dbInfo.host)})` : ''}`}
+            </span>
+            {!error && dbInfo?.last_data_download && (
+              <span style={{ fontSize: 10, color: '#7ec8f0', fontWeight: 600, opacity: 0.9 }}>
+                ⏱️ Last data download: {dbInfo.last_data_download}
+              </span>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -534,7 +554,7 @@ function App() {
         {active === 'dashboard' && <Dashboard apiBase={apiBase} setActive={setActive} />}
         {active === 'charts_visualizations' && <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />}
         {active.startsWith('master:') && (
-          <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} />
+          <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} dataset={dataset} />
         )}
         {active.startsWith('sector:') && (
           <SectorIntelligencePage
@@ -550,6 +570,10 @@ function App() {
           <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} dataset={dataset} />
         ) : active === 'best_option_strategy' ? (
           <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:patterns' ? (
+          <PatternViewerPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:indices_patterns' ? (
+          <IndicesPatternViewerPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:compare' ? (
           <ResearchBoardPage apiBase={apiBase} dataset={dataset} />
         ) : !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:') && active !== 'dashboard' && active !== 'charts_visualizations' && (
@@ -1809,9 +1833,11 @@ const reorderColumns = (cols) => {
 }
 
 // ─── Interactive Report Detail Modal with Iframe & Live Chart ─────────────────
-function ReportDetailModal({ ticker, onClose }) {
+function ReportDetailModal({ ticker, onClose, dataset }) {
   if (!ticker) return null
   const [activeTab, setActiveTab] = useState('report')
+
+  const reportUrl = `/api/reports/html/${ticker}${dataset ? `?dataset=${encodeURIComponent(dataset)}` : ''}`
 
   return (
     <div
@@ -1918,7 +1944,7 @@ function ReportDetailModal({ ticker, onClose }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <a
-              href={`/api/reports/html/${ticker}`}
+              href={reportUrl}
               target="_blank"
               rel="noreferrer"
               style={{
@@ -1982,7 +2008,7 @@ function ReportDetailModal({ ticker, onClose }) {
         {activeTab === 'report' ? (
           <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
             <iframe
-              src={`/api/reports/html/${ticker}`}
+              src={reportUrl}
               title={`${ticker} Research Report`}
               style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             />
@@ -2161,8 +2187,191 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     return s
   }
 
+  const isCallEfficiency = activeTable === 'call_efficiency'
+
+  // Date range state for Call Efficiency filtering
+  const [effDateRange, setEffDateRange] = useState('ALL') // '7D', '30D', 'ALL', 'CUSTOM'
+  const [startDateInput, setStartDateInput] = useState('')
+  const [endDateInput, setEndDateInput] = useState('')
+
+  // Calculate summary metrics for call_efficiency page
+  const effMetrics = useMemo(() => {
+    if (!isCallEfficiency || !data?.rows) return null
+    let tot = 0, p = 0, f = 0, ps = 0, pf = 0
+    data.rows.forEach(r => {
+      tot += Number(r.total_calls || 0)
+      p += Number(r.passed || 0)
+      f += Number(r.failed || 0)
+      ps += Number(r.partial_success || 0)
+      pf += Number(r.partial_fail || 0)
+    })
+    const overallRate = tot > 0 ? (((p + (ps * 0.5)) / tot) * 100).toFixed(1) : '0.0'
+    return { tot, p, f, ps, pf, overallRate }
+  }, [isCallEfficiency, data?.rows])
+
   return (
     <section className="panel data-panel">
+      {isCallEfficiency && effMetrics && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(11, 25, 41, 0.98))',
+          borderRadius: 12, border: '1px solid rgba(56, 189, 248, 0.25)',
+          padding: 20, marginBottom: 20, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+        }}>
+          {/* Header & Date Range Filter Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, marginBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 14 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                📊 Call Efficiency Statistics Table
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                Statistical performance metric counters of algorithm recommendation outcomes over selectable timeframes.
+              </p>
+            </div>
+
+            {/* Time Period Filter Preset Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: '#7ec8f0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Calendar size={14} /> Time Period:
+              </span>
+              <button
+                className={`filter-btn ${effDateRange === '7D' ? 'active' : ''}`}
+                onClick={() => {
+                  setEffDateRange('7D')
+                  const d = new Date()
+                  d.setDate(d.getDate() - 7)
+                  const startStr = d.toISOString().split('T')[0]
+                  setStartDateInput(startStr)
+                  setEndDateInput('')
+                  onSearch(startStr, '')
+                }}
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6 }}
+              >
+                Last 7 Days
+              </button>
+              <button
+                className={`filter-btn ${effDateRange === '30D' ? 'active' : ''}`}
+                onClick={() => {
+                  setEffDateRange('30D')
+                  const d = new Date()
+                  d.setDate(d.getDate() - 30)
+                  const startStr = d.toISOString().split('T')[0]
+                  setStartDateInput(startStr)
+                  setEndDateInput('')
+                  onSearch(startStr, '')
+                }}
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6 }}
+              >
+                Last 30 Days
+              </button>
+              <button
+                className={`filter-btn ${effDateRange === 'ALL' ? 'active' : ''}`}
+                onClick={() => {
+                  setEffDateRange('ALL')
+                  setStartDateInput('')
+                  setEndDateInput('')
+                  onSearch('', '')
+                }}
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6 }}
+              >
+                All Time
+              </button>
+
+              {/* Winning Post / Share Summary Export */}
+              <button
+                onClick={() => {
+                  const summaryText = `🎯 BSA SCREENER CALL EFFICIENCY WINNING POST 🎯\n` +
+                    `----------------------------------------\n` +
+                    `📈 Overall Success Rate: ${effMetrics.overallRate}%\n` +
+                    `✅ Target Passed: ${effMetrics.p}\n` +
+                    `❌ Stopped Out (Failed): ${effMetrics.f}\n` +
+                    `⚡ Partial Success: ${effMetrics.ps}\n` +
+                    `⚠️ Partial Fail: ${effMetrics.pf}\n` +
+                    `📊 Total Recommendation Calls Evaluated: ${effMetrics.tot}\n` +
+                    `----------------------------------------\n` +
+                    `Verified by BSA Quantitative Engine`
+                  navigator.clipboard.writeText(summaryText)
+                  alert('🏆 Call Efficiency Statistics summary copied to clipboard as Winning Post!')
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #059669, #10b981)',
+                  color: '#fff', border: 'none', borderRadius: 6,
+                  padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  marginLeft: 6
+                }}
+              >
+                <Share2 size={13} /> Export Winning Post
+              </button>
+            </div>
+          </div>
+
+          {/* Clean 2-Column Statistics Table Layout */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
+            <div style={{ background: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'rgba(56, 189, 248, 0.12)', borderBottom: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', color: '#7ec8f0', fontWeight: 700 }}>Statistical Performance Field</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'right', color: '#7ec8f0', fontWeight: 700 }}>Evaluated Count Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '10px 14px', color: '#f8fafc', fontWeight: 600 }}>Total Call Recommended</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#38bdf8', fontFamily: "'DM Mono'" }}>{effMetrics.tot}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '10px 14px', color: '#22c55e', fontWeight: 600 }}>✅ Passed (Target Hit)</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#22c55e', fontFamily: "'DM Mono'" }}>{effMetrics.p}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '10px 14px', color: '#ef4444', fontWeight: 600 }}>❌ Failed (Stop Loss Hit)</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#ef4444', fontFamily: "'DM Mono'" }}>{effMetrics.f}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '10px 14px', color: '#eab308', fontWeight: 600 }}>⚡ Partial Success (30d Expired in Profit)</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#eab308', fontFamily: "'DM Mono'" }}>{effMetrics.ps}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '10px 14px', color: '#f97316', fontWeight: 600 }}>⚠️ Partial Fail (30d Expired in Loss)</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#f97316', fontFamily: "'DM Mono'" }}>{effMetrics.pf}</td>
+                  </tr>
+                  <tr style={{ background: 'rgba(56, 189, 248, 0.06)' }}>
+                    <td style={{ padding: '10px 14px', color: '#38bdf8', fontWeight: 700 }}>🔥 Overall Success Rate %</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#38bdf8', fontSize: 15, fontFamily: "'DM Mono'" }}>{effMetrics.overallRate}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Drilldown Link Box to View Full Detailed Historical Calls Breakdown */}
+            <div style={{ background: 'rgba(56, 189, 248, 0.05)', padding: 18, borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                🔍 Detailed Call Logs & Entry/Exit Status
+              </div>
+              <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5, margin: '0 0 14px 0' }}>
+                View complete individual stock call records, date recommended, review date, locked entry price, target/stop-loss levels, and final outcome status.
+              </p>
+              <button
+                onClick={() => {
+                  const evt = new CustomEvent('navigate_table', { detail: 'historical_calls' })
+                  window.dispatchEvent(evt)
+                }}
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  color: '#38bdf8', padding: '8px 16px', borderRadius: 6,
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6
+                }}
+              >
+                Open Detailed Historical Call Records <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="toolbar" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1 }}>
           <div className="search">
@@ -2484,8 +2693,8 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
           )}
         </div>
       )}
-      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
-      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
+      {detailTicker && <ReportDetailModal ticker={detailTicker} dataset={dataset} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} dataset={dataset} onClose={() => setVisualizerTicker(null)} />}
     </section>
   )
 }

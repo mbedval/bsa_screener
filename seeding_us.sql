@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS raw_fno_derivatives (
     PRIMARY KEY (ticker, strike_price, option_type, expiry_date)
 );
 
--- 5. Analysis Summaries
+-- 5. Analysis Summaries & Call Efficiency
 CREATE TABLE IF NOT EXISTS analysis_summaries (
     ticker             TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
     close              DOUBLE PRECISION,
@@ -162,6 +162,38 @@ CREATE TABLE IF NOT EXISTS analysis_summaries (
     option_insights    TEXT,
     news_footprint     TEXT,
     updated_at         TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS historical_calls (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(20) NOT NULL,
+    recommended_call VARCHAR(20) NOT NULL,
+    confidence NUMERIC(5,2),
+    entry_price NUMERIC(12,2) NOT NULL,
+    stop_loss NUMERIC(12,2) NOT NULL,
+    target_price NUMERIC(12,2) NOT NULL,
+    rr_ratio VARCHAR(20) DEFAULT '1:2.00',
+    status VARCHAR(20) DEFAULT 'OPEN',
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+    review_date DATE DEFAULT CURRENT_DATE,
+    closed_at TIMESTAMP WITHOUT TIME ZONE,
+    final_cmp NUMERIC(12,2),
+    outcome VARCHAR(30) DEFAULT 'OPEN',
+    min_cmp NUMERIC(12,2),
+    max_cmp NUMERIC(12,2),
+    closest_info VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS call_efficiency (
+    ticker VARCHAR(20) PRIMARY KEY,
+    total_calls INT DEFAULT 0,
+    passed INT DEFAULT 0,
+    failed INT DEFAULT 0,
+    partial_success INT DEFAULT 0,
+    partial_fail INT DEFAULT 0,
+    success_rate_pct NUMERIC(5,2) DEFAULT 0.0,
+    avg_return_pct NUMERIC(5,2) DEFAULT 0.0,
+    last_updated TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
 );
 
 -- Indexes

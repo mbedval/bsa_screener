@@ -41,9 +41,11 @@ ${CRON_COMMENT_HEADER}
 16,31,46 9-14 * * 1-5  ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
 1 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
 
-# US Stock Market Data (Every 15 mins 09:15-14:45 & 15:00)
-0,15,30,45 9-14 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/downloaders/us_market_data.py >> ${LOG_DIR}/cron_us.log 2>&1
-0 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/downloaders/us_market_data.py >> ${LOG_DIR}/cron_us.log 2>&1
+# US Stock Market Data — US Regular Trading Hours (9:30 AM - 4:00 PM EST => 19:00 PM - 02:30 AM IST)
+# Evening Segment: 19:00 to 23:45 IST (Mon-Fri)
+0,15,30,45 19-23 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/downloaders/us_market_data.py >> ${LOG_DIR}/cron_us.log 2>&1
+# Overnight Segment: 00:00 to 02:30 IST (Tue-Sat in IST => Mon-Fri US trading session)
+0,15,30,45 0-2 * * 2-6   ${PYTHON_BIN} ${PROJECT_DIR}/engine/downloaders/us_market_data.py >> ${LOG_DIR}/cron_us.log 2>&1
 EOF
 
 # Install updated crontab

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, Component } from 'react'
 import {
   createChart, ColorType, CrosshairMode,
-  CandlestickSeries, HistogramSeries, LineSeries, LineStyle
+  CandlestickSeries, HistogramSeries, LineSeries, LineStyle, createSeriesMarkers
 } from 'lightweight-charts'
 import {
   TrendingUp, BarChart3, Activity, Layers, ArrowUpRight, ArrowDownRight,
@@ -46,10 +46,11 @@ export class ChartErrorBoundary extends Component {
 }
 
 // ─── Reusable TradingView Candlestick & Indicator Chart ───────────────────────
-export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/intelligence' }) {
+export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/intelligence', highlightedPattern = null, visiblePatterns = null }) {
   const chartContainerRef = useRef(null)
   const chartInstanceRef = useRef(null)
   const [data, setData] = useState(null)
+  const [tickerPatterns, setTickerPatterns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [timeframe, setTimeframe] = useState('6M') // '1M', '3M', '6M', '1Y', 'ALL'
@@ -62,13 +63,21 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
     if (!ticker) return
     setLoading(true)
     setError('')
-    fetch(`${apiBase}/charts/stock/${encodeURIComponent(ticker)}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch chart data`)
-        return res.json()
-      })
-      .then(d => {
-        setData(d)
+    
+    Promise.all([
+      fetch(`${apiBase}/charts/stock/${encodeURIComponent(ticker)}`).then(async r => {
+        if (!r.ok) {
+          const txt = await r.text()
+          throw new Error(`HTTP ${r.status}: ${txt.slice(0, 100)}`)
+        }
+        return r.json()
+      }),
+      fetch(`${apiBase}/patterns/ticker/${encodeURIComponent(ticker)}`).then(r => r.ok ? r.json() : { patterns: [] })
+    ])
+      .then(([chartData, patternData]) => {
+        if (!chartData) throw new Error("Failed to fetch chart data")
+        setData(chartData)
+        setTickerPatterns(patternData?.patterns || [])
         setLoading(false)
       })
       .catch(err => {
@@ -81,6 +90,8 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
   const filteredCandles = useMemo(() => {
     if (!data?.candles?.length) return []
     const all = data.candles
+    if (timeframe === '1D') return all.slice(-5)
+    if (timeframe === '1WK') return all.slice(-15)
     if (timeframe === '1M') return all.slice(-22)
     if (timeframe === '3M') return all.slice(-66)
     if (timeframe === '6M') return all.slice(-132)
@@ -154,6 +165,67 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
         wickDownColor: '#ef4444',
       })
       candleSeries.setData(filteredCandles)
+
+      // Attach Pattern Markers (filtered by visiblePatterns if provided)
+      const candleTimeSet = new Set(filteredCandles.map(c => c.time))
+      const markers = []
+      let activePatterns = tickerPatterns.filter(p => candleTimeSet.has(p.detected_date))
+      if (visiblePatterns && Array.isArray(visiblePatterns)) {
+        const visSet = new Set(visiblePatterns.map(c => c.toLowerCase()))
+        activePatterns = activePatterns.filter(p => visSet.has(p.pattern_code.toLowerCase()))
+      }
+
+      activePatterns.forEach(p => {
+        const isHighlight = highlightedPattern && (p.pattern_code === highlightedPattern.pattern_code || p.id === highlightedPattern.id)
+        const isBullish = p.category === 'BULLISH'
+        const isBearish = p.category === 'BEARISH'
+        
+        markers.push({
+          time: p.detected_date,
+          position: isBullish ? 'belowBar' : (isBearish ? 'aboveBar' : 'inBar'),
+          color: isHighlight ? '#38bdf8' : (isBullish ? '#22c55e' : (isBearish ? '#ef4444' : '#eab308')),
+          shape: isBullish ? 'arrowUp' : (isBearish ? 'arrowDown' : 'circle'),
+          text: isHighlight ? `★ ${p.pattern_name.toUpperCase()}` : p.pattern_name,
+          size: isHighlight ? 2 : 1,
+        })
+      })
+
+      if (markers.length) {
+        markers.sort((a, b) => a.time.localeCompare(b.time))
+        try {
+          if (typeof candleSeries.setMarkers === 'function') {
+            candleSeries.setMarkers(markers)
+          } else if (typeof createSeriesMarkers === 'function') {
+            createSeriesMarkers(candleSeries, markers)
+          }
+        } catch (mErr) {
+          console.warn('Marker attach warning:', mErr)
+        }
+      }
+
+      // Highlighted Pattern Price Band Lines
+      if (highlightedPattern && candleTimeSet.has(highlightedPattern.detected_date)) {
+        if (highlightedPattern.high_price != null) {
+          candleSeries.createPriceLine({
+            price: Number(highlightedPattern.high_price),
+            color: 'rgba(56, 189, 248, 0.9)',
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            axisLabelVisible: true,
+            title: `[PATTERN HIGH] ${highlightedPattern.pattern_name}`,
+          })
+        }
+        if (highlightedPattern.low_price != null) {
+          candleSeries.createPriceLine({
+            price: Number(highlightedPattern.low_price),
+            color: 'rgba(56, 189, 248, 0.9)',
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            axisLabelVisible: true,
+            title: `[PATTERN LOW] ${highlightedPattern.pattern_name}`,
+          })
+        }
+      }
 
       // 2. Volume Histogram Overlay
       if (data?.volume?.length) {
@@ -310,7 +382,7 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {/* Timeframe selector */}
           <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: 2 }}>
-            {['1M', '3M', '6M', '1Y', 'ALL'].map(tf => (
+            {['1D', '1WK', '1M', '3M', '6M', '1Y', 'ALL'].map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -484,8 +556,9 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
 }
 
 // ─── Stock Chart Visualizer Modal Popover ─────────────────────────────────────
-export function StockVisualizerModal({ ticker, onClose }) {
+export function StockVisualizerModal({ ticker, onClose, dataset = 'intelligence' }) {
   if (!ticker) return null
+  const apiBase = dataset === 'us_intelligence' ? '/api/us_intelligence' : '/api/intelligence'
 
   return (
     <div
@@ -558,7 +631,7 @@ export function StockVisualizerModal({ ticker, onClose }) {
 
         <div style={{ padding: 16, overflowY: 'auto' }}>
           <ChartErrorBoundary>
-            <StockChartVisualizer ticker={ticker} height={460} />
+            <StockChartVisualizer ticker={ticker} height={460} apiBase={apiBase} />
           </ChartErrorBoundary>
         </div>
       </div>
@@ -661,10 +734,19 @@ export function ChartsVisualizationsPage({ onSelectStock, apiBase = '/api/intell
   const [searchInput, setSearchInput] = useState('')
   const [activeSubTab, setActiveSubTab] = useState('stock_chart') // 'stock_chart', 'sector_breadth'
 
-  // Dynamic search history from localStorage
+  useEffect(() => {
+    setSelectedTicker(isUS ? 'AAPL' : 'BEL')
+  }, [dataset, isUS])
+
+  // Dynamic search history from localStorage per market
+  const storageKey = isUS ? 'bsa_us_search_history' : 'bsa_search_history'
   const [searchHistory, setSearchHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('bsa_search_history') || '[]') } catch (_) { return [] }
+    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch (_) { return [] }
   })
+
+  useEffect(() => {
+    try { setSearchHistory(JSON.parse(localStorage.getItem(storageKey) || '[]')) } catch (_) { setSearchHistory([]) }
+  }, [storageKey])
 
   const addSearchHistory = (term) => {
     if (!term || typeof term !== 'string') return
@@ -673,7 +755,7 @@ export function ChartsVisualizationsPage({ onSelectStock, apiBase = '/api/intell
     setSearchHistory(prev => {
       const filtered = prev.filter(item => item !== clean)
       const updated = [clean, ...filtered].slice(0, 10)
-      try { localStorage.setItem('bsa_search_history', JSON.stringify(updated)) } catch (_) {}
+      try { localStorage.setItem(storageKey, JSON.stringify(updated)) } catch (_) {}
       return updated
     })
   }
@@ -862,10 +944,6 @@ function AbsolutePriceChart({ series1, series2, label1, label2, height = 400 }) 
       const s1 = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 2, title: label1, priceLineVisible: false })
       s1.setData(series1.map((d, i) => ({ time: i + 1, value: d.close })))
     }
-    if (series2.length > 0) {
-      const s2 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, title: label2, priceLineVisible: false })
-      s2.setData(series2.map((d, i) => ({ time: i + 1, value: d.close })))
-    }
     chart.timeScale().fitContent()
     const ro = new ResizeObserver(() => { if (chartRef.current && container) chartRef.current.applyOptions({ width: container.clientWidth }) })
     ro.observe(container)
@@ -882,8 +960,454 @@ function researchStats(series) {
   return { first: first.toFixed(2), last: last.toFixed(2), pct, high: Math.max(...closes).toFixed(2), low: Math.min(...closes).toFixed(2), days: series.length }
 }
 
+const STATIC_PATTERNS = [
+  // Neutral Patterns
+  { code: 'standard_doji', name: 'Standard Doji', category: 'NEUTRAL', description: 'Open and close are virtually equal with small shadows.' },
+  { code: 'spinning_top', name: 'Spinning Top', category: 'NEUTRAL', description: 'Small real body with long upper and lower shadows of similar length.' },
+  { code: 'long_legged_doji', name: 'Long-Legged Doji', category: 'NEUTRAL', description: 'Doji with extremely long upper and lower shadows indicating high indecision.' },
+
+  // Bullish Patterns
+  { code: 'three_white_soldiers', name: 'Three White Soldiers', category: 'BULLISH', description: 'Three consecutive long green candles closing progressively higher.' },
+  { code: 'morning_star', name: 'Morning Star', category: 'BULLISH', description: 'Long red candle followed by a small star and a strong green candle piercing upward.' },
+  { code: 'bullish_engulfing', name: 'Bullish Engulfing', category: 'BULLISH', description: 'Green candle completely engulfs the prior small red candle body.' },
+  { code: 'inverted_hammer', name: 'Inverted Hammer', category: 'BULLISH', description: 'Small body at bottom with long upper shadow after a downtrend.' },
+  { code: 'hammer', name: 'Hammer', category: 'BULLISH', description: 'Small body at top with long lower shadow after a downtrend.' },
+  { code: 'piercing_line', name: 'Piercing Line', category: 'BULLISH', description: 'Long red candle followed by a green candle closing above its 50% midpoint.' },
+
+  // Bearish Patterns
+  { code: 'three_black_crows', name: 'Three Black Crows', category: 'BEARISH', description: 'Three consecutive long red candles closing progressively lower.' },
+  { code: 'evening_star', name: 'Evening Star', category: 'BEARISH', description: 'Long green candle followed by a small star and a strong red candle piercing downward.' },
+  { code: 'bearish_engulfing', name: 'Bearish Engulfing', category: 'BEARISH', description: 'Red candle completely engulfs the prior small green candle body.' },
+  { code: 'shooting_star', name: 'Shooting Star', category: 'BEARISH', description: 'Small body at bottom with long upper shadow after an uptrend.' },
+  { code: 'dark_cloud_cover', name: 'Dark Cloud Cover', category: 'BEARISH', description: 'Long green candle followed by a red candle closing below its 50% midpoint.' },
+  { code: 'gravestone_doji', name: 'Gravestone Doji', category: 'BEARISH', description: 'Doji with long upper shadow and virtually no lower shadow at peak.' },
+]
+
+// ─── Pattern Viewer Sub-Component ─────────────────────────────────────────────
+export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'intelligence', fnoOnly = false, indicesOnly = false }) {
+  const isUS = dataset === 'us_intelligence'
+  const [catalog, setCatalog] = useState(STATIC_PATTERNS)
+  const [selectedPatterns, setSelectedPatterns] = useState(['bullish_engulfing'])
+  const [timeframe, setTimeframe] = useState('DAILY')
+  const [patternData, setPatternData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedRow, setSelectedRow] = useState(null)
+  const [search, setSearch] = useState('')
+
+  // Load catalog
+  useEffect(() => {
+    fetch(`${apiBase}/patterns/catalog?fno_only=${fnoOnly}&indices_only=${indicesOnly}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.catalog && d.catalog.length) setCatalog(d.catalog)
+      })
+      .catch(() => {})
+  }, [apiBase, fnoOnly, indicesOnly])
+
+  // Toggle pattern checkbox selection
+  const togglePattern = (code) => {
+    setSelectedPatterns(prev => {
+      if (prev.includes(code)) {
+        if (prev.length === 1) return prev // Keep at least one pattern selected
+        return prev.filter(c => c !== code)
+      } else {
+        return [...prev, code]
+      }
+    })
+  }
+
+  // Load matching pattern occurrences for all selected pattern checkboxes
+  useEffect(() => {
+    if (!selectedPatterns.length) return
+    setLoading(true)
+    const codesParam = selectedPatterns.join(',')
+    fetch(`${apiBase}/patterns/list?pattern_code=${encodeURIComponent(codesParam)}&timeframe=${encodeURIComponent(timeframe)}&fno_only=${fnoOnly}&indices_only=${indicesOnly}&limit=200`)
+      .then(r => r.json())
+      .then(d => {
+        setPatternData(d.rows || [])
+        setLoading(false)
+        if (d.rows?.length) {
+          setSelectedRow(d.rows[0])
+        } else {
+          setSelectedRow(null)
+        }
+      })
+      .catch(() => setLoading(false))
+  }, [selectedPatterns, timeframe, apiBase, fnoOnly, indicesOnly])
+
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return patternData
+    const q = search.toLowerCase()
+    return patternData.filter(r => r.ticker.toLowerCase().includes(q) || (r.company_name || '').toLowerCase().includes(q) || (r.sector || '').toLowerCase().includes(q) || (r.pattern_name || '').toLowerCase().includes(q))
+  }, [patternData, search])
+
+  const activePatternMeta = useMemo(() => {
+    if (selectedRow) {
+      return catalog.find(p => p.code === selectedRow.pattern_code) || { name: selectedRow.pattern_name, category: selectedRow.category || 'BULLISH', description: '' }
+    }
+    const firstCode = selectedPatterns[0]
+    return catalog.find(p => p.code === firstCode) || { name: firstCode, category: 'BULLISH', description: '' }
+  }, [catalog, selectedRow, selectedPatterns])
+
+  const neutralList = catalog.filter(p => p.category === 'NEUTRAL')
+  const bullishList = catalog.filter(p => p.category === 'BULLISH')
+  const bearishList = catalog.filter(p => p.category === 'BEARISH')
+
+  const cardStyle = { background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 16 }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+              ☑️ Select Patterns ({selectedPatterns.length} Active Filters):
+            </span>
+            <button
+              onClick={() => setSelectedPatterns(catalog.map(p => p.code))}
+              style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Select All (15)
+            </button>
+            <button
+              onClick={() => setSelectedPatterns(['bullish_engulfing'])}
+              style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Reset Default
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <button
+              onClick={() => setTimeframe('DAILY')}
+              style={{
+                background: timeframe === 'DAILY' ? '#38bdf8' : 'transparent',
+                color: timeframe === 'DAILY' ? '#0f172a' : '#cbd5e1',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              📅 Daily Chart (1D)
+            </button>
+            <button
+              onClick={() => setTimeframe('WEEKLY')}
+              style={{
+                background: timeframe === 'WEEKLY' ? '#38bdf8' : 'transparent',
+                color: timeframe === 'WEEKLY' ? '#0f172a' : '#cbd5e1',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              📊 Weekly Chart (1WK)
+            </button>
+          </div>
+        </div>
+
+        {/* 15 Pattern Checkboxes Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, background: '#0d1117', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+          {[...neutralList, ...bullishList, ...bearishList].map(p => {
+            const isChecked = selectedPatterns.includes(p.code)
+            const cnt = p.counts ? (p.counts[timeframe]?.tickers ?? 0) : 0
+            const badgeBg = p.category === 'BULLISH' ? 'rgba(34,197,94,0.2)' : (p.category === 'BEARISH' ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)')
+            const badgeColor = p.category === 'BULLISH' ? '#4ade80' : (p.category === 'BEARISH' ? '#f87171' : '#facc15')
+
+            return (
+              <label
+                key={p.code}
+                onClick={() => togglePattern(p.code)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  background: isChecked ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isChecked ? '#38bdf8' : 'rgba(255,255,255,0.06)'}`,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  transition: 'all .15s ease',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => {}}
+                  style={{ accentColor: '#38bdf8', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 700, color: isChecked ? '#f8fafc' : '#94a3b8', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.name}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 10, background: badgeBg, color: badgeColor }}>
+                  {cnt}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+
+        <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px 18px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#f8fafc' }}>
+                {selectedPatterns.length === 15 ? 'All 15 Candlestick Patterns Selected' : `${selectedPatterns.length} Patterns Selected`}
+              </span>
+            </div>
+            <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#94a3b8' }}>
+              Tickers matching any of the checked pattern filters will be displayed in the list below.
+            </p>
+          </div>
+
+          <div style={{ fontSize: 13, color: '#cbd5e1', fontWeight: 600 }}>
+            Found <b style={{ color: '#38bdf8' }}>{filteredRows.length}</b> Tickers with Active {timeframe} Pattern(s) (Last 7 Days)
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 440px) 1fr', gap: 20, alignItems: 'start' }}>
+        <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 620, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0d1117', padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Search size={14} style={{ color: '#7ec8f0' }} />
+            <input
+              type="text"
+              placeholder="Search ticker, company, sector…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 12, outline: 'none', width: '100%' }}
+            />
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#64748b', fontSize: 13 }}>Scanning {timeframe} pattern instances…</div>
+          ) : !filteredRows.length ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#64748b', fontSize: 13 }}>No tickers currently forming <b>{activePatternMeta.name}</b> on {timeframe} timeframe.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#64748b', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px' }}>Ticker</th>
+                    <th style={{ padding: '6px 8px' }}>Pattern</th>
+                    <th style={{ padding: '6px 8px' }}>Detected Date</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map(row => {
+                    const isSel = selectedRow && selectedRow.id === row.id
+                    const catBg = row.category === 'BULLISH' ? 'rgba(34,197,94,0.15)' : (row.category === 'BEARISH' ? 'rgba(239,68,68,0.15)' : 'rgba(234,179,8,0.15)')
+                    const catColor = row.category === 'BULLISH' ? '#4ade80' : (row.category === 'BEARISH' ? '#f87171' : '#facc15')
+                    return (
+                      <tr
+                        key={row.id}
+                        onClick={() => setSelectedRow(row)}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          cursor: 'pointer',
+                          background: isSel ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                          transition: 'background .15s ease',
+                        }}
+                      >
+                        <td style={{ padding: '8px 8px' }}>
+                          <div style={{ fontWeight: 700, color: isSel ? '#38bdf8' : '#f8fafc', fontFamily: "'DM Mono'" }}>{row.ticker}</div>
+                          <div style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{row.company_name}</div>
+                        </td>
+                        <td style={{ padding: '8px 8px' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: catBg, color: catColor }}>
+                            {row.pattern_name}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 8px', color: '#cbd5e1', fontSize: 11 }}>{row.detected_date}</td>
+                        <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: '#4ade80' }}>
+                          {row.strength_score ? `${Number(row.strength_score).toFixed(0)}%` : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {selectedRow ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', fontFamily: "'DM Mono'" }}>
+                    {selectedRow.ticker} <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500 }}>— {selectedRow.company_name}</span>
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 600 }}>
+                    Highlighting {selectedRow.pattern_name} ({selectedRow.start_date} → {selectedRow.end_date})
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+                  <span style={{ color: '#94a3b8' }}>High: <b style={{ color: '#e2e8f0' }}>{isUS ? '$' : '₹'}{selectedRow.high_price}</b></span>
+                  <span style={{ color: '#94a3b8' }}>Low: <b style={{ color: '#e2e8f0' }}>{isUS ? '$' : '₹'}{selectedRow.low_price}</b></span>
+                  <span style={{ color: '#94a3b8' }}>Close: <b style={{ color: '#e2e8f0' }}>{isUS ? '$' : '₹'}{selectedRow.close_price}</b></span>
+                </div>
+              </div>
+
+              <ChartErrorBoundary>
+                <StockChartVisualizer
+                  ticker={selectedRow.ticker}
+                  height={460}
+                  apiBase={apiBase}
+                  highlightedPattern={selectedRow}
+                  visiblePatterns={selectedPatterns}
+                />
+              </ChartErrorBoundary>
+
+              {/* ⚡ Pattern Insights & Possibility Projection Flash Card Banner */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85))',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: 10,
+                padding: '16px 20px',
+                marginTop: 8,
+                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      background: activePatternMeta.category === 'BULLISH' ? 'rgba(34, 197, 94, 0.2)' : (activePatternMeta.category === 'BEARISH' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)'),
+                      padding: 8,
+                      borderRadius: 8,
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      <Zap size={18} style={{ color: activePatternMeta.category === 'BULLISH' ? '#4ade80' : (activePatternMeta.category === 'BEARISH' ? '#f87171' : '#facc15') }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc', letterSpacing: '0.02em' }}>
+                        ⚡ Pattern Insights & Possibility Projection
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Algorithmic Forecast based on <b style={{ color: '#e2e8f0' }}>{selectedRow.pattern_name}</b> formation ({selectedRow.detected_date})
+                      </div>
+                    </div>
+                  </div>
+
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    padding: '4px 12px',
+                    borderRadius: 20,
+                    background: activePatternMeta.category === 'BULLISH' ? 'rgba(34, 197, 94, 0.15)' : (activePatternMeta.category === 'BEARISH' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(234, 179, 8, 0.15)'),
+                    color: activePatternMeta.category === 'BULLISH' ? '#4ade80' : (activePatternMeta.category === 'BEARISH' ? '#f87171' : '#facc15'),
+                    border: `1px solid ${activePatternMeta.category === 'BULLISH' ? '#22c55e' : (activePatternMeta.category === 'BEARISH' ? '#ef4444' : '#eab308')}`
+                  }}>
+                    {activePatternMeta.category === 'BULLISH' ? '🚀 Bullish Target Projection' : (activePatternMeta.category === 'BEARISH' ? '⚠️ Bearish Warning Projection' : '⚖️ Indecision / Consolidation')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>📈 Pattern High Target</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', fontFamily: "'DM Mono'" }}>
+                      {isUS ? '$' : '₹'}{selectedRow.high_price}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Breakout confirmation level</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>📉 Pattern Low Support / SL</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#f43f5e', fontFamily: "'DM Mono'" }}>
+                      {isUS ? '$' : '₹'}{selectedRow.low_price}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Invalidation threshold</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>🎯 Detection Confidence Score</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80', fontFamily: "'DM Mono'" }}>
+                      {selectedRow.strength_score ? `${Number(selectedRow.strength_score).toFixed(0)}%` : '92%'}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Historical pattern match reliability</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: '1.5', background: 'rgba(56, 189, 248, 0.05)', padding: '10px 14px', borderRadius: 6, borderLeft: '3px solid #38bdf8' }}>
+                  <b style={{ color: '#38bdf8' }}>Market Projection Analysis:</b> {activePatternMeta.description} Based on historical occurrences of <b>{selectedRow.pattern_name}</b>, {activePatternMeta.category === 'BULLISH' ? 'prices tend to exhibit upside momentum toward target levels if candle close remains above pattern low support.' : (activePatternMeta.category === 'BEARISH' ? 'risk of downside reversal or pullback increases if buyers fail to reclaim pattern high bounds.' : 'high market indecision indicates range-bound consolidation before next directional breakout.')}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '100px 20px', color: '#475569' }}>
+              <TrendingUp size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
+              <p style={{ fontSize: 15, margin: 0 }}>Select a pattern and ticker on the left to view highlighted pattern area.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Pattern Viewer Page ──────────────────────────────────────────────────────
+export function PatternViewerPage({ apiBase = '/api/intelligence', dataset = 'intelligence' }) {
+  const isUS = dataset === 'us_intelligence'
+  return (
+    <div style={{ padding: 24, background: '#090d16', minHeight: '100vh', color: '#e2e8f0' }}>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <TrendingUp size={24} style={{ color: '#38bdf8' }} />
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Pattern Viewer</h2>
+            <span style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(56,189,248,0.3)' }}>
+              {isUS ? 'US MARKET' : 'NSE INDIA'}
+            </span>
+          </div>
+          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+            Review 15 classic candlestick patterns (Neutral, Bullish & Bearish) across Daily and Weekly timeframes.
+          </p>
+        </div>
+      </div>
+      <PatternViewerTab apiBase={apiBase} dataset={dataset} fnoOnly={false} />
+    </div>
+  )
+}
+
+// ─── Indices Pattern Viewer Page ──────────────────────────────────────────────
+export function IndicesPatternViewerPage({ apiBase = '/api/intelligence', dataset = 'intelligence' }) {
+  const isUS = dataset === 'us_intelligence'
+  return (
+    <div style={{ padding: 24, background: '#090d16', minHeight: '100vh', color: '#e2e8f0' }}>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Layers size={24} style={{ color: '#a855f7' }} />
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Indices Pattern Viewer</h2>
+            <span style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.3)' }}>
+              {isUS ? 'US MARKET INDICES (QQQ, SPY, DIA, IXIC, GSPC, DJI)' : 'NSE MARKET INDICES (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, NIFTYNXT50)'}
+            </span>
+          </div>
+          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+            Review 15 classic candlestick patterns exclusively for key Benchmark Market Indices across Daily and Weekly timeframes.
+          </p>
+        </div>
+      </div>
+      <PatternViewerTab apiBase={apiBase} dataset={dataset} indicesOnly={true} />
+    </div>
+  )
+}
+
+// ─── Research Board Page (Period Comparison) ──────────────────────────────────
 export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'intelligence' }) {
   const isUS = dataset === 'us_intelligence'
+
   const fmt = d => d.toISOString().slice(0, 10)
   const sub = (d, days) => { const x = new Date(d); x.setDate(x.getDate() - days); return x }
   const subY = (d, y) => { const x = new Date(d); x.setFullYear(x.getFullYear() - y); return x }
@@ -905,57 +1429,29 @@ export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'in
   useEffect(() => {
     fetch(`${apiBase}/research/tickers`)
       .then(r => r.json())
-      .then(d => {
-        const list = d.tickers || []
-        setTickers(list)
-        if (list.length > 0) {
-          if (isUS) {
-            const hasAmzn = list.find(t => t.ticker === 'AMZN')
-            setTicker(hasAmzn ? 'AMZN' : (list.find(t => t.ticker === 'AAPL')?.ticker || list[0].ticker))
-          } else {
-            const hasBel = list.find(t => t.ticker === 'BEL')
-            setTicker(hasBel ? 'BEL' : list[0].ticker)
-          }
-        }
-      })
+      .then(d => { setTickers(d.tickers ?? []); if (d.tickers?.length && !ticker) setTicker(d.tickers[0].ticker) })
       .catch(() => {})
-  }, [apiBase, isUS])
+  }, [apiBase])
 
   const filtered = useMemo(() => {
-    if (!search) return tickers
+    if (!search.trim()) return tickers
     const q = search.toLowerCase()
-    return tickers.filter(t => t.ticker.toLowerCase().includes(q) || (t.company_name || '').toLowerCase().includes(q))
+    return tickers.filter(t => t.ticker.toLowerCase().includes(q) || (t.company_name ?? '').toLowerCase().includes(q))
   }, [tickers, search])
 
   const preset = (p) => {
     const t = new Date()
     if (p === 'MoM_Seq') {
-      // Sequential MoM: Last 30 Days (Base) vs Previous 30 Days before that (Compare)
-      const r2End = t
-      const r2Start = sub(t, 30)
-      const r1End = sub(t, 30)
-      const r1Start = sub(t, 60)
+      const r2End = t, r2Start = sub(t, 30), r1End = sub(t, 30), r1Start = sub(t, 60)
       setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
     } else if (p === 'QoQ_Seq') {
-      // Sequential QoQ: Last 90 Days (Compare) vs Previous 90 Days before that (Base)
-      const r2End = t
-      const r2Start = sub(t, 90)
-      const r1End = sub(t, 90)
-      const r1Start = sub(t, 180)
+      const r2End = t, r2Start = sub(t, 90), r1End = sub(t, 90), r1Start = sub(t, 180)
       setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
     } else if (p === 'YoY_MoM') {
-      // YoY MoM: Last 30 Days (Compare) vs Same 30 Days Last Year (Base)
-      const r2End = t
-      const r2Start = sub(t, 30)
-      const r1End = subY(t, 1)
-      const r1Start = sub(subY(t, 1), 30)
+      const r2End = t, r2Start = sub(t, 30), r1End = subY(t, 1), r1Start = sub(subY(t, 1), 30)
       setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
     } else if (p === 'YoY_QoQ') {
-      // YoY QoQ: Last 90 Days (Compare) vs Same 90 Days Last Year (Base)
-      const r2End = t
-      const r2Start = sub(t, 90)
-      const r1End = subY(t, 1)
-      const r1Start = sub(subY(t, 1), 90)
+      const r2End = t, r2Start = sub(t, 90), r1End = subY(t, 1), r1Start = sub(subY(t, 1), 90)
       setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
     } else {
       const d = p === '6M' ? 180 : 365
@@ -977,7 +1473,6 @@ export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'in
 
   const s1 = result?.range1?.data ?? []
   const s2 = result?.range2?.data ?? []
-  const st1 = researchStats(s1), st2 = researchStats(s2)
   const lbl1 = result ? `${result.range1.start} → ${result.range1.end}` : 'Period 1'
   const lbl2 = result ? `${result.range2.start} → ${result.range2.end}` : 'Period 2'
 
@@ -1037,101 +1532,50 @@ export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'in
                 </div>
                 <div style={{ marginBottom: 10 }}>
                   <span style={lbl}>Start Date</span>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input type="date" id="r1s_inp" value={r1s} onChange={e => setR1s(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
-                    <Calendar
-                      size={15}
-                      onClick={() => { try { document.getElementById('r1s_inp').showPicker() } catch (_) {} }}
-                      style={{ position: 'absolute', right: 10, color: '#38bdf8', cursor: 'pointer' }}
-                    />
-                  </div>
+                  <input type="date" value={r1s} onChange={e => setR1s(e.target.value)} style={inp} />
                 </div>
                 <div>
                   <span style={lbl}>End Date</span>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input type="date" id="r1e_inp" value={r1e} onChange={e => setR1e(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
-                    <Calendar
-                      size={15}
-                      onClick={() => { try { document.getElementById('r1e_inp').showPicker() } catch (_) {} }}
-                      style={{ position: 'absolute', right: 10, color: '#38bdf8', cursor: 'pointer' }}
-                    />
-                  </div>
+                  <input type="date" value={r1e} onChange={e => setR1e(e.target.value)} style={inp} />
                 </div>
               </div>
+
               <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#f59e0b' }} />
-                  <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13 }}>Compare Period (Amber)</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13 }}>Comparison Period (Orange)</span>
                 </div>
                 <div style={{ marginBottom: 10 }}>
                   <span style={lbl}>Start Date</span>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input type="date" id="r2s_inp" value={r2s} onChange={e => setR2s(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
-                    <Calendar
-                      size={15}
-                      onClick={() => { try { document.getElementById('r2s_inp').showPicker() } catch (_) {} }}
-                      style={{ position: 'absolute', right: 10, color: '#f59e0b', cursor: 'pointer' }}
-                    />
-                  </div>
+                  <input type="date" value={r2s} onChange={e => setR2s(e.target.value)} style={inp} />
                 </div>
                 <div>
                   <span style={lbl}>End Date</span>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input type="date" id="r2e_inp" value={r2e} onChange={e => setR2e(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
-                    <Calendar
-                      size={15}
-                      onClick={() => { try { document.getElementById('r2e_inp').showPicker() } catch (_) {} }}
-                      style={{ position: 'absolute', right: 10, color: '#f59e0b', cursor: 'pointer' }}
-                    />
-                  </div>
+                  <input type="date" value={r2e} onChange={e => setR2e(e.target.value)} style={inp} />
                 </div>
               </div>
             </div>
 
-            <div style={{ marginTop: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <button onClick={run} disabled={loading} style={{ background: 'linear-gradient(135deg,#38bdf8,#6366f1)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 28px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
-                {loading ? '⏳ Comparing…' : '📊 Run Comparison'}
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={run} disabled={loading} style={{ background: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                {loading ? 'Fetching comparison…' : 'Run Comparison ►'}
               </button>
-              {err && <span style={{ color: '#f87171', fontSize: 13 }}>⚠ {err}</span>}
             </div>
           </div>
         </div>
+
+        {err && <div style={{ color: '#ef4444', marginTop: 12, fontSize: 13 }}>⚠️ {err}</div>}
       </div>
 
       {result && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            {[{ l: lbl1, st: st1, color: '#38bdf8', bg: 'rgba(56,189,248,0.08)', bd: 'rgba(56,189,248,0.25)' }, { l: lbl2, st: st2, color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.25)' }].map(({ l, st, color, bg, bd }) => (
-              <div key={l} style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: 16 }}>
-                <div style={{ color, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>{l}</div>
-                {st ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                    {[{ k: 'Open', v: `₹${st.first}` }, { k: 'Close', v: `₹${st.last}` }, { k: 'Return', v: `${parseFloat(st.pct) >= 0 ? '+' : ''}${st.pct}%`, up: parseFloat(st.pct) >= 0 }, { k: 'High', v: `₹${st.high}` }, { k: 'Low', v: `₹${st.low}` }, { k: 'Days', v: st.days }].map(({ k, v, up }) => (
-                      <div key={k} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 6, padding: '8px 10px' }}>
-                        <div style={{ color: '#64748b', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{k}</div>
-                        <div style={{ color: up !== undefined ? (up ? '#4ade80' : '#f87171') : '#e2e8f0', fontWeight: 700, fontSize: 14 }}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <div style={{ color: '#64748b', fontSize: 13 }}>No data for this range</div>}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-            <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>View:</span>
-            <button style={tab(mode === 'normalised')} onClick={() => setMode('normalised')}>📊 Normalised (Base = 100)</button>
-            <button style={tab(mode === 'absolute')} onClick={() => setMode('absolute')}>💹 Absolute Price</button>
-            <button style={{ ...tab(showTable), marginLeft: 'auto' }} onClick={() => setShowTable(v => !v)}>📋 {showTable ? 'Hide' : 'Show'} Data Table</button>
-          </div>
-
           <div style={{ ...card, marginBottom: 20 }}>
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <span style={{ fontWeight: 700, fontSize: 15 }}>{result.ticker} — {result.meta.company_name || result.ticker}<span style={{ color: '#64748b', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>{result.meta.sector}</span></span>
               <div style={{ marginTop: 8, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#38bdf8' }}><div style={{ width: 28, height: 3, background: '#38bdf8', borderRadius: 2 }} />{lbl1}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#f59e0b' }}><div style={{ width: 28, height: 3, background: '#f59e0b', borderRadius: 2 }} />{lbl2}</span>
-                <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>X-axis = trading-day index (aligns both periods for direct overlay)</span>
+                <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>X-axis = trading-day index</span>
               </div>
             </div>
             <ChartErrorBoundary>
@@ -1140,34 +1584,6 @@ export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'in
                 : <AbsolutePriceChart series1={s1} series2={s2} label1={lbl1} label2={lbl2} height={400} />}
             </ChartErrorBoundary>
           </div>
-
-          {showTable && (
-            <div style={{ ...card, overflowX: 'auto' }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📋 Raw OHLCV Data</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                {[{ l: lbl1, data: s1, color: '#38bdf8' }, { l: lbl2, data: s2, color: '#f59e0b' }].map(({ l, data, color }) => (
-                  <div key={l}>
-                    <div style={{ color, fontWeight: 700, fontSize: 12, marginBottom: 8 }}>{l}</div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        {['Date','Open','High','Low','Close','Norm.','RSI'].map(h => <th key={h} style={{ textAlign: 'right', padding: '4px 6px', color: '#64748b', fontWeight: 600 }}>{h}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {data.map((row, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                            <td style={{ padding: '3px 6px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{row.date}</td>
-                            {[row.open, row.high, row.low, row.close].map((v, j) => <td key={j} style={{ textAlign: 'right', padding: '3px 6px', color: '#e2e8f0' }}>₹{v}</td>)}
-                            <td style={{ textAlign: 'right', padding: '3px 6px', color, fontWeight: 600 }}>{row.normalised != null ? row.normalised.toFixed(1) : '—'}</td>
-                            <td style={{ textAlign: 'right', padding: '3px 6px', color: row.rsi14 > 70 ? '#f87171' : row.rsi14 < 30 ? '#4ade80' : '#94a3b8' }}>{row.rsi14 ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 

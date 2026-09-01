@@ -81,6 +81,25 @@ def database_info_for(dsn: str) -> dict[str, Any]:
             databases = [row["datname"] for row in cur.fetchall()]
             cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s AND table_type = 'BASE TABLE' ORDER BY table_name", (settings.database_schema,))
             tables = [row["table_name"] for row in cur.fetchall()]
+            
+            # Fetch latest data download / calculation completion time
+            last_download = None
+            try:
+                cur.execute("""
+                    SELECT 
+                        GREATEST(
+                            (SELECT MAX(downloaded_at)::timestamp FROM ohlcv_daily),
+                            (SELECT MAX(updated_at)::timestamp FROM analysis_summaries),
+                            (SELECT MAX(computed_at)::timestamp FROM indicators_daily)
+                        ) AS last_download_time
+                """)
+                row = cur.fetchone()
+                if row and row.get("last_download_time"):
+                    dt = row["last_download_time"]
+                    last_download = dt.strftime("%Y-%m-%d %H:%M:%S") if hasattr(dt, "strftime") else str(dt)
+            except Exception as e:
+                logger.warning(f"Could not fetch last download timestamp: {e}")
+
             host_val = current.get("server_addr") or settings.postgres_host
             return {
                 "database": current["name"],
@@ -88,13 +107,14 @@ def database_info_for(dsn: str) -> dict[str, Any]:
                 "host": str(host_val) if host_val else settings.postgres_host,
                 "schema": settings.database_schema,
                 "available_databases": databases,
-                "tables": tables
+                "tables": tables,
+                "last_data_download": last_download,
             }
     except OperationalError as error:
         raise database_error(error)
 
 
-def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: str | None, ticker: str | None) -> dict[str, Any]:
+def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: str | None, ticker: str | None, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
     all_tables = table_names(dsn)
     if table_name == "delivery_spikes":
         try:
@@ -494,23 +514,46 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
 
                 if table_name == "historical_calls":
                     cols = ["uniqueid", "ticker", "recommended_call", "confidence", "cmp", "stop_loss", "target_price", "rr_ratio", "status", "timestamp", "review_date", "latest_cmp", "call_status", "closest"]
-                    select_sql = """
+                    conditions, params = [], []
+                    if ticker:
+                        conditions.append(sql.SQL("h.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    if search:
+                        searchable = ["h.ticker", "h.recommended_call", "h.outcome", "h.status"]
+                        conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                        params.extend([f"%{search}%"] * len(searchable))
+                    if start_date:
+                        conditions.append(sql.SQL("h.created_at >= %s::timestamp")); params.append(f"{start_date} 00:00:00")
+                    if end_date:
+                        conditions.append(sql.SQL("h.created_at <= %s::timestamp")); params.append(f"{end_date} 23:59:59")
+                    
+                    where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                    base_from = sql.SQL(" FROM historical_calls h JOIN ticker_master t ON h.ticker = t.ticker ")
+
+                    count_sql = sql.SQL("SELECT count(*) AS total ") + base_from + where_clause
+                    cur.execute(count_sql, params)
+                    total = cur.fetchone()["total"]
+
+                    select_sql = sql.SQL("""
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS uniqueid,
-                        a.ticker,
-                        a.overall_signal AS recommended_call,
-                        ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
-                        a.close AS cmp,
-                        ROUND((a.close * 0.96)::numeric, 2) AS stop_loss,
-                        ROUND((a.close * 1.08)::numeric, 2) AS target_price,
-                        '1:2.00' AS rr_ratio,
-                        'OPEN' AS status,
-                        to_char(a.updated_at, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
-                        to_char(a.updated_at, 'YYYY-MM-DD') AS review_date,
-                        a.close AS latest_cmp,
-                        'OPEN' AS call_status,
-                        '(CSL: 4.0%%, CTL: 8.0%%)' AS closest
-                    """
+                        to_char(h.created_at, 'YYMMDDHH24MISS') AS uniqueid,
+                        h.ticker,
+                        h.recommended_call,
+                        ROUND(h.confidence::numeric, 1) AS confidence,
+                        h.entry_price AS cmp,
+                        h.stop_loss,
+                        h.target_price,
+                        h.rr_ratio,
+                        h.status,
+                        to_char(h.created_at, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
+                        to_char(h.created_at, 'YYYY-MM-DD') AS review_date,
+                        COALESCE(h.final_cmp, h.entry_price) AS latest_cmp,
+                        h.outcome AS call_status,
+                        COALESCE(h.closest_info, '(CSL: 0.0%%, CTL: 0.0%%)') AS closest
+                    """)
+                    data_sql = select_sql + base_from + where_clause + sql.SQL(" ORDER BY h.created_at DESC LIMIT %s OFFSET %s")
+                    cur.execute(data_sql, [*params, limit, offset])
+                    rows = cur.fetchall()
+                    return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
                 else: # intraday_call
                     cols = ["uniqueid", "ticker", "signal", "bet", "confidence", "entry_price", "stop_loss", "target_price", "cmp", "actionable_insight", "fo_buildup", "tech_reason", "analysed_at", "pcr", "support", "resistance"]
                     select_sql = """
@@ -621,12 +664,38 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                             params.append(f"%{term}%")
                     conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(or_parts) + sql.SQL(")"))
             where = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
-            order_column = next((c for c in ("run_time", "timestamp", "analysed_at", "last_updated", "latest_date", "trade_date", "date") if c in columns), columns[0])
-            base = sql.SQL(" FROM {}.{} ").format(sql.Identifier(settings.database_schema), sql.Identifier(table_name))
-            cur.execute(sql.SQL("SELECT count(*) AS total") + base + where, params)
-            total = cur.fetchone()["total"]
-            query = sql.SQL("SELECT *") + base + where + sql.SQL(" ORDER BY {} DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(order_column))
-            cur.execute(query, [*params, limit, offset])
+            order_column = next((c for c in ("run_time", "timestamp", "analysed_at", "last_updated", "latest_date", "trade_date", "date", "updated_at") if c in columns), columns[0])
+            
+            # For analysis/scanner/master tables with a 'ticker' or 'symbol' column, deduplicate to show latest state per ticker
+            distinct_col = "ticker" if "ticker" in columns else ("symbol" if "symbol" in columns else None)
+            
+            if distinct_col and table_name not in ("ohlcv_daily", "indicators_daily", "raw_fno_derivatives"):
+                base_cte = sql.SQL("""
+                    WITH distinct_rows AS (
+                        SELECT DISTINCT ON ({}) *
+                        FROM {}.{}
+                        {}
+                        ORDER BY {}, {} DESC NULLS LAST
+                    )
+                """).format(
+                    sql.Identifier(distinct_col),
+                    sql.Identifier(settings.database_schema),
+                    sql.Identifier(table_name),
+                    where,
+                    sql.Identifier(distinct_col),
+                    sql.Identifier(order_column)
+                )
+                cur.execute(base_cte + sql.SQL("SELECT count(*) AS total FROM distinct_rows"), params)
+                total = cur.fetchone()["total"]
+                query = base_cte + sql.SQL("SELECT * FROM distinct_rows ORDER BY {} DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(order_column))
+                cur.execute(query, [*params, limit, offset])
+            else:
+                base = sql.SQL(" FROM {}.{} ").format(sql.Identifier(settings.database_schema), sql.Identifier(table_name))
+                cur.execute(sql.SQL("SELECT count(*) AS total") + base + where, params)
+                total = cur.fetchone()["total"]
+                query = sql.SQL("SELECT *") + base + where + sql.SQL(" ORDER BY {} DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(order_column))
+                cur.execute(query, [*params, limit, offset])
+            
             raw_rows = cur.fetchall()
 
             if table_name == "fno_master":
@@ -695,6 +764,8 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
     """Synthesizes top 15 technical-fundamental trade opportunities dynamically from live database analysis summaries."""
     results = []
     try:
+        is_us = dsn == settings.us_postgres_dsn
+        curr_sym = "$" if is_us else "₹"
         with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT 
@@ -737,9 +808,9 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
                     "stock_name": r["stock_name"],
                     "sector": r["sector"],
                     "current_price": round(price, 2),
-                    "best_buy_zone": f"₹{buy_low:,.2f} – ₹{buy_high:,.2f}",
-                    "stop_loss": f"₹{stop_loss:,.2f}",
-                    "target_price": f"₹{target1:,.2f} (T2: ₹{target2:,.2f})",
+                    "best_buy_zone": f"{curr_sym}{buy_low:,.2f} – {curr_sym}{buy_high:,.2f}",
+                    "stop_loss": f"{curr_sym}{stop_loss:,.2f}",
+                    "target_price": f"{curr_sym}{target1:,.2f} (T2: {curr_sym}{target2:,.2f})",
                     "risk_reward": f"1 : {rr_ratio:.2f}",
                     "setup_signal": r["setup_signal"],
                     "score": round(float(r["hybrid_score"]) * 100, 1),
@@ -748,25 +819,44 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error synthesizing dynamic top trades: {e}")
 
-    # Fallback to candidates_meta dynamically resolving prices from ohlcv_daily if DB is empty
-    if not results:
-        candidates_meta = [
-            {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike above 30-day average. Solid operating margins."},
-            {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Energy", "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout."},
-            {"ticker": "HDFCBANK", "stock_name": "HDFC Bank", "sector": "Financials", "setup_signal": "Bullish Reversal", "score": 96.5, "insight": "Double-bottom reversal pattern confirmed above support. Top-tier asset quality metrics."},
-            {"ticker": "INFY", "stock_name": "Infosys Limited", "sector": "Technology", "setup_signal": "Long Buildup", "score": 94.8, "insight": "Fresh FNO long position buildup with OI addition. RSI-14 momentum crossing 62 with clean EMA20 support."},
-            {"ticker": "HAL", "stock_name": "Hindustan Aeronautics", "sector": "Defence", "setup_signal": "Trend Trading", "score": 92.5, "insight": "Robust defence aerospace order book. Consistent revenue CAGR with strong return on capital."},
-            {"ticker": "CANBK", "stock_name": "Canara Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 91.8, "insight": "Expanding net interest margin and consistent reduction in non-performing assets."},
-            {"ticker": "TCS", "stock_name": "Tata Consultancy Services", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 89.8, "insight": "Multi-year deal wins expanding order book. Weekly swinger buy signal active with high ROE."},
-            {"ticker": "BHARTIARTL", "stock_name": "Bharti Airtel", "sector": "Telecom", "setup_signal": "Short Covering", "score": 88.8, "insight": "Short covering rally active in derivative contracts. Strong ARPU expansion & institutional inflow."},
-            {"ticker": "ICICIBANK", "stock_name": "ICICI Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 87.9, "insight": "Sustained upward trendline continuation with OI expansion. Outstanding NIM & ROA fundamentals."},
-            {"ticker": "MARUTI", "stock_name": "Maruti Suzuki", "sector": "Automobiles", "setup_signal": "Trend Trading", "score": 86.5, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated delivery ratio."},
-            {"ticker": "LT", "stock_name": "Larsen & Toubro", "sector": "Infrastructure", "setup_signal": "Breakout", "score": 85.4, "insight": "Order book visibility at all-time highs. Breakout above consolidation zone with heavy volume."},
-            {"ticker": "SONACOMS", "stock_name": "Sona BLW Precision", "sector": "Automobiles", "setup_signal": "Breakout", "score": 84.0, "insight": "Fresh EV drive system order wins. Delivery volume above 20-day EMA with MACD bullish crossover."},
-            {"ticker": "COFORGE", "stock_name": "Coforge Limited", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 83.8, "insight": "Multi-year deal wins expanding order book with expanding operating margins."},
-            {"ticker": "HDFCLIFE", "stock_name": "HDFC Life Insurance", "sector": "Financials", "setup_signal": "Support Bounce", "score": 82.5, "insight": "Bouncing cleanly off support level with positive institutional delivery accumulation."},
-            {"ticker": "PAYTM", "stock_name": "One97 Communications", "sector": "Technology", "setup_signal": "Short Covering", "score": 81.7, "insight": "Massive short covering rally following UPI payment volume recovery and operating breakeven trajectory."}
-        ]
+        is_us = dsn == settings.us_postgres_dsn
+        curr_sym = "$" if is_us else "₹"
+        if is_us:
+            candidates_meta = [
+                {"ticker": "NVDA", "stock_name": "NVIDIA Corporation", "sector": "Technology", "setup_signal": "Strong Buy", "score": 96.5, "insight": "Robust AI data center GPU demand. Breakout above consolidation zone with heavy institutional accumulation."},
+                {"ticker": "AAPL", "stock_name": "Apple Inc.", "sector": "Technology", "setup_signal": "Trend Trading", "score": 94.2, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated volume expansion."},
+                {"ticker": "MSFT", "stock_name": "Microsoft Corporation", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 93.8, "insight": "Azure cloud growth accelerating. Weekly swinger buy signal active with high ROE."},
+                {"ticker": "AMZN", "stock_name": "Amazon.com Inc.", "sector": "Consumer", "setup_signal": "Operator Footprint", "score": 92.5, "insight": "Operator footprints detected with delivery spike above 30-day average. Expanding AWS operating margins."},
+                {"ticker": "GOOGL", "stock_name": "Alphabet Inc.", "sector": "Technology", "setup_signal": "Bullish Reversal", "score": 91.8, "insight": "Double-bottom reversal pattern confirmed above support with digital ad revenue growth."},
+                {"ticker": "META", "stock_name": "Meta Platforms Inc.", "sector": "Technology", "setup_signal": "Strong Buy", "score": 90.5, "insight": "Sustained upward trendline continuation with ad revenue growth and AI ad targeting efficiency."},
+                {"ticker": "TSLA", "stock_name": "Tesla Inc.", "sector": "Automotive", "setup_signal": "Breakout", "score": 88.9, "insight": "Breakout above resistance level with expanding EV delivery margins and FSD expansion."},
+                {"ticker": "AMD", "stock_name": "Advanced Micro Devices", "sector": "Semiconductors", "setup_signal": "Long Buildup", "score": 87.8, "insight": "Instinct AI accelerator momentum crossing key EMA resistance levels."},
+                {"ticker": "JPM", "stock_name": "JPMorgan Chase & Co.", "sector": "Financials", "setup_signal": "Strong Buy", "score": 86.9, "insight": "Top-tier net interest income growth with solid return on tangible common equity."},
+                {"ticker": "BAC", "stock_name": "Bank of America Corp.", "sector": "Financials", "setup_signal": "Support Bounce", "score": 85.5, "insight": "Bouncing cleanly off support level with positive institutional delivery accumulation."},
+                {"ticker": "GS", "stock_name": "Goldman Sachs Group", "sector": "Financials", "setup_signal": "Swinger Buy", "score": 84.8, "insight": "Rebound in global investment banking fees and asset management net inflows."},
+                {"ticker": "V", "stock_name": "Visa Inc.", "sector": "Financials", "setup_signal": "Trend Trading", "score": 84.0, "insight": "Consistent cross-border payment volume expansion with high operating margins."},
+                {"ticker": "MA", "stock_name": "Mastercard Inc.", "sector": "Financials", "setup_signal": "Trend Trading", "score": 83.5, "insight": "Solid gross dollar volume growth and strong free cash flow generation."},
+                {"ticker": "UNH", "stock_name": "UnitedHealth Group", "sector": "Healthcare", "setup_signal": "Bullish Reversal", "score": 82.7, "insight": "Value bounce off key support level with medical margin stabilization."},
+                {"ticker": "XOM", "stock_name": "Exxon Mobil Corp.", "sector": "Energy", "setup_signal": "Breakout", "score": 81.9, "insight": "Upstream production growth in Guyana with strong free cash flow yield."}
+            ]
+        else:
+            candidates_meta = [
+                {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike above 30-day average. Solid operating margins."},
+                {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Energy", "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout."},
+                {"ticker": "HDFCBANK", "stock_name": "HDFC Bank", "sector": "Financials", "setup_signal": "Bullish Reversal", "score": 96.5, "insight": "Double-bottom reversal pattern confirmed above support. Top-tier asset quality metrics."},
+                {"ticker": "INFY", "stock_name": "Infosys Limited", "sector": "Technology", "setup_signal": "Long Buildup", "score": 94.8, "insight": "Fresh FNO long position buildup with OI addition. RSI-14 momentum crossing 62 with clean EMA20 support."},
+                {"ticker": "HAL", "stock_name": "Hindustan Aeronautics", "sector": "Defence", "setup_signal": "Trend Trading", "score": 92.5, "insight": "Robust defence aerospace order book. Consistent revenue CAGR with strong return on capital."},
+                {"ticker": "CANBK", "stock_name": "Canara Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 91.8, "insight": "Expanding net interest margin and consistent reduction in non-performing assets."},
+                {"ticker": "TCS", "stock_name": "Tata Consultancy Services", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 89.8, "insight": "Multi-year deal wins expanding order book. Weekly swinger buy signal active with high ROE."},
+                {"ticker": "BHARTIARTL", "stock_name": "Bharti Airtel", "sector": "Telecom", "setup_signal": "Short Covering", "score": 88.8, "insight": "Short covering rally active in derivative contracts. Strong ARPU expansion & institutional inflow."},
+                {"ticker": "ICICIBANK", "stock_name": "ICICI Bank", "sector": "Financials", "setup_signal": "Strong Buy", "score": 87.9, "insight": "Sustained upward trendline continuation with OI expansion. Outstanding NIM & ROA fundamentals."},
+                {"ticker": "MARUTI", "stock_name": "Maruti Suzuki", "sector": "Automobiles", "setup_signal": "Trend Trading", "score": 86.5, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated delivery ratio."},
+                {"ticker": "LT", "stock_name": "Larsen & Toubro", "sector": "Infrastructure", "setup_signal": "Breakout", "score": 85.4, "insight": "Order book visibility at all-time highs. Breakout above consolidation zone with heavy volume."},
+                {"ticker": "SONACOMS", "stock_name": "Sona BLW Precision", "sector": "Automobiles", "setup_signal": "Breakout", "score": 84.0, "insight": "Fresh EV drive system order wins. Delivery volume above 20-day EMA with MACD bullish crossover."},
+                {"ticker": "COFORGE", "stock_name": "Coforge Limited", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 83.8, "insight": "Multi-year deal wins expanding order book with expanding operating margins."},
+                {"ticker": "HDFCLIFE", "stock_name": "HDFC Life Insurance", "sector": "Financials", "setup_signal": "Support Bounce", "score": 82.5, "insight": "Bouncing cleanly off support level with positive institutional delivery accumulation."},
+                {"ticker": "PAYTM", "stock_name": "One97 Communications", "sector": "Technology", "setup_signal": "Short Covering", "score": 81.7, "insight": "Massive short covering rally following UPI payment volume recovery and operating breakeven trajectory."}
+            ]
         db_prices = {}
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
@@ -794,9 +884,9 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
                 "stock_name": item["stock_name"],
                 "sector": item["sector"],
                 "current_price": round(price, 2),
-                "best_buy_zone": f"₹{buy_low:,.2f} – ₹{buy_high:,.2f}",
-                "stop_loss": f"₹{stop_loss:,.2f}",
-                "target_price": f"₹{target1:,.2f} (T2: ₹{target2:,.2f})",
+                "best_buy_zone": f"{curr_sym}{buy_low:,.2f} – {curr_sym}{buy_high:,.2f}",
+                "stop_loss": f"{curr_sym}{stop_loss:,.2f}",
+                "target_price": f"{curr_sym}{target1:,.2f} (T2: {curr_sym}{target2:,.2f})",
                 "risk_reward": f"1 : {rr_ratio:.2f}",
                 "setup_signal": item["setup_signal"],
                 "score": item["score"],
@@ -1392,10 +1482,19 @@ def overview(dataset: str) -> dict[str, Any]:
 
 @app.get("/api/{dataset}/tables/{table_name}")
 @app.get("/api/{dataset}/table/{table_name}")
-def table_data(dataset: str, table_name: str, limit: int = Query(500, ge=1, le=2000), offset: int = Query(0, ge=0), search: str | None = None, ticker: str | None = None) -> dict[str, Any]:
+def table_data(
+    dataset: str,
+    table_name: str,
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    search: str | None = None,
+    ticker: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
     lim = int(limit.default) if hasattr(limit, "default") else int(limit)
     off = int(offset.default) if hasattr(offset, "default") else int(offset)
-    return table_data_for(get_dsn(dataset), table_name, lim, off, search, ticker)
+    return table_data_for(get_dsn(dataset), table_name, lim, off, search, ticker, start_date, end_date)
 
 
 
@@ -1556,11 +1655,11 @@ def trigger_analysis(ticker: str = None, background_tasks: BackgroundTasks = Non
 
 
 @app.get("/api/reports/html/{ticker}")
-def view_html_report(ticker: str):
+def view_html_report(ticker: str, dataset: str = Query("intelligence")):
     """View the interactive HTML research and analysis report for a given ticker, generating fresh analysis."""
     ticker_clean = ticker.upper().strip()
     from engine.reports.html_generator import generate_html_report
-    report_file = generate_html_report(ticker_clean)
+    report_file = generate_html_report(ticker_clean, dataset=dataset)
     
     if not report_file or not Path(report_file).exists():
         raise HTTPException(404, f"HTML report for {ticker_clean} could not be generated.")
@@ -1689,13 +1788,17 @@ def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
                     bb_lower_data.append({"time": date_str, "value": round(float(r["bb_lower"]), 2)})
 
             # Also fetch F&O strike OI if available
-            cur.execute("""
-                SELECT strike_price, option_type, volume, ltp
-                FROM raw_fno_derivatives
-                WHERE ticker = %s
-                ORDER BY strike_price ASC
-            """, (clean_t,))
-            fno_rows = cur.fetchall()
+            fno_rows = []
+            try:
+                cur.execute("""
+                    SELECT strike_price, option_type, volume, ltp
+                    FROM raw_fno_derivatives
+                    WHERE ticker = %s
+                    ORDER BY strike_price ASC
+                """, (clean_t,))
+                fno_rows = cur.fetchall()
+            except Exception:
+                fno_rows = []
 
             return {
                 "ticker": clean_t,
@@ -1743,6 +1846,222 @@ def get_sector_overview(dataset: str = "intelligence"):
     except Exception as e:
         logger.error(f"Error fetching sector overview: {e}")
         raise HTTPException(500, f"Error fetching sector overview: {e}")
+
+
+# ─── Candlestick Pattern Viewer Endpoints ─────────────────────────────────────
+from engine.analysis.patterns import PATTERNS_CATALOG
+
+@app.get("/api/{dataset}/patterns/catalog")
+@app.get("/api/patterns/catalog")
+def get_patterns_catalog(
+    dataset: str = "intelligence",
+    days: int = Query(7, ge=1, le=365),
+    fno_only: bool = Query(False),
+    indices_only: bool = Query(False)
+):
+    """Returns catalog of 15 candlestick patterns with active detection counts (supports indices_only and fno_only filters)."""
+    dsn = get_dsn(dataset)
+    try:
+        counts_map = {}
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            if indices_only:
+                cur.execute("""
+                    SELECT p.pattern_code, p.timeframe, COUNT(DISTINCT p.ticker) AS ticker_count, COUNT(*) AS total_occurrences
+                    FROM chart_patterns p
+                    LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
+                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND (
+                          tm.sector = 'Market Index'
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                      )
+                    GROUP BY p.pattern_code, p.timeframe
+                """, (days,))
+            elif fno_only:
+                cur.execute("""
+                    SELECT p.pattern_code, p.timeframe, COUNT(DISTINCT p.ticker) AS ticker_count, COUNT(*) AS total_occurrences
+                    FROM chart_patterns p
+                    LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
+                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND (
+                          tm.is_fno = true 
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
+                      )
+                    GROUP BY p.pattern_code, p.timeframe
+                """, (days,))
+            else:
+                cur.execute("""
+                    SELECT pattern_code, timeframe, COUNT(DISTINCT ticker) AS ticker_count, COUNT(*) AS total_occurrences
+                    FROM chart_patterns
+                    WHERE detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                    GROUP BY pattern_code, timeframe
+                """, (days,))
+            for row in cur.fetchall():
+                code = row["pattern_code"]
+                tf = row["timeframe"]
+                if code not in counts_map:
+                    counts_map[code] = {}
+                counts_map[code][tf] = {
+                    "tickers": row["ticker_count"],
+                    "total": row["total_occurrences"]
+                }
+
+        catalog = []
+        for p in PATTERNS_CATALOG:
+            c_info = counts_map.get(p["code"], {})
+            catalog.append({
+                **p,
+                "counts": {
+                    "DAILY": c_info.get("DAILY", {"tickers": 0, "total": 0}),
+                    "WEEKLY": c_info.get("WEEKLY", {"tickers": 0, "total": 0}),
+                }
+            })
+        return {"catalog": catalog, "days": days, "fno_only": fno_only, "indices_only": indices_only}
+    except Exception as e:
+        logger.error(f"Error fetching pattern catalog: {e}")
+        raise HTTPException(500, f"Error fetching pattern catalog: {e}")
+
+
+@app.get("/api/{dataset}/patterns/list")
+@app.get("/api/patterns/list")
+def get_pattern_occurrences(
+    pattern_code: str = Query("bullish_engulfing"),
+    timeframe: str = Query("DAILY"),
+    dataset: str = "intelligence",
+    days: int = Query(7, ge=1, le=365),
+    fno_only: bool = Query(False),
+    indices_only: bool = Query(False),
+    limit: int = Query(200, ge=1, le=500),
+):
+    """Return matching tickers and pattern detection instances from recent days for selected pattern(s). Supports comma-separated pattern_codes."""
+    dsn = get_dsn(dataset)
+    try:
+        codes = [c.strip().lower() for c in pattern_code.split(",") if c.strip()]
+        if not codes:
+            codes = ["bullish_engulfing"]
+
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            if indices_only:
+                cur.execute("""
+                    SELECT 
+                        p.id,
+                        p.ticker,
+                        COALESCE(tm.company_name, p.ticker) AS company_name,
+                        COALESCE(tm.sector, 'General') AS sector,
+                        p.pattern_code,
+                        p.pattern_name,
+                        p.category,
+                        p.timeframe,
+                        to_char(p.detected_date, 'YYYY-MM-DD') AS detected_date,
+                        to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+                        to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
+                        p.high_price,
+                        p.low_price,
+                        p.close_price,
+                        p.strength_score,
+                        p.details
+                    FROM chart_patterns p
+                    LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
+                    WHERE LOWER(p.pattern_code) = ANY(%s)
+                      AND UPPER(p.timeframe) = UPPER(%s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND (
+                          tm.sector = 'Market Index'
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                      )
+                    ORDER BY p.detected_date DESC, p.strength_score DESC
+                    LIMIT %s
+                """, (codes, timeframe, days, limit))
+            elif fno_only:
+                cur.execute("""
+                    SELECT 
+                        p.id,
+                        p.ticker,
+                        COALESCE(tm.company_name, p.ticker) AS company_name,
+                        COALESCE(tm.sector, 'General') AS sector,
+                        p.pattern_code,
+                        p.pattern_name,
+                        p.category,
+                        p.timeframe,
+                        to_char(p.detected_date, 'YYYY-MM-DD') AS detected_date,
+                        to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+                        to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
+                        p.high_price,
+                        p.low_price,
+                        p.close_price,
+                        p.strength_score,
+                        p.details
+                    FROM chart_patterns p
+                    LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
+                    WHERE LOWER(p.pattern_code) = ANY(%s)
+                      AND UPPER(p.timeframe) = UPPER(%s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND (
+                          tm.is_fno = true 
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
+                      )
+                    ORDER BY p.detected_date DESC, p.strength_score DESC
+                    LIMIT %s
+                """, (codes, timeframe, days, limit))
+            else:
+                cur.execute("""
+                    SELECT 
+                        p.id,
+                        p.ticker,
+                        COALESCE(tm.company_name, p.ticker) AS company_name,
+                        COALESCE(tm.sector, 'General') AS sector,
+                        p.pattern_code,
+                        p.pattern_name,
+                        p.category,
+                        p.timeframe,
+                        to_char(p.detected_date, 'YYYY-MM-DD') AS detected_date,
+                        to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
+                        to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
+                        p.high_price,
+                        p.low_price,
+                        p.close_price,
+                        p.strength_score,
+                        p.details
+                    FROM chart_patterns p
+                    LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
+                    WHERE LOWER(p.pattern_code) = ANY(%s)
+                      AND UPPER(p.timeframe) = UPPER(%s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                    ORDER BY p.detected_date DESC, p.strength_score DESC
+                    LIMIT %s
+                """, (codes, timeframe, days, limit))
+            rows = cur.fetchall()
+            return {"pattern_codes": codes, "timeframe": timeframe, "days": days, "fno_only": fno_only, "indices_only": indices_only, "rows": [dict(r) for r in rows], "count": len(rows)}
+    except Exception as e:
+        logger.error(f"Error fetching pattern occurrences: {e}")
+        raise HTTPException(500, f"Error fetching pattern occurrences: {e}")
+
+
+@app.get("/api/{dataset}/patterns/ticker/{ticker}")
+@app.get("/api/patterns/ticker/{ticker}")
+def get_ticker_patterns(ticker: str, dataset: str = "intelligence"):
+    """Return all detected pattern markers and price bounds for a specific ticker."""
+    clean_t = ticker.upper().strip()
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    id, ticker, pattern_code, pattern_name, category, timeframe,
+                    to_char(detected_date, 'YYYY-MM-DD') AS detected_date,
+                    to_char(start_date, 'YYYY-MM-DD') AS start_date,
+                    to_char(end_date, 'YYYY-MM-DD') AS end_date,
+                    high_price, low_price, close_price, strength_score, details
+                FROM chart_patterns
+                WHERE ticker = %s
+                ORDER BY detected_date DESC
+            """, (clean_t,))
+            rows = cur.fetchall()
+            return {"ticker": clean_t, "patterns": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error fetching ticker patterns for {ticker}: {e}")
+        raise HTTPException(500, f"Error fetching ticker patterns: {e}")
 
 
 # ─── Research Board ───────────────────────────────────────────────────────────
@@ -1860,6 +2179,8 @@ if (FRONTEND_DIST / "assets").is_dir():
 
 @app.get("/{path:path}", include_in_schema=False)
 def portal(path: str):
+    if path and path.startswith("api/"):
+        raise HTTPException(404, f"API endpoint /{path} not found.")
     if path:
         file_path = FRONTEND_DIST / path
         if file_path.is_file():
@@ -1873,7 +2194,7 @@ def portal(path: str):
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
             "Expires": "0",
-        },
+            },
     )
 
 

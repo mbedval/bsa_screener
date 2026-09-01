@@ -8,17 +8,17 @@ import ExcludedTickersPage from './ExcludedTickersPage.jsx'
 
 export { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage }
 
-export default function MasterSubmodule({ subView, onNavigate }) {
+export default function MasterSubmodule({ subView, onNavigate, dataset }) {
   switch (subView) {
-    case 'tickers':    return <TickersPage />
-    case 'watchlists': return <WatchlistsPage />
-    case 'users':      return <UsersPage />
+    case 'tickers':    return <TickersPage dataset={dataset} />
+    case 'watchlists': return <WatchlistsPage dataset={dataset} />
+    case 'users':      return <UsersPage dataset={dataset} />
     case 'aliases':
-    case 'alternativenames': return <AlternativeNamesPage />
+    case 'alternativenames': return <AlternativeNamesPage dataset={dataset} />
     case 'excluded':
-    case 'exclusions': return <ExcludedTickersPage onNavigate={onNavigate} />
+    case 'exclusions': return <ExcludedTickersPage onNavigate={onNavigate} dataset={dataset} />
     case 'sectors':
-    default:           return <SectorsPage />
+    default:           return <SectorsPage dataset={dataset} />
   }
 }
 

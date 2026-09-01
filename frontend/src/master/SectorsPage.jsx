@@ -9,7 +9,7 @@ import {
 
 const PAGE_SIZE = 10
 
-export default function SectorsPage() {
+export default function SectorsPage({ dataset }) {
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [page, setPage]         = useState(1)
@@ -33,12 +33,12 @@ export default function SectorsPage() {
 
   const load = async () => {
     setLoading(true)
-    try { setRows(await api.sectors.list()) }
+    try { setRows(await api.sectors.list(dataset)) }
     catch (e) { show(e.message, 'error') }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [dataset])
 
   const [sortKey, setSortKey] = useState('')
   const [sortAsc, setSortAsc] = useState(true)

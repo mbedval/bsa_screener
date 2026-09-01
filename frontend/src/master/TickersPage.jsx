@@ -9,7 +9,7 @@ import {
 
 const PAGE_SIZE = 50
 
-export default function TickersPage() {
+export default function TickersPage({ dataset }) {
   const [rows, setRows]           = useState([])
   const [sectors, setSectors]     = useState([])
   const [loading, setLoading]     = useState(true)
@@ -31,13 +31,13 @@ export default function TickersPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const [t, s] = await Promise.all([api.tickers.list(), api.sectors.list()])
+      const [t, s] = await Promise.all([api.tickers.list({}, dataset), api.sectors.list(dataset)])
       setRows(t); setSectors(s)
     } catch (e) { show(e.message, 'error') }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [dataset])
 
   // ── Filter + sort client-side ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -64,15 +64,18 @@ export default function TickersPage() {
 
   const sort = key => { setSortKey(key); setSortAsc(k => sortKey === key ? !sortAsc : true); setPage(1) }
 
+  const isUS = dataset === 'us_intelligence'
+  const defaultExchange = isUS ? 'NASDAQ' : 'NSE'
+
   // ── Forms ─────────────────────────────────────────────────────────────────
   const openNew  = () => {
     setEditing(null)
-    setForm({ ticker: '', company_name: '', is_fno: false, index_memberships: [], exchange: 'NSE' })
+    setForm({ ticker: '', company_name: '', is_fno: false, index_memberships: [], exchange: defaultExchange })
     setShowForm(true)
   }
   const openEdit = row => {
     setEditing(row)
-    setForm({ ticker: row.ticker, company_name: row.company_name, is_fno: row.is_fno, index_memberships: row.index_memberships || [], exchange: row.exchange || 'NSE' })
+    setForm({ ticker: row.ticker, company_name: row.company_name, is_fno: row.is_fno, index_memberships: row.index_memberships || [], exchange: row.exchange || defaultExchange })
     setShowForm(true)
   }
   const openSectors = row => {
@@ -85,8 +88,8 @@ export default function TickersPage() {
     setSaving(true)
     try {
       const body = { ...form, ticker: form.ticker.trim().toUpperCase() }
-      if (editing) { await api.tickers.update(editing.ticker, body); show('Ticker updated') }
-      else         { await api.tickers.create(body);                   show('Ticker created') }
+      if (editing) { await api.tickers.update(editing.ticker, body, dataset); show('Ticker updated') }
+      else         { await api.tickers.create(body, dataset);                   show('Ticker created') }
       setShowForm(false); load()
     } catch (e) { show(e.message, 'error') }
     finally { setSaving(false) }
@@ -95,14 +98,14 @@ export default function TickersPage() {
   const saveSectors = async () => {
     setSaving(true)
     try {
-      await api.tickers.setSectors(sectorModal.ticker, selSectors)
+      await api.tickers.setSectors(sectorModal.ticker, selSectors, dataset)
       show('Sector assignments saved'); setSectorModal(null); load()
     } catch (e) { show(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async ticker => {
-    try { await api.tickers.remove(ticker); show('Ticker deleted'); load() }
+    try { await api.tickers.remove(ticker, dataset); show('Ticker deleted'); load() }
     catch (e) { show(e.message, 'error') }
   }
 
@@ -207,8 +210,20 @@ export default function TickersPage() {
             </FormGroup>
             <FormGroup label="Exchange">
               <Select value={form.exchange} onChange={e => setForm(f => ({...f, exchange: e.target.value}))}>
-                <option>NSE</option>
-                <option>BSE</option>
+                {isUS ? (
+                  <>
+                    <option>NASDAQ</option>
+                    <option>NYSE</option>
+                    <option>AMEX</option>
+                    <option>DOW</option>
+                    <option>S&P 500</option>
+                  </>
+                ) : (
+                  <>
+                    <option>NSE</option>
+                    <option>BSE</option>
+                  </>
+                )}
               </Select>
             </FormGroup>
           </div>
@@ -216,14 +231,14 @@ export default function TickersPage() {
             <Input
               value={form.company_name}
               onChange={e => setForm(f => ({...f, company_name: e.target.value}))}
-              placeholder="e.g. Reliance Industries Ltd"
+              placeholder={isUS ? "e.g. GoPro, Inc." : "e.g. Reliance Industries Ltd"}
             />
           </FormGroup>
           <FormGroup label="Index memberships" hint="type and press Enter to add">
             <TagInput
               value={form.index_memberships}
               onChange={v => setForm(f => ({...f, index_memberships: v}))}
-              placeholder="e.g. NIFTY50, NIFTY IT…"
+              placeholder={isUS ? "e.g. NASDAQ100, SP500, DOW30…" : "e.g. NIFTY50, NIFTY IT…"}
             />
           </FormGroup>
           <FormGroup label="">

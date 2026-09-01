@@ -3,6 +3,7 @@
 FIXED_TABLES = {
     "historical_calls": {"label": "Historical calls", "group": "Calls"},
     "intraday_call": {"label": "Intraday calls", "group": "Calls"},
+    "call_efficiency": {"label": "Call efficiency", "group": "Calls"},
     "fno_master": {"label": "FNO Master", "group": "Derivative"},
     "fno_active": {"label": "FNO Active", "group": "Derivative"},
     "option_chain_analyzer": {"label": "Option Chain & Greeks", "group": "Derivative"},

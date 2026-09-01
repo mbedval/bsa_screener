@@ -46,8 +46,9 @@ router = APIRouter(prefix="/api/master", tags=["master"])
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def rawdata_conn():
-    return get_connection(settings.rawdata_postgres_dsn)
+def rawdata_conn(dataset: Optional[str] = None):
+    dsn = settings.us_postgres_dsn if dataset == "us_intelligence" else settings.rawdata_postgres_dsn
+    return get_connection(dsn)
 
 
 def _not_found(entity: str, key: Any) -> HTTPException:
@@ -143,8 +144,8 @@ class TickerAssign(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/sectors")
-def list_sectors() -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def list_sectors(dataset: Optional[str] = None) -> list[dict]:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id, name, description, created_at FROM sectors ORDER BY name"
         )
@@ -152,8 +153,8 @@ def list_sectors() -> list[dict]:
 
 
 @router.post("/sectors", status_code=201)
-def create_sector(body: SectorIn) -> dict:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def create_sector(body: SectorIn, dataset: Optional[str] = None) -> dict:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         try:
             cur.execute(
                 "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING *",
@@ -169,8 +170,8 @@ def create_sector(body: SectorIn) -> dict:
 
 
 @router.put("/sectors/{sector_id}")
-def update_sector(sector_id: int, body: SectorIn) -> dict:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def update_sector(sector_id: int, body: SectorIn, dataset: Optional[str] = None) -> dict:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute(
             "UPDATE sectors SET name=%s, description=%s WHERE id=%s RETURNING *",
             (body.name, body.description, sector_id),
@@ -183,8 +184,8 @@ def update_sector(sector_id: int, body: SectorIn) -> dict:
 
 
 @router.delete("/sectors/{sector_id}", status_code=204)
-def delete_sector(sector_id: int) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def delete_sector(sector_id: int, dataset: Optional[str] = None) -> None:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM sectors WHERE id=%s RETURNING id", (sector_id,))
         if not cur.fetchone():
             raise _not_found("Sector", sector_id)
@@ -192,9 +193,9 @@ def delete_sector(sector_id: int) -> None:
 
 
 @router.get("/sectors/{sector_id}/tickers")
-def sector_tickers(sector_id: int) -> list[dict]:
+def sector_tickers(sector_id: int, dataset: Optional[str] = None) -> list[dict]:
     """All tickers belonging to a sector (with ticker_master details)."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT tm.ticker, tm.company_name, tm.is_fno, tm.index_memberships, tm.exchange
@@ -212,6 +213,7 @@ def sector_tickers(sector_id: int) -> list[dict]:
 def import_watchlist_sector_file(
     file: UploadFile = File(...),
     custom_sector: Optional[str] = Form(None),
+    dataset: Optional[str] = Form(None),
 ) -> dict:
     """Imports a watchlist sector txt file (e.g. watchlist_pharma.txt).
     
@@ -260,7 +262,9 @@ def import_watchlist_sector_file(
     if not tickers_list:
         raise HTTPException(400, "No valid tickers found in the uploaded file.")
 
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    default_exchange = "NASDAQ" if dataset == "us_intelligence" else "NSE"
+
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         # 2. Get or create sector
         cur.execute("SELECT id, name FROM sectors WHERE LOWER(name) = LOWER(%s)", (sector_name,))
         sector_row = cur.fetchone()
@@ -290,7 +294,7 @@ def import_watchlist_sector_file(
                 # Add to ticker_master
                 cur.execute(
                     "INSERT INTO ticker_master (ticker, company_name, exchange) VALUES (%s, %s, %s)",
-                    (t, t, "NSE"),
+                    (t, t, default_exchange),
                 )
                 new_tickers_added.append(t)
             else:
@@ -337,8 +341,9 @@ def list_tickers(
     search: Optional[str] = None,
     sector_id: Optional[int] = None,
     is_fno: Optional[bool] = None,
+    dataset: Optional[str] = None,
 ) -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         query = "SELECT ticker, company_name, is_fno, index_memberships, exchange, updated_at FROM ticker_master"
         where_clauses = []
         params = []
@@ -383,8 +388,8 @@ def list_tickers(
 
 
 @router.post("/tickers", status_code=201)
-def create_ticker(body: TickerIn) -> dict:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def create_ticker(body: TickerIn, dataset: Optional[str] = None) -> dict:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         try:
             cur.execute(
                 """
@@ -411,7 +416,7 @@ def create_ticker(body: TickerIn) -> dict:
 
 
 @router.put("/tickers/{ticker}")
-def update_ticker(ticker: str, body: TickerUpdate) -> dict:
+def update_ticker(ticker: str, body: TickerUpdate, dataset: Optional[str] = None) -> dict:
     updates, params = [], []
     if body.company_name is not None:
         updates.append("company_name = %s"); params.append(body.company_name)
@@ -425,7 +430,7 @@ def update_ticker(ticker: str, body: TickerUpdate) -> dict:
         raise HTTPException(400, "No fields to update.")
     updates.append("updated_at = now()")
     params.append(ticker.upper())
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute(
             f"UPDATE ticker_master SET {', '.join(updates)} WHERE ticker = %s RETURNING *",
             params,
@@ -438,8 +443,8 @@ def update_ticker(ticker: str, body: TickerUpdate) -> dict:
 
 
 @router.delete("/tickers/{ticker}", status_code=204)
-def delete_ticker(ticker: str) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+def delete_ticker(ticker: str, dataset: Optional[str] = None) -> None:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         cur.execute(
             "DELETE FROM ticker_master WHERE ticker=%s RETURNING ticker",
             (ticker.upper(),),
@@ -450,10 +455,10 @@ def delete_ticker(ticker: str) -> None:
 
 
 @router.post("/tickers/{ticker}/sectors")
-def assign_ticker_sectors(ticker: str, body: SectorAssign) -> dict:
+def assign_ticker_sectors(ticker: str, body: SectorAssign, dataset: Optional[str] = None) -> dict:
     """Replace the sector assignments for a ticker."""
     t = ticker.upper()
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
         # Verify ticker exists
         cur.execute("SELECT ticker FROM ticker_master WHERE ticker=%s", (t,))
         if not cur.fetchone():
