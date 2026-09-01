@@ -215,13 +215,15 @@ body[data-theme="warm"] .badge.neutral {
 /* ── Master page layout ────────────────────────────────────────────────────── */
 .master-page{display:flex;flex-direction:column;gap:10px}
 .master-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-.section-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid #1a2d44;margin-bottom:6px}
+.section-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid #1a2d44;margin-bottom:6px;flex-wrap:wrap;gap:10px}
 .section-header h2{margin:0;font-size:18px;letter-spacing:-.4px;color:#edf3ff}
 .section-sub{margin:2px 0 0;font-size:11px;color:#7d94b2}
+.master-search-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
 
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 .btn-primary{background:linear-gradient(135deg,#2a6fd4,#1d56a8);border:none;color:#fff;padding:9px 16px;border-radius:8px;font:700 12px Manrope;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s}.btn-primary:hover{opacity:.87}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:#162c46;border:1px solid #32547a;color:#7ec8f0;padding:9px 16px;border-radius:8px;font:700 12px Manrope;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}.btn-secondary:hover{background:#1d3a5c;border-color:#4a7eb5;color:#fff}
 .btn-ghost{background:transparent;border:1px solid #304765;color:#a8b8cf;padding:9px 16px;border-radius:8px;font:600 12px Manrope;cursor:pointer;transition:border-color .15s}.btn-ghost:hover{border-color:#5d8fcb;color:#d9eaff}
 .icon-btn{background:transparent;border:1px solid #2a405e;color:#7d97b8;width:30px;height:30px;border-radius:6px;display:grid;place-items:center;cursor:pointer;transition:all .15s}.icon-btn:hover{background:#1e3550;color:#d9eaff;border-color:#4a6fa0}.icon-btn.danger:hover{background:#3d1e2e;color:#ff93a8;border-color:#7a3050}
 .chip-edit-btn{background:transparent;border:1px dashed #2a4a6a;color:#5d88b8;width:22px;height:22px;border-radius:5px;display:inline-grid;place-items:center;cursor:pointer;transition:all .15s;flex-shrink:0}.chip-edit-btn:hover{background:#1e3550;border-color:#5d8fcb;color:#d9eaff}
@@ -324,12 +326,28 @@ select.select-input{background:#0b1929;border:1px solid #294566;color:#d9eaff;pa
 .fno-ticker-badge{background:rgba(102,228,202,0.12);border:1px solid rgba(102,228,202,0.28);padding:3px 8px;border-radius:5px;transition:all .15s ease}
 .clickable-fno-row:hover .fno-ticker-badge{background:rgba(102,228,202,0.25);border-color:#66e4ca;color:#fff !important}
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* Dark-themed HTML5 date inputs with custom calendar icon */
+input[type="date"] {
+  color-scheme: dark;
+  background-color: #0d1117;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
 }
-.spin-icon {
-  animation: spin 1s linear infinite;
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(1) saturate(5) hue-rotate(175deg);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 

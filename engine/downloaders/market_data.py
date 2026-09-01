@@ -99,6 +99,12 @@ def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
         df["VWAP"] = compute_vwap(df)
         enriched = compute_indicators(df)
 
+        # Drop any row where Close is NaN/None before saving
+        enriched = enriched.dropna(subset=["Close"])
+        if enriched.empty:
+            logger.warning(f"No valid close prices for {ticker_clean}")
+            return False
+
         # 2. Save stock_meta information
         info = tk.info
         company_name = info.get("longName", info.get("shortName", ticker_clean))

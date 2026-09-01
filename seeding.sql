@@ -1998,6 +1998,7 @@ INSERT INTO public.watchlist_items VALUES (7, 'WPIL');
 --
 
 SELECT pg_catalog.setval('public.alternative_names_id_seq', 8, true);
+SELECT pg_catalog.setval('public.sectors_id_seq', (SELECT MAX(id) FROM public.sectors), true);
 
 
 --

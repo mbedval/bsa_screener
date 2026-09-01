@@ -2,3 +2,1055 @@
 2026-08-31 20:53:50,662 [ERROR] bsa_cli: Data download failed for INFY
 2026-08-31 20:54:22,013 [INFO] bsa_cli: Running on-demand pipeline for ticker: INFY
 2026-08-31 20:54:25,519 [INFO] bsa_cli: Analysis completed and upserted for INFY
+2026-09-01 06:35:28,471 [INFO] bsa_cli: Triggered downloading data for all master tickers...
+2026-09-01 06:42:28,153 [INFO] bsa_cli: Triggered downloading data for all master tickers...
+2026-09-01 07:32:05,992 [INFO] bsa_cli: Triggered downloading data for all master tickers...
+2026-09-01 07:41:33,209 [INFO] bsa_cli: Triggered scoring and analysis engine for all master tickers...
+2026-09-01 07:42:45,647 [INFO] bsa_cli: Triggered scoring and analysis engine for all master tickers...
+2026-09-01 07:43:35,800 [INFO] bsa_orchestrator: Starting analysis process for 221 tickers...
+2026-09-01 07:43:36,790 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PHOENIXLTD.
+2026-09-01 07:43:36,791 [INFO] bsa_orchestrator: [1/221] Analyzed PHOENIXLTD: Success
+2026-09-01 07:43:36,995 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PRESTIGE.
+2026-09-01 07:43:36,995 [INFO] bsa_orchestrator: [2/221] Analyzed PRESTIGE: Success
+2026-09-01 07:43:37,196 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ABB.
+2026-09-01 07:43:37,196 [INFO] bsa_orchestrator: [3/221] Analyzed ABB: Success
+2026-09-01 07:43:37,410 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SOBHA.
+2026-09-01 07:43:37,410 [INFO] bsa_orchestrator: [4/221] Analyzed SOBHA: Success
+2026-09-01 07:43:37,593 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNTECK.
+2026-09-01 07:43:37,593 [INFO] bsa_orchestrator: [5/221] Analyzed SUNTECK: Success
+2026-09-01 07:43:37,793 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BEL.
+2026-09-01 07:43:37,793 [INFO] bsa_orchestrator: [6/221] Analyzed BEL: Success
+2026-09-01 07:43:38,145 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JSWENERGY.
+2026-09-01 07:43:38,146 [INFO] bsa_orchestrator: [7/221] Analyzed JSWENERGY: Success
+2026-09-01 07:43:38,348 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POWERINDIA.
+2026-09-01 07:43:38,349 [INFO] bsa_orchestrator: [8/221] Analyzed POWERINDIA: Success
+2026-09-01 07:43:38,557 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PRAJIND.
+2026-09-01 07:43:38,558 [INFO] bsa_orchestrator: [9/221] Analyzed PRAJIND: Success
+2026-09-01 07:43:38,763 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SIEMENS.
+2026-09-01 07:43:38,763 [INFO] bsa_orchestrator: [10/221] Analyzed SIEMENS: Success
+2026-09-01 07:43:39,077 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAZDOCK.
+2026-09-01 07:43:39,081 [INFO] bsa_orchestrator: [11/221] Analyzed MAZDOCK: Success
+2026-09-01 07:43:39,312 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SJVN.
+2026-09-01 07:43:39,312 [INFO] bsa_orchestrator: [12/221] Analyzed SJVN: Success
+2026-09-01 07:43:39,527 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CANBK.
+2026-09-01 07:43:39,527 [INFO] bsa_orchestrator: [13/221] Analyzed CANBK: Success
+2026-09-01 07:43:39,714 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CENTRALBK.
+2026-09-01 07:43:39,715 [INFO] bsa_orchestrator: [14/221] Analyzed CENTRALBK: Success
+2026-09-01 07:43:39,901 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDIANB.
+2026-09-01 07:43:39,902 [INFO] bsa_orchestrator: [15/221] Analyzed INDIANB: Success
+2026-09-01 07:43:40,194 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IOB.
+2026-09-01 07:43:40,194 [INFO] bsa_orchestrator: [16/221] Analyzed IOB: Success
+2026-09-01 07:43:40,499 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAHABANK.
+2026-09-01 07:43:40,499 [INFO] bsa_orchestrator: [17/221] Analyzed MAHABANK: Success
+2026-09-01 07:43:40,808 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PSB.
+2026-09-01 07:43:40,808 [INFO] bsa_orchestrator: [18/221] Analyzed PSB: Success
+2026-09-01 07:43:41,012 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UNIONBANK.
+2026-09-01 07:43:41,013 [INFO] bsa_orchestrator: [19/221] Analyzed UNIONBANK: Success
+2026-09-01 07:43:41,426 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BPCL.
+2026-09-01 07:43:41,426 [INFO] bsa_orchestrator: [20/221] Analyzed BPCL: Success
+2026-09-01 07:43:41,725 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COALINDIA.
+2026-09-01 07:43:41,725 [INFO] bsa_orchestrator: [21/221] Analyzed COALINDIA: Success
+2026-09-01 07:43:41,972 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CONCOR.
+2026-09-01 07:43:41,973 [INFO] bsa_orchestrator: [22/221] Analyzed CONCOR: Success
+2026-09-01 07:43:42,168 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GAIL.
+2026-09-01 07:43:42,171 [INFO] bsa_orchestrator: [23/221] Analyzed GAIL: Success
+2026-09-01 07:43:42,382 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IRFC.
+2026-09-01 07:43:42,383 [INFO] bsa_orchestrator: [24/221] Analyzed IRFC: Success
+2026-09-01 07:43:42,596 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NATIONALUM.
+2026-09-01 07:43:42,597 [INFO] bsa_orchestrator: [25/221] Analyzed NATIONALUM: Success
+2026-09-01 07:43:42,967 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NHPC.
+2026-09-01 07:43:42,968 [INFO] bsa_orchestrator: [26/221] Analyzed NHPC: Success
+2026-09-01 07:43:43,344 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NMDC.
+2026-09-01 07:43:43,344 [INFO] bsa_orchestrator: [27/221] Analyzed NMDC: Success
+2026-09-01 07:43:43,730 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ONGC.
+2026-09-01 07:43:43,731 [INFO] bsa_orchestrator: [28/221] Analyzed ONGC: Success
+2026-09-01 07:43:43,982 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POWERGRID.
+2026-09-01 07:43:43,982 [INFO] bsa_orchestrator: [29/221] Analyzed POWERGRID: Success
+2026-09-01 07:43:44,289 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RECLTD.
+2026-09-01 07:43:44,290 [INFO] bsa_orchestrator: [30/221] Analyzed RECLTD: Success
+2026-09-01 07:43:44,494 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SAIL.
+2026-09-01 07:43:44,495 [INFO] bsa_orchestrator: [31/221] Analyzed SAIL: Success
+2026-09-01 07:43:44,698 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AUBANK.
+2026-09-01 07:43:44,700 [INFO] bsa_orchestrator: [32/221] Analyzed AUBANK: Success
+2026-09-01 07:43:44,923 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AXISBANK.
+2026-09-01 07:43:44,925 [INFO] bsa_orchestrator: [33/221] Analyzed AXISBANK: Success
+2026-09-01 07:43:45,122 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IDFCFIRSTB.
+2026-09-01 07:43:45,122 [INFO] bsa_orchestrator: [34/221] Analyzed IDFCFIRSTB: Success
+2026-09-01 07:43:45,334 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDUSINDBK.
+2026-09-01 07:43:45,334 [INFO] bsa_orchestrator: [35/221] Analyzed INDUSINDBK: Success
+2026-09-01 07:43:45,614 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KOTAKBANK.
+2026-09-01 07:43:45,616 [INFO] bsa_orchestrator: [36/221] Analyzed KOTAKBANK: Success
+2026-09-01 07:43:45,811 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ALKEM.
+2026-09-01 07:43:45,811 [INFO] bsa_orchestrator: [37/221] Analyzed ALKEM: Success
+2026-09-01 07:43:46,234 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RBLBANK.
+2026-09-01 07:43:46,235 [INFO] bsa_orchestrator: [38/221] Analyzed RBLBANK: Success
+2026-09-01 07:43:46,544 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BIOCON.
+2026-09-01 07:43:46,545 [INFO] bsa_orchestrator: [39/221] Analyzed BIOCON: Success
+2026-09-01 07:43:46,758 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DRREDDY.
+2026-09-01 07:43:46,759 [INFO] bsa_orchestrator: [40/221] Analyzed DRREDDY: Success
+2026-09-01 07:43:47,054 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRANULES.
+2026-09-01 07:43:47,055 [INFO] bsa_orchestrator: [41/221] Analyzed GRANULES: Success
+2026-09-01 07:43:47,379 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GLENMARK.
+2026-09-01 07:43:47,380 [INFO] bsa_orchestrator: [42/221] Analyzed GLENMARK: Success
+2026-09-01 07:43:47,580 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LAURUSLABS.
+2026-09-01 07:43:47,581 [INFO] bsa_orchestrator: [43/221] Analyzed LAURUSLABS: Success
+2026-09-01 07:43:47,780 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LUPIN.
+2026-09-01 07:43:47,780 [INFO] bsa_orchestrator: [44/221] Analyzed LUPIN: Success
+2026-09-01 07:43:47,980 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NATCOPHARM.
+2026-09-01 07:43:47,980 [INFO] bsa_orchestrator: [45/221] Analyzed NATCOPHARM: Success
+2026-09-01 07:43:48,194 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TORNTPHARM.
+2026-09-01 07:43:48,195 [INFO] bsa_orchestrator: [46/221] Analyzed TORNTPHARM: Success
+2026-09-01 07:43:48,569 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ZYDUSLIFE.
+2026-09-01 07:43:48,572 [INFO] bsa_orchestrator: [47/221] Analyzed ZYDUSLIFE: Success
+2026-09-01 07:43:48,948 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIGREEN.
+2026-09-01 07:43:48,949 [INFO] bsa_orchestrator: [48/221] Analyzed ADANIGREEN: Success
+2026-09-01 07:43:49,146 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AMBUJACEM.
+2026-09-01 07:43:49,146 [INFO] bsa_orchestrator: [49/221] Analyzed AMBUJACEM: Success
+2026-09-01 07:43:49,340 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DELHIVERY.
+2026-09-01 07:43:49,341 [INFO] bsa_orchestrator: [50/221] Analyzed DELHIVERY: Success
+2026-09-01 07:43:49,540 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ETERNAL.
+2026-09-01 07:43:49,541 [INFO] bsa_orchestrator: [51/221] Analyzed ETERNAL: Success
+2026-09-01 07:43:49,744 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GODREJCP.
+2026-09-01 07:43:49,744 [INFO] bsa_orchestrator: [52/221] Analyzed GODREJCP: Success
+2026-09-01 07:43:49,942 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ICICIPRULI.
+2026-09-01 07:43:49,943 [INFO] bsa_orchestrator: [53/221] Analyzed ICICIPRULI: Success
+2026-09-01 07:43:50,210 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDHOTEL.
+2026-09-01 07:43:50,211 [INFO] bsa_orchestrator: [54/221] Analyzed INDHOTEL: Success
+2026-09-01 07:43:50,416 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JIOFIN.
+2026-09-01 07:43:50,417 [INFO] bsa_orchestrator: [55/221] Analyzed JIOFIN: Success
+2026-09-01 07:43:50,739 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JINDALSTEL.
+2026-09-01 07:43:50,739 [INFO] bsa_orchestrator: [56/221] Analyzed JINDALSTEL: Success
+2026-09-01 07:43:50,932 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LICI.
+2026-09-01 07:43:50,932 [INFO] bsa_orchestrator: [57/221] Analyzed LICI: Success
+2026-09-01 07:43:51,131 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for M&MFIN.
+2026-09-01 07:43:51,131 [INFO] bsa_orchestrator: [58/221] Analyzed M&MFIN: Success
+2026-09-01 07:43:51,511 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MUTHOOTFIN.
+2026-09-01 07:43:51,511 [INFO] bsa_orchestrator: [59/221] Analyzed MUTHOOTFIN: Success
+2026-09-01 07:43:51,777 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PAYTM.
+2026-09-01 07:43:51,777 [INFO] bsa_orchestrator: [60/221] Analyzed PAYTM: Success
+2026-09-01 07:43:52,045 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PIDILITIND.
+2026-09-01 07:43:52,045 [INFO] bsa_orchestrator: [61/221] Analyzed PIDILITIND: Success
+2026-09-01 07:43:52,297 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POONAWALLA.
+2026-09-01 07:43:52,298 [INFO] bsa_orchestrator: [62/221] Analyzed POONAWALLA: Success
+2026-09-01 07:43:52,494 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBICARD.
+2026-09-01 07:43:52,495 [INFO] bsa_orchestrator: [63/221] Analyzed SBICARD: Success
+2026-09-01 07:43:52,824 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SOLARINDS.
+2026-09-01 07:43:52,825 [INFO] bsa_orchestrator: [64/221] Analyzed SOLARINDS: Success
+2026-09-01 07:43:53,029 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATAPOWER.
+2026-09-01 07:43:53,029 [INFO] bsa_orchestrator: [65/221] Analyzed TATAPOWER: Success
+2026-09-01 07:43:53,417 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TRENT.
+2026-09-01 07:43:53,418 [INFO] bsa_orchestrator: [66/221] Analyzed TRENT: Success
+2026-09-01 07:43:53,612 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VEDL.
+2026-09-01 07:43:53,613 [INFO] bsa_orchestrator: [67/221] Analyzed VEDL: Success
+2026-09-01 07:43:53,844 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ABFRL.
+2026-09-01 07:43:53,845 [INFO] bsa_orchestrator: [68/221] Analyzed ABFRL: Success
+2026-09-01 07:43:54,052 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VBL.
+2026-09-01 07:43:54,054 [INFO] bsa_orchestrator: [69/221] Analyzed VBL: Success
+2026-09-01 07:43:54,326 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LODHA.
+2026-09-01 07:43:54,326 [INFO] bsa_orchestrator: [70/221] Analyzed LODHA: Success
+2026-09-01 07:43:54,733 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BLUESTARCO.
+2026-09-01 07:43:54,733 [INFO] bsa_orchestrator: [71/221] Analyzed BLUESTARCO: Success
+2026-09-01 07:43:55,044 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COFORGE.
+2026-09-01 07:43:55,045 [INFO] bsa_orchestrator: [72/221] Analyzed COFORGE: Success
+2026-09-01 07:43:55,348 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CENTURYPLY.
+2026-09-01 07:43:55,349 [INFO] bsa_orchestrator: [73/221] Analyzed CENTURYPLY: Success
+2026-09-01 07:43:55,657 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KANSAINER.
+2026-09-01 07:43:55,658 [INFO] bsa_orchestrator: [74/221] Analyzed KANSAINER: Success
+2026-09-01 07:43:55,944 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRINDWELL.
+2026-09-01 07:43:55,944 [INFO] bsa_orchestrator: [75/221] Analyzed GRINDWELL: Success
+2026-09-01 07:43:56,198 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MPHASIS.
+2026-09-01 07:43:56,198 [INFO] bsa_orchestrator: [76/221] Analyzed MPHASIS: Success
+2026-09-01 07:43:56,475 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NAUKRI.
+2026-09-01 07:43:56,476 [INFO] bsa_orchestrator: [77/221] Analyzed NAUKRI: Success
+2026-09-01 07:43:56,781 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PAGEIND.
+2026-09-01 07:43:56,782 [INFO] bsa_orchestrator: [78/221] Analyzed PAGEIND: Success
+2026-09-01 07:43:56,980 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RAYMOND.
+2026-09-01 07:43:56,981 [INFO] bsa_orchestrator: [79/221] Analyzed RAYMOND: Success
+2026-09-01 07:43:57,193 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RELAXO.
+2026-09-01 07:43:57,194 [INFO] bsa_orchestrator: [80/221] Analyzed RELAXO: Success
+2026-09-01 07:43:57,602 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SHOPERSTOP.
+2026-09-01 07:43:57,603 [INFO] bsa_orchestrator: [81/221] Analyzed SHOPERSTOP: Success
+2026-09-01 07:43:57,806 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SKFINDIA.
+2026-09-01 07:43:57,807 [INFO] bsa_orchestrator: [82/221] Analyzed SKFINDIA: Success
+2026-09-01 07:43:58,113 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUPREMEIND.
+2026-09-01 07:43:58,113 [INFO] bsa_orchestrator: [83/221] Analyzed SUPREMEIND: Success
+2026-09-01 07:43:58,317 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIMKEN.
+2026-09-01 07:43:58,317 [INFO] bsa_orchestrator: [84/221] Analyzed TIMKEN: Success
+2026-09-01 07:43:58,627 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for APLAPOLLO.
+2026-09-01 07:43:58,628 [INFO] bsa_orchestrator: [85/221] Analyzed APLAPOLLO: Success
+2026-09-01 07:43:58,932 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDALCO.
+2026-09-01 07:43:58,933 [INFO] bsa_orchestrator: [86/221] Analyzed HINDALCO: Success
+2026-09-01 07:43:59,343 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDCOPPER.
+2026-09-01 07:43:59,344 [INFO] bsa_orchestrator: [87/221] Analyzed HINDCOPPER: Success
+2026-09-01 07:43:59,649 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JSWSTEEL.
+2026-09-01 07:43:59,649 [INFO] bsa_orchestrator: [88/221] Analyzed JSWSTEEL: Success
+2026-09-01 07:43:59,857 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MOIL.
+2026-09-01 07:43:59,858 [INFO] bsa_orchestrator: [89/221] Analyzed MOIL: Success
+2026-09-01 07:44:00,060 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RATNAMANI.
+2026-09-01 07:44:00,062 [INFO] bsa_orchestrator: [90/221] Analyzed RATNAMANI: Success
+2026-09-01 07:44:00,365 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATASTEEL.
+2026-09-01 07:44:00,366 [INFO] bsa_orchestrator: [91/221] Analyzed TATASTEEL: Success
+2026-09-01 07:44:00,675 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NAZARA.
+2026-09-01 07:44:00,675 [INFO] bsa_orchestrator: [92/221] Analyzed NAZARA: Success
+2026-09-01 07:44:00,875 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PVRINOX.
+2026-09-01 07:44:00,876 [INFO] bsa_orchestrator: [93/221] Analyzed PVRINOX: Success
+2026-09-01 07:44:01,127 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SAREGAMA.
+2026-09-01 07:44:01,127 [INFO] bsa_orchestrator: [94/221] Analyzed SAREGAMA: Success
+2026-09-01 07:44:01,311 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNTV.
+2026-09-01 07:44:01,311 [INFO] bsa_orchestrator: [95/221] Analyzed SUNTV: Success
+2026-09-01 07:44:01,506 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIPSMUSIC.
+2026-09-01 07:44:01,507 [INFO] bsa_orchestrator: [96/221] Analyzed TIPSMUSIC: Success
+2026-09-01 07:44:01,732 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HCLTECH.
+2026-09-01 07:44:01,733 [INFO] bsa_orchestrator: [97/221] Analyzed HCLTECH: Success
+2026-09-01 07:44:02,094 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INFY.
+2026-09-01 07:44:02,095 [INFO] bsa_orchestrator: [98/221] Analyzed INFY: Success
+2026-09-01 07:44:02,512 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LTM.
+2026-09-01 07:44:02,513 [INFO] bsa_orchestrator: [99/221] Analyzed LTM: Success
+2026-09-01 07:44:03,096 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TCS.
+2026-09-01 07:44:03,096 [INFO] bsa_orchestrator: [100/221] Analyzed TCS: Success
+2026-09-01 07:44:03,523 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WIPRO.
+2026-09-01 07:44:03,524 [INFO] bsa_orchestrator: [101/221] Analyzed WIPRO: Success
+2026-09-01 07:44:03,732 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIPORTS.
+2026-09-01 07:44:03,732 [INFO] bsa_orchestrator: [102/221] Analyzed ADANIPORTS: Success
+2026-09-01 07:44:04,019 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LT.
+2026-09-01 07:44:04,020 [INFO] bsa_orchestrator: [103/221] Analyzed LT: Success
+2026-09-01 07:44:04,631 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ULTRACEMCO.
+2026-09-01 07:44:04,632 [INFO] bsa_orchestrator: [104/221] Analyzed ULTRACEMCO: Success
+2026-09-01 07:44:04,963 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FORTIS.
+2026-09-01 07:44:04,965 [INFO] bsa_orchestrator: [105/221] Analyzed FORTIS: Success
+2026-09-01 07:44:05,278 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KIMS.
+2026-09-01 07:44:05,279 [INFO] bsa_orchestrator: [106/221] Analyzed KIMS: Success
+2026-09-01 07:44:05,583 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for METROPOLIS.
+2026-09-01 07:44:05,583 [INFO] bsa_orchestrator: [107/221] Analyzed METROPOLIS: Success
+2026-09-01 07:44:05,863 [INFO] bsa_orchestrator: [108/221] Analyzed RAINBOW: Success
+2026-09-01 07:44:06,168 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for YATHARTH.
+2026-09-01 07:44:06,169 [INFO] bsa_orchestrator: [109/221] Analyzed YATHARTH: Success
+2026-09-01 07:44:07,111 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BRITANNIA.
+2026-09-01 07:44:07,111 [INFO] bsa_orchestrator: [110/221] Analyzed BRITANNIA: Success
+2026-09-01 07:44:07,329 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DABUR.
+2026-09-01 07:44:07,329 [INFO] bsa_orchestrator: [111/221] Analyzed DABUR: Success
+2026-09-01 07:44:07,795 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDUNILVR.
+2026-09-01 07:44:07,796 [INFO] bsa_orchestrator: [112/221] Analyzed HINDUNILVR: Success
+2026-09-01 07:44:08,045 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ITC.
+2026-09-01 07:44:08,045 [INFO] bsa_orchestrator: [113/221] Analyzed ITC: Success
+2026-09-01 07:44:08,457 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RADICO.
+2026-09-01 07:44:08,458 [INFO] bsa_orchestrator: [114/221] Analyzed RADICO: Success
+2026-09-01 07:44:08,660 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATACONSUM.
+2026-09-01 07:44:08,660 [INFO] bsa_orchestrator: [115/221] Analyzed TATACONSUM: Success
+2026-09-01 07:44:08,977 [INFO] bsa_orchestrator: [116/221] Analyzed UBL: Success
+2026-09-01 07:44:09,209 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJAJFINSV.
+2026-09-01 07:44:09,209 [INFO] bsa_orchestrator: [117/221] Analyzed BAJAJFINSV: Success
+2026-09-01 07:44:09,411 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJFINANCE.
+2026-09-01 07:44:09,412 [INFO] bsa_orchestrator: [118/221] Analyzed BAJFINANCE: Success
+2026-09-01 07:44:09,789 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HDFCLIFE.
+2026-09-01 07:44:09,790 [INFO] bsa_orchestrator: [119/221] Analyzed HDFCLIFE: Success
+2026-09-01 07:44:10,075 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJAJ-AUTO.
+2026-09-01 07:44:10,075 [INFO] bsa_orchestrator: [120/221] Analyzed BAJAJ-AUTO: Success
+2026-09-01 07:44:10,344 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BALKRISIND.
+2026-09-01 07:44:10,344 [INFO] bsa_orchestrator: [121/221] Analyzed BALKRISIND: Success
+2026-09-01 07:44:10,564 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EICHERMOT.
+2026-09-01 07:44:10,565 [INFO] bsa_orchestrator: [122/221] Analyzed EICHERMOT: Success
+2026-09-01 07:44:10,762 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EXIDEIND.
+2026-09-01 07:44:10,762 [INFO] bsa_orchestrator: [123/221] Analyzed EXIDEIND: Success
+2026-09-01 07:44:10,960 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HEROMOTOCO.
+2026-09-01 07:44:10,960 [INFO] bsa_orchestrator: [124/221] Analyzed HEROMOTOCO: Success
+2026-09-01 07:44:11,163 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MARUTI.
+2026-09-01 07:44:11,163 [INFO] bsa_orchestrator: [125/221] Analyzed MARUTI: Success
+2026-09-01 07:44:11,429 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MOTHERSON.
+2026-09-01 07:44:11,430 [INFO] bsa_orchestrator: [126/221] Analyzed MOTHERSON: Success
+2026-09-01 07:44:11,662 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIINDIA.
+2026-09-01 07:44:11,662 [INFO] bsa_orchestrator: [127/221] Analyzed TIINDIA: Success
+2026-09-01 07:44:11,875 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TVSMOTOR.
+2026-09-01 07:44:11,876 [INFO] bsa_orchestrator: [128/221] Analyzed TVSMOTOR: Success
+2026-09-01 07:44:12,099 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIENT.
+2026-09-01 07:44:12,099 [INFO] bsa_orchestrator: [129/221] Analyzed ADANIENT: Success
+2026-09-01 07:44:12,512 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BHARTIARTL.
+2026-09-01 07:44:12,512 [INFO] bsa_orchestrator: [130/221] Analyzed BHARTIARTL: Success
+2026-09-01 07:44:12,707 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FEDFINA.
+2026-09-01 07:44:12,708 [INFO] bsa_orchestrator: [131/221] Analyzed FEDFINA: Success
+2026-09-01 07:44:12,963 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JMFINANCIL.
+2026-09-01 07:44:12,963 [INFO] bsa_orchestrator: [132/221] Analyzed JMFINANCIL: Success
+2026-09-01 07:44:13,268 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KFINTECH.
+2026-09-01 07:44:13,270 [INFO] bsa_orchestrator: [133/221] Analyzed KFINTECH: Success
+2026-09-01 07:44:13,462 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MASFIN.
+2026-09-01 07:44:13,463 [INFO] bsa_orchestrator: [134/221] Analyzed MASFIN: Success
+2026-09-01 07:44:13,689 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBFC.
+2026-09-01 07:44:13,690 [INFO] bsa_orchestrator: [135/221] Analyzed SBFC: Success
+2026-09-01 07:44:13,988 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KPITTECH.
+2026-09-01 07:44:13,989 [INFO] bsa_orchestrator: [136/221] Analyzed KPITTECH: Success
+2026-09-01 07:44:14,293 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RAMCOSYS.
+2026-09-01 07:44:14,293 [INFO] bsa_orchestrator: [137/221] Analyzed RAMCOSYS: Success
+2026-09-01 07:44:14,565 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GODREJPROP.
+2026-09-01 07:44:14,567 [INFO] bsa_orchestrator: [138/221] Analyzed GODREJPROP: Success
+2026-09-01 07:44:14,825 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HDFCBANK.
+2026-09-01 07:44:14,825 [INFO] bsa_orchestrator: [139/221] Analyzed HDFCBANK: Success
+2026-09-01 07:44:15,043 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DLF.
+2026-09-01 07:44:15,043 [INFO] bsa_orchestrator: [140/221] Analyzed DLF: Success
+2026-09-01 07:44:15,235 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for OBEROIRLTY.
+2026-09-01 07:44:15,236 [INFO] bsa_orchestrator: [141/221] Analyzed OBEROIRLTY: Success
+2026-09-01 07:44:15,523 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BRIGADE.
+2026-09-01 07:44:15,523 [INFO] bsa_orchestrator: [142/221] Analyzed BRIGADE: Success
+2026-09-01 07:44:15,917 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAHLIFE.
+2026-09-01 07:44:15,917 [INFO] bsa_orchestrator: [143/221] Analyzed MAHLIFE: Success
+2026-09-01 07:44:16,182 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RELIANCE.
+2026-09-01 07:44:16,183 [INFO] bsa_orchestrator: [144/221] Analyzed RELIANCE: Success
+2026-09-01 07:44:16,444 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CUMMINSIND.
+2026-09-01 07:44:16,444 [INFO] bsa_orchestrator: [145/221] Analyzed CUMMINSIND: Success
+2026-09-01 07:44:16,685 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HAVELLS.
+2026-09-01 07:44:16,687 [INFO] bsa_orchestrator: [146/221] Analyzed HAVELLS: Success
+2026-09-01 07:44:16,887 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANKINDIA.
+2026-09-01 07:44:16,888 [INFO] bsa_orchestrator: [147/221] Analyzed BANKINDIA: Success
+2026-09-01 07:44:17,092 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANKBARODA.
+2026-09-01 07:44:17,092 [INFO] bsa_orchestrator: [148/221] Analyzed BANKBARODA: Success
+2026-09-01 07:44:17,466 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PNB.
+2026-09-01 07:44:17,466 [INFO] bsa_orchestrator: [149/221] Analyzed PNB: Success
+2026-09-01 07:44:17,819 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBIN.
+2026-09-01 07:44:17,821 [INFO] bsa_orchestrator: [150/221] Analyzed SBIN: Success
+2026-09-01 07:44:18,184 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UCOBANK.
+2026-09-01 07:44:18,185 [INFO] bsa_orchestrator: [151/221] Analyzed UCOBANK: Success
+2026-09-01 07:44:18,594 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IOC.
+2026-09-01 07:44:18,595 [INFO] bsa_orchestrator: [152/221] Analyzed IOC: Success
+2026-09-01 07:44:18,903 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HAL.
+2026-09-01 07:44:18,904 [INFO] bsa_orchestrator: [153/221] Analyzed HAL: Success
+2026-09-01 07:44:19,100 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IRCTC.
+2026-09-01 07:44:19,101 [INFO] bsa_orchestrator: [154/221] Analyzed IRCTC: Success
+2026-09-01 07:44:19,342 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NTPC.
+2026-09-01 07:44:19,343 [INFO] bsa_orchestrator: [155/221] Analyzed NTPC: Success
+2026-09-01 07:44:19,598 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PFC.
+2026-09-01 07:44:19,598 [INFO] bsa_orchestrator: [156/221] Analyzed PFC: Success
+2026-09-01 07:44:19,808 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANDHANBNK.
+2026-09-01 07:44:19,809 [INFO] bsa_orchestrator: [157/221] Analyzed BANDHANBNK: Success
+2026-09-01 07:44:20,005 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FEDERALBNK.
+2026-09-01 07:44:20,006 [INFO] bsa_orchestrator: [158/221] Analyzed FEDERALBNK: Success
+2026-09-01 07:44:20,264 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ICICIBANK.
+2026-09-01 07:44:20,264 [INFO] bsa_orchestrator: [159/221] Analyzed ICICIBANK: Success
+2026-09-01 07:44:20,461 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AUROPHARMA.
+2026-09-01 07:44:20,462 [INFO] bsa_orchestrator: [160/221] Analyzed AUROPHARMA: Success
+2026-09-01 07:44:20,670 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CIPLA.
+2026-09-01 07:44:20,671 [INFO] bsa_orchestrator: [161/221] Analyzed CIPLA: Success
+2026-09-01 07:44:21,044 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DIVISLAB.
+2026-09-01 07:44:21,045 [INFO] bsa_orchestrator: [162/221] Analyzed DIVISLAB: Success
+2026-09-01 07:44:21,241 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IPCALAB.
+2026-09-01 07:44:21,241 [INFO] bsa_orchestrator: [163/221] Analyzed IPCALAB: Success
+2026-09-01 07:44:21,441 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNPHARMA.
+2026-09-01 07:44:21,441 [INFO] bsa_orchestrator: [164/221] Analyzed SUNPHARMA: Success
+2026-09-01 07:44:21,645 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BOSCHLTD.
+2026-09-01 07:44:21,646 [INFO] bsa_orchestrator: [165/221] Analyzed BOSCHLTD: Success
+2026-09-01 07:44:21,894 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ATGL.
+2026-09-01 07:44:21,896 [INFO] bsa_orchestrator: [166/221] Analyzed ATGL: Success
+2026-09-01 07:44:22,099 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CHOLAFIN.
+2026-09-01 07:44:22,100 [INFO] bsa_orchestrator: [167/221] Analyzed CHOLAFIN: Success
+2026-09-01 07:44:22,290 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COLPAL.
+2026-09-01 07:44:22,290 [INFO] bsa_orchestrator: [168/221] Analyzed COLPAL: Success
+2026-09-01 07:44:22,597 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDUSTOWER.
+2026-09-01 07:44:22,598 [INFO] bsa_orchestrator: [169/221] Analyzed INDUSTOWER: Success
+2026-09-01 07:44:22,807 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IDEA.
+2026-09-01 07:44:22,808 [INFO] bsa_orchestrator: [170/221] Analyzed IDEA: Success
+2026-09-01 07:44:22,995 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IIFL.
+2026-09-01 07:44:22,995 [INFO] bsa_orchestrator: [171/221] Analyzed IIFL: Success
+2026-09-01 07:44:23,194 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAXHEALTH.
+2026-09-01 07:44:23,194 [INFO] bsa_orchestrator: [172/221] Analyzed MAXHEALTH: Success
+2026-09-01 07:44:23,508 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for OFSS.
+2026-09-01 07:44:23,509 [INFO] bsa_orchestrator: [173/221] Analyzed OFSS: Success
+2026-09-01 07:44:23,739 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MARICO.
+2026-09-01 07:44:23,740 [INFO] bsa_orchestrator: [174/221] Analyzed MARICO: Success
+2026-09-01 07:44:23,942 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POLYCAB.
+2026-09-01 07:44:23,943 [INFO] bsa_orchestrator: [175/221] Analyzed POLYCAB: Success
+2026-09-01 07:44:24,147 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SRF.
+2026-09-01 07:44:24,148 [INFO] bsa_orchestrator: [176/221] Analyzed SRF: Success
+2026-09-01 07:44:24,529 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATAELXSI.
+2026-09-01 07:44:24,530 [INFO] bsa_orchestrator: [177/221] Analyzed TATAELXSI: Success
+2026-09-01 07:44:24,733 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UNITDSPR.
+2026-09-01 07:44:24,733 [INFO] bsa_orchestrator: [178/221] Analyzed UNITDSPR: Success
+2026-09-01 07:44:24,994 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASIANPAINT.
+2026-09-01 07:44:24,994 [INFO] bsa_orchestrator: [179/221] Analyzed ASIANPAINT: Success
+2026-09-01 07:44:25,188 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASTRAL.
+2026-09-01 07:44:25,189 [INFO] bsa_orchestrator: [180/221] Analyzed ASTRAL: Success
+2026-09-01 07:44:25,360 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ATUL.
+2026-09-01 07:44:25,360 [INFO] bsa_orchestrator: [181/221] Analyzed ATUL: Success
+2026-09-01 07:44:25,557 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BERGEPAINT.
+2026-09-01 07:44:25,558 [INFO] bsa_orchestrator: [182/221] Analyzed BERGEPAINT: Success
+2026-09-01 07:44:25,969 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BATAINDIA.
+2026-09-01 07:44:25,969 [INFO] bsa_orchestrator: [183/221] Analyzed BATAINDIA: Success
+2026-09-01 07:44:26,275 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CAMPUS.
+2026-09-01 07:44:26,276 [INFO] bsa_orchestrator: [184/221] Analyzed CAMPUS: Success
+2026-09-01 07:44:26,478 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CARBORUNIV.
+2026-09-01 07:44:26,479 [INFO] bsa_orchestrator: [185/221] Analyzed CARBORUNIV: Success
+2026-09-01 07:44:26,788 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CROMPTON.
+2026-09-01 07:44:26,789 [INFO] bsa_orchestrator: [186/221] Analyzed CROMPTON: Success
+2026-09-01 07:44:27,166 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DEEPAKNTR.
+2026-09-01 07:44:27,166 [INFO] bsa_orchestrator: [187/221] Analyzed DEEPAKNTR: Success
+2026-09-01 07:44:27,404 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DMART.
+2026-09-01 07:44:27,405 [INFO] bsa_orchestrator: [188/221] Analyzed DMART: Success
+2026-09-01 07:44:27,708 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MANYAVAR.
+2026-09-01 07:44:27,709 [INFO] bsa_orchestrator: [189/221] Analyzed MANYAVAR: Success
+2026-09-01 07:44:28,013 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PERSISTENT.
+2026-09-01 07:44:28,013 [INFO] bsa_orchestrator: [190/221] Analyzed PERSISTENT: Success
+2026-09-01 07:44:28,218 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PIIND.
+2026-09-01 07:44:28,218 [INFO] bsa_orchestrator: [191/221] Analyzed PIIND: Success
+2026-09-01 07:44:28,526 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SCHAEFFLER.
+2026-09-01 07:44:28,526 [INFO] bsa_orchestrator: [192/221] Analyzed SCHAEFFLER: Success
+2026-09-01 07:44:28,832 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VOLTAS.
+2026-09-01 07:44:28,833 [INFO] bsa_orchestrator: [193/221] Analyzed VOLTAS: Success
+2026-09-01 07:44:29,090 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WHIRLPOOL.
+2026-09-01 07:44:29,091 [INFO] bsa_orchestrator: [194/221] Analyzed WHIRLPOOL: Success
+2026-09-01 07:44:29,756 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HATHWAY.
+2026-09-01 07:44:29,757 [INFO] bsa_orchestrator: [195/221] Analyzed HATHWAY: Success
+2026-09-01 07:44:30,063 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WELCORP.
+2026-09-01 07:44:30,063 [INFO] bsa_orchestrator: [196/221] Analyzed WELCORP: Success
+2026-09-01 07:44:30,259 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NETWORK18.
+2026-09-01 07:44:30,260 [INFO] bsa_orchestrator: [197/221] Analyzed NETWORK18: Success
+2026-09-01 07:44:30,574 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TVTODAY.
+2026-09-01 07:44:30,575 [INFO] bsa_orchestrator: [198/221] Analyzed TVTODAY: Success
+2026-09-01 07:44:30,779 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ZEEL.
+2026-09-01 07:44:30,779 [INFO] bsa_orchestrator: [199/221] Analyzed ZEEL: Success
+2026-09-01 07:44:31,090 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TECHM.
+2026-09-01 07:44:31,090 [INFO] bsa_orchestrator: [200/221] Analyzed TECHM: Success
+2026-09-01 07:44:31,393 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRASIM.
+2026-09-01 07:44:31,394 [INFO] bsa_orchestrator: [201/221] Analyzed GRASIM: Success
+2026-09-01 07:44:31,700 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for APOLLOHOSP.
+2026-09-01 07:44:31,701 [INFO] bsa_orchestrator: [202/221] Analyzed APOLLOHOSP: Success
+2026-09-01 07:44:32,009 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LALPATHLAB.
+2026-09-01 07:44:32,010 [INFO] bsa_orchestrator: [203/221] Analyzed LALPATHLAB: Success
+2026-09-01 07:44:32,213 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MEDANTA.
+2026-09-01 07:44:32,214 [INFO] bsa_orchestrator: [204/221] Analyzed MEDANTA: Success
+2026-09-01 07:44:32,522 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for STARHEALTH.
+2026-09-01 07:44:32,522 [INFO] bsa_orchestrator: [205/221] Analyzed STARHEALTH: Success
+2026-09-01 07:44:32,828 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EMAMILTD.
+2026-09-01 07:44:32,829 [INFO] bsa_orchestrator: [206/221] Analyzed EMAMILTD: Success
+2026-09-01 07:44:33,239 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NESTLEIND.
+2026-09-01 07:44:33,240 [INFO] bsa_orchestrator: [207/221] Analyzed NESTLEIND: Success
+2026-09-01 07:44:33,425 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PGHH.
+2026-09-01 07:44:33,425 [INFO] bsa_orchestrator: [208/221] Analyzed PGHH: Success
+2026-09-01 07:44:33,630 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBILIFE.
+2026-09-01 07:44:33,632 [INFO] bsa_orchestrator: [209/221] Analyzed SBILIFE: Success
+2026-09-01 07:44:33,955 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SHRIRAMFIN.
+2026-09-01 07:44:33,956 [INFO] bsa_orchestrator: [210/221] Analyzed SHRIRAMFIN: Success
+2026-09-01 07:44:34,264 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASHOKLEY.
+2026-09-01 07:44:34,264 [INFO] bsa_orchestrator: [211/221] Analyzed ASHOKLEY: Success
+2026-09-01 07:44:34,673 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BHARATFORG.
+2026-09-01 07:44:34,674 [INFO] bsa_orchestrator: [212/221] Analyzed BHARATFORG: Success
+2026-09-01 07:44:34,976 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for M&M.
+2026-09-01 07:44:34,977 [INFO] bsa_orchestrator: [213/221] Analyzed M&M: Success
+2026-09-01 07:44:35,181 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MRF.
+2026-09-01 07:44:35,181 [INFO] bsa_orchestrator: [214/221] Analyzed MRF: Success
+2026-09-01 07:44:35,390 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TMCV.
+2026-09-01 07:44:35,390 [INFO] bsa_orchestrator: [215/221] Analyzed TMCV: Success
+2026-09-01 07:44:35,693 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TITAN.
+2026-09-01 07:44:35,694 [INFO] bsa_orchestrator: [216/221] Analyzed TITAN: Success
+2026-09-01 07:44:35,899 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IREDA.
+2026-09-01 07:44:35,900 [INFO] bsa_orchestrator: [217/221] Analyzed IREDA: Success
+2026-09-01 07:44:36,208 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDIASHLTR.
+2026-09-01 07:44:36,208 [INFO] bsa_orchestrator: [218/221] Analyzed INDIASHLTR: Success
+2026-09-01 07:44:36,485 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BSE.
+2026-09-01 07:44:36,486 [INFO] bsa_orchestrator: [219/221] Analyzed BSE: Success
+2026-09-01 07:44:36,768 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SONATSOFTW.
+2026-09-01 07:44:36,770 [INFO] bsa_orchestrator: [220/221] Analyzed SONATSOFTW: Success
+2026-09-01 07:44:37,044 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SURYODAY.
+2026-09-01 07:44:37,045 [INFO] bsa_orchestrator: [221/221] Analyzed SURYODAY: Success
+2026-09-01 07:44:37,045 [INFO] bsa_orchestrator: Analysis process completed. Attempted: 221, Succeeded: 221, Failed: 0, Time Taken: 61.25s
+2026-09-01 08:10:45,144 [INFO] bsa_us_market: Starting US market download for 22 tickers...
+2026-09-01 08:10:47,387 [ERROR] bsa_us_market: Error downloading US stock data for AMZN: 'RSI_14'
+2026-09-01 08:10:47,388 [INFO] bsa_us_market: [1/22] US Downloaded AMZN: Failed
+2026-09-01 08:10:47,398 [ERROR] bsa_us_market: Error downloading US stock data for MSFT: 'RSI_14'
+2026-09-01 08:10:47,400 [INFO] bsa_us_market: [2/22] US Downloaded MSFT: Failed
+2026-09-01 08:10:47,643 [ERROR] bsa_us_market: Error downloading US stock data for AAPL: 'RSI_14'
+2026-09-01 08:10:47,644 [INFO] bsa_us_market: [3/22] US Downloaded AAPL: Failed
+2026-09-01 08:10:47,651 [ERROR] bsa_us_market: Error downloading US stock data for GOOGL: 'RSI_14'
+2026-09-01 08:10:47,652 [INFO] bsa_us_market: [4/22] US Downloaded GOOGL: Failed
+2026-09-01 08:10:47,838 [ERROR] bsa_us_market: Error downloading US stock data for NVDA: 'RSI_14'
+2026-09-01 08:10:47,848 [INFO] bsa_us_market: [5/22] US Downloaded NVDA: Failed
+2026-09-01 08:10:48,668 [ERROR] bsa_us_market: Error downloading US stock data for META: 'RSI_14'
+2026-09-01 08:10:48,669 [INFO] bsa_us_market: [6/22] US Downloaded META: Failed
+2026-09-01 08:10:48,940 [ERROR] bsa_us_market: Error downloading US stock data for TSLA: 'RSI_14'
+2026-09-01 08:10:48,943 [INFO] bsa_us_market: [7/22] US Downloaded TSLA: Failed
+2026-09-01 08:10:49,049 [ERROR] bsa_us_market: Error downloading US stock data for AMD: 'RSI_14'
+2026-09-01 08:10:49,051 [INFO] bsa_us_market: [8/22] US Downloaded AMD: Failed
+2026-09-01 08:10:49,219 [ERROR] bsa_us_market: Error downloading US stock data for INTC: 'RSI_14'
+2026-09-01 08:10:49,221 [INFO] bsa_us_market: [9/22] US Downloaded INTC: Failed
+2026-09-01 08:10:49,358 [ERROR] bsa_us_market: Error downloading US stock data for JPM: 'RSI_14'
+2026-09-01 08:10:49,362 [INFO] bsa_us_market: [10/22] US Downloaded JPM: Failed
+2026-09-01 08:10:49,967 [ERROR] bsa_us_market: Error downloading US stock data for BAC: 'RSI_14'
+2026-09-01 08:10:49,968 [INFO] bsa_us_market: [11/22] US Downloaded BAC: Failed
+2026-09-01 08:10:50,476 [ERROR] bsa_us_market: Error downloading US stock data for V: 'RSI_14'
+2026-09-01 08:10:50,482 [INFO] bsa_us_market: [12/22] US Downloaded V: Failed
+2026-09-01 08:10:50,563 [ERROR] bsa_us_market: Error downloading US stock data for GS: 'RSI_14'
+2026-09-01 08:10:50,565 [INFO] bsa_us_market: [13/22] US Downloaded GS: Failed
+2026-09-01 08:10:50,680 [ERROR] bsa_us_market: Error downloading US stock data for MA: 'RSI_14'
+2026-09-01 08:10:50,681 [INFO] bsa_us_market: [14/22] US Downloaded MA: Failed
+2026-09-01 08:10:51,164 [ERROR] bsa_us_market: Error downloading US stock data for JNJ: 'RSI_14'
+2026-09-01 08:10:51,177 [INFO] bsa_us_market: [15/22] US Downloaded JNJ: Failed
+2026-09-01 08:10:51,880 [ERROR] bsa_us_market: Error downloading US stock data for PFE: 'RSI_14'
+2026-09-01 08:10:51,904 [INFO] bsa_us_market: [16/22] US Downloaded PFE: Failed
+2026-09-01 08:10:52,785 [ERROR] bsa_us_market: Error downloading US stock data for CVX: 'RSI_14'
+2026-09-01 08:10:52,786 [INFO] bsa_us_market: [17/22] US Downloaded CVX: Failed
+2026-09-01 08:10:52,817 [ERROR] bsa_us_market: Error downloading US stock data for UNH: 'RSI_14'
+2026-09-01 08:10:52,817 [INFO] bsa_us_market: [18/22] US Downloaded UNH: Failed
+2026-09-01 08:10:52,994 [ERROR] bsa_us_market: Error downloading US stock data for SPY: 'RSI_14'
+2026-09-01 08:10:52,995 [INFO] bsa_us_market: [19/22] US Downloaded SPY: Failed
+2026-09-01 08:10:53,025 [ERROR] bsa_us_market: Error downloading US stock data for XOM: 'RSI_14'
+2026-09-01 08:10:53,028 [INFO] bsa_us_market: [20/22] US Downloaded XOM: Failed
+2026-09-01 08:10:53,151 [ERROR] bsa_us_market: Error downloading US stock data for QQQ: 'RSI_14'
+2026-09-01 08:10:53,151 [INFO] bsa_us_market: [21/22] US Downloaded QQQ: Failed
+2026-09-01 08:10:54,131 [ERROR] bsa_us_market: Error downloading US stock data for DIA: 'RSI_14'
+2026-09-01 08:10:54,132 [INFO] bsa_us_market: [22/22] US Downloaded DIA: Failed
+2026-09-01 08:10:54,133 [INFO] bsa_us_market: US Download completed. Attempted: 22, Succeeded: 0, Failed: 22
+2026-09-01 08:10:54,135 [INFO] bsa_orchestrator: Starting analysis process for 22 tickers...
+2026-09-01 08:10:54,139 [WARNING] bsa_orchestrator: No price data available for AAPL, skipping analysis.
+2026-09-01 08:10:54,140 [INFO] bsa_orchestrator: [1/22] Analyzed AAPL: Failed
+2026-09-01 08:10:54,145 [WARNING] bsa_orchestrator: No price data available for MSFT, skipping analysis.
+2026-09-01 08:10:54,147 [INFO] bsa_orchestrator: [2/22] Analyzed MSFT: Failed
+2026-09-01 08:10:54,148 [WARNING] bsa_orchestrator: No price data available for NVDA, skipping analysis.
+2026-09-01 08:10:54,149 [INFO] bsa_orchestrator: [3/22] Analyzed NVDA: Failed
+2026-09-01 08:10:54,151 [WARNING] bsa_orchestrator: No price data available for GOOGL, skipping analysis.
+2026-09-01 08:10:54,151 [INFO] bsa_orchestrator: [4/22] Analyzed GOOGL: Failed
+2026-09-01 08:10:54,154 [WARNING] bsa_orchestrator: No price data available for AMZN, skipping analysis.
+2026-09-01 08:10:54,154 [INFO] bsa_orchestrator: [5/22] Analyzed AMZN: Failed
+2026-09-01 08:10:54,157 [WARNING] bsa_orchestrator: No price data available for META, skipping analysis.
+2026-09-01 08:10:54,157 [INFO] bsa_orchestrator: [6/22] Analyzed META: Failed
+2026-09-01 08:10:54,164 [WARNING] bsa_orchestrator: No price data available for TSLA, skipping analysis.
+2026-09-01 08:10:54,164 [INFO] bsa_orchestrator: [7/22] Analyzed TSLA: Failed
+2026-09-01 08:10:54,168 [WARNING] bsa_orchestrator: No price data available for AMD, skipping analysis.
+2026-09-01 08:10:54,168 [INFO] bsa_orchestrator: [8/22] Analyzed AMD: Failed
+2026-09-01 08:10:54,170 [WARNING] bsa_orchestrator: No price data available for INTC, skipping analysis.
+2026-09-01 08:10:54,170 [INFO] bsa_orchestrator: [9/22] Analyzed INTC: Failed
+2026-09-01 08:10:54,174 [WARNING] bsa_orchestrator: No price data available for JPM, skipping analysis.
+2026-09-01 08:10:54,174 [INFO] bsa_orchestrator: [10/22] Analyzed JPM: Failed
+2026-09-01 08:10:54,181 [WARNING] bsa_orchestrator: No price data available for BAC, skipping analysis.
+2026-09-01 08:10:54,182 [INFO] bsa_orchestrator: [11/22] Analyzed BAC: Failed
+2026-09-01 08:10:54,186 [WARNING] bsa_orchestrator: No price data available for GS, skipping analysis.
+2026-09-01 08:10:54,186 [INFO] bsa_orchestrator: [12/22] Analyzed GS: Failed
+2026-09-01 08:10:54,189 [WARNING] bsa_orchestrator: No price data available for V, skipping analysis.
+2026-09-01 08:10:54,189 [INFO] bsa_orchestrator: [13/22] Analyzed V: Failed
+2026-09-01 08:10:54,191 [WARNING] bsa_orchestrator: No price data available for MA, skipping analysis.
+2026-09-01 08:10:54,192 [INFO] bsa_orchestrator: [14/22] Analyzed MA: Failed
+2026-09-01 08:10:54,198 [WARNING] bsa_orchestrator: No price data available for JNJ, skipping analysis.
+2026-09-01 08:10:54,198 [INFO] bsa_orchestrator: [15/22] Analyzed JNJ: Failed
+2026-09-01 08:10:54,201 [WARNING] bsa_orchestrator: No price data available for PFE, skipping analysis.
+2026-09-01 08:10:54,201 [INFO] bsa_orchestrator: [16/22] Analyzed PFE: Failed
+2026-09-01 08:10:54,203 [WARNING] bsa_orchestrator: No price data available for UNH, skipping analysis.
+2026-09-01 08:10:54,203 [INFO] bsa_orchestrator: [17/22] Analyzed UNH: Failed
+2026-09-01 08:10:54,206 [WARNING] bsa_orchestrator: No price data available for XOM, skipping analysis.
+2026-09-01 08:10:54,206 [INFO] bsa_orchestrator: [18/22] Analyzed XOM: Failed
+2026-09-01 08:10:54,208 [WARNING] bsa_orchestrator: No price data available for CVX, skipping analysis.
+2026-09-01 08:10:54,209 [INFO] bsa_orchestrator: [19/22] Analyzed CVX: Failed
+2026-09-01 08:10:54,212 [WARNING] bsa_orchestrator: No price data available for SPY, skipping analysis.
+2026-09-01 08:10:54,212 [INFO] bsa_orchestrator: [20/22] Analyzed SPY: Failed
+2026-09-01 08:10:54,214 [WARNING] bsa_orchestrator: No price data available for QQQ, skipping analysis.
+2026-09-01 08:10:54,214 [INFO] bsa_orchestrator: [21/22] Analyzed QQQ: Failed
+2026-09-01 08:10:54,216 [WARNING] bsa_orchestrator: No price data available for DIA, skipping analysis.
+2026-09-01 08:10:54,217 [INFO] bsa_orchestrator: [22/22] Analyzed DIA: Failed
+2026-09-01 08:10:54,217 [INFO] bsa_orchestrator: Analysis process completed. Attempted: 22, Succeeded: 0, Failed: 22, Time Taken: 0.08s
+2026-09-01 08:11:04,472 [INFO] bsa_us_market: Starting US market download for 22 tickers...
+2026-09-01 08:11:10,896 [INFO] bsa_us_market: Successfully downloaded US market data for AMZN
+2026-09-01 08:11:10,906 [INFO] bsa_us_market: [1/22] US Downloaded AMZN: Success
+2026-09-01 08:11:11,299 [INFO] bsa_us_market: Successfully downloaded US market data for GOOGL
+2026-09-01 08:11:11,311 [INFO] bsa_us_market: [2/22] US Downloaded GOOGL: Success
+2026-09-01 08:11:11,368 [INFO] bsa_us_market: Successfully downloaded US market data for NVDA
+2026-09-01 08:11:11,381 [INFO] bsa_us_market: [3/22] US Downloaded NVDA: Success
+2026-09-01 08:11:11,677 [INFO] bsa_us_market: Successfully downloaded US market data for MSFT
+2026-09-01 08:11:11,695 [INFO] bsa_us_market: [4/22] US Downloaded MSFT: Success
+2026-09-01 08:11:11,889 [INFO] bsa_us_market: Successfully downloaded US market data for AAPL
+2026-09-01 08:11:11,891 [INFO] bsa_us_market: [5/22] US Downloaded AAPL: Success
+2026-09-01 08:11:15,752 [INFO] bsa_us_market: Successfully downloaded US market data for META
+2026-09-01 08:11:15,766 [INFO] bsa_us_market: [6/22] US Downloaded META: Success
+2026-09-01 08:11:17,452 [INFO] bsa_us_market: Successfully downloaded US market data for TSLA
+2026-09-01 08:11:17,463 [INFO] bsa_us_market: [7/22] US Downloaded TSLA: Success
+2026-09-01 08:11:18,112 [INFO] bsa_us_market: Successfully downloaded US market data for AMD
+2026-09-01 08:11:18,115 [INFO] bsa_us_market: [8/22] US Downloaded AMD: Success
+2026-09-01 08:11:18,379 [INFO] bsa_us_market: Successfully downloaded US market data for JPM
+2026-09-01 08:11:18,391 [INFO] bsa_us_market: [9/22] US Downloaded JPM: Success
+2026-09-01 08:11:18,549 [INFO] bsa_us_market: Successfully downloaded US market data for INTC
+2026-09-01 08:11:18,551 [INFO] bsa_us_market: [10/22] US Downloaded INTC: Success
+2026-09-01 08:11:19,833 [INFO] bsa_us_market: Successfully downloaded US market data for BAC
+2026-09-01 08:11:19,841 [INFO] bsa_us_market: [11/22] US Downloaded BAC: Success
+2026-09-01 08:11:22,082 [INFO] bsa_us_market: Successfully downloaded US market data for GS
+2026-09-01 08:11:22,096 [INFO] bsa_us_market: [12/22] US Downloaded GS: Success
+2026-09-01 08:11:22,988 [INFO] bsa_us_market: Successfully downloaded US market data for V
+2026-09-01 08:11:22,991 [INFO] bsa_us_market: [13/22] US Downloaded V: Success
+2026-09-01 08:11:22,995 [INFO] bsa_us_market: Successfully downloaded US market data for MA
+2026-09-01 08:11:23,009 [INFO] bsa_us_market: [14/22] US Downloaded MA: Success
+2026-09-01 08:11:23,893 [INFO] bsa_us_market: Successfully downloaded US market data for JNJ
+2026-09-01 08:11:23,897 [INFO] bsa_us_market: [15/22] US Downloaded JNJ: Success
+2026-09-01 08:11:24,207 [INFO] bsa_us_market: Successfully downloaded US market data for PFE
+2026-09-01 08:11:24,221 [INFO] bsa_us_market: [16/22] US Downloaded PFE: Success
+2026-09-01 08:11:27,047 [INFO] bsa_us_market: Successfully downloaded US market data for UNH
+2026-09-01 08:11:27,051 [INFO] bsa_us_market: [17/22] US Downloaded UNH: Success
+2026-09-01 08:11:27,360 [INFO] bsa_us_market: Successfully downloaded US market data for CVX
+2026-09-01 08:11:27,367 [INFO] bsa_us_market: [18/22] US Downloaded CVX: Success
+2026-09-01 08:11:27,492 [INFO] bsa_us_market: Successfully downloaded US market data for XOM
+2026-09-01 08:11:27,498 [INFO] bsa_us_market: [19/22] US Downloaded XOM: Success
+2026-09-01 08:11:28,054 [INFO] bsa_us_market: Successfully downloaded US market data for SPY
+2026-09-01 08:11:28,058 [INFO] bsa_us_market: [20/22] US Downloaded SPY: Success
+2026-09-01 08:11:28,139 [INFO] bsa_us_market: Successfully downloaded US market data for QQQ
+2026-09-01 08:11:28,141 [INFO] bsa_us_market: [21/22] US Downloaded QQQ: Success
+2026-09-01 08:11:29,385 [INFO] bsa_us_market: Successfully downloaded US market data for DIA
+2026-09-01 08:11:29,386 [INFO] bsa_us_market: [22/22] US Downloaded DIA: Success
+2026-09-01 08:11:29,388 [INFO] bsa_us_market: US Download completed. Attempted: 22, Succeeded: 22, Failed: 0
+2026-09-01 08:11:29,392 [INFO] bsa_orchestrator: Starting analysis process for 22 tickers...
+2026-09-01 08:11:29,901 [INFO] bsa_orchestrator: [1/22] Analyzed MA: Success
+2026-09-01 08:11:30,098 [INFO] bsa_orchestrator: [2/22] Analyzed JNJ: Success
+2026-09-01 08:11:30,301 [INFO] bsa_orchestrator: [3/22] Analyzed PFE: Success
+2026-09-01 08:11:30,506 [INFO] bsa_orchestrator: [4/22] Analyzed UNH: Success
+2026-09-01 08:11:30,916 [INFO] bsa_orchestrator: [5/22] Analyzed XOM: Success
+2026-09-01 08:11:31,431 [INFO] bsa_orchestrator: [6/22] Analyzed CVX: Success
+2026-09-01 08:11:31,653 [INFO] bsa_orchestrator: [7/22] Analyzed SPY: Success
+2026-09-01 08:11:31,940 [INFO] bsa_orchestrator: [8/22] Analyzed QQQ: Success
+2026-09-01 08:11:32,139 [INFO] bsa_orchestrator: [9/22] Analyzed DIA: Success
+2026-09-01 08:11:32,553 [INFO] bsa_orchestrator: [10/22] Analyzed AMZN: Success
+2026-09-01 08:11:32,760 [INFO] bsa_orchestrator: [11/22] Analyzed NVDA: Success
+2026-09-01 08:11:32,969 [INFO] bsa_orchestrator: [12/22] Analyzed GOOGL: Success
+2026-09-01 08:11:33,170 [INFO] bsa_orchestrator: [13/22] Analyzed MSFT: Success
+2026-09-01 08:11:33,484 [INFO] bsa_orchestrator: [14/22] Analyzed AAPL: Success
+2026-09-01 08:11:33,681 [INFO] bsa_orchestrator: [15/22] Analyzed META: Success
+2026-09-01 08:11:33,895 [INFO] bsa_orchestrator: [16/22] Analyzed TSLA: Success
+2026-09-01 08:11:34,152 [INFO] bsa_orchestrator: [17/22] Analyzed AMD: Success
+2026-09-01 08:11:34,464 [INFO] bsa_orchestrator: [18/22] Analyzed INTC: Success
+2026-09-01 08:11:34,704 [INFO] bsa_orchestrator: [19/22] Analyzed JPM: Success
+2026-09-01 08:11:35,116 [INFO] bsa_orchestrator: [20/22] Analyzed BAC: Success
+2026-09-01 08:11:35,342 [INFO] bsa_orchestrator: [21/22] Analyzed GS: Success
+2026-09-01 08:11:35,568 [INFO] bsa_orchestrator: [22/22] Analyzed V: Success
+2026-09-01 08:11:35,568 [INFO] bsa_orchestrator: Analysis process completed. Attempted: 22, Succeeded: 22, Failed: 0, Time Taken: 6.18s
+2026-09-01 09:21:34,091 [INFO] bsa_cli: Triggered scoring and analysis engine for all master tickers...
+2026-09-01 09:21:34,238 [INFO] bsa_orchestrator: Starting analysis process for 221 tickers...
+2026-09-01 09:21:35,521 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PHOENIXLTD.
+2026-09-01 09:21:35,521 [INFO] bsa_orchestrator: [1/221] Analyzed PHOENIXLTD: Success
+2026-09-01 09:21:35,781 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PRESTIGE.
+2026-09-01 09:21:35,781 [INFO] bsa_orchestrator: [2/221] Analyzed PRESTIGE: Success
+2026-09-01 09:21:36,119 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ABB.
+2026-09-01 09:21:36,119 [INFO] bsa_orchestrator: [3/221] Analyzed ABB: Success
+2026-09-01 09:21:36,394 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SOBHA.
+2026-09-01 09:21:36,394 [INFO] bsa_orchestrator: [4/221] Analyzed SOBHA: Success
+2026-09-01 09:21:36,601 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNTECK.
+2026-09-01 09:21:36,602 [INFO] bsa_orchestrator: [5/221] Analyzed SUNTECK: Success
+2026-09-01 09:21:36,810 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BEL.
+2026-09-01 09:21:36,810 [INFO] bsa_orchestrator: [6/221] Analyzed BEL: Success
+2026-09-01 09:21:37,056 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JSWENERGY.
+2026-09-01 09:21:37,057 [INFO] bsa_orchestrator: [7/221] Analyzed JSWENERGY: Success
+2026-09-01 09:21:37,293 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POWERINDIA.
+2026-09-01 09:21:37,294 [INFO] bsa_orchestrator: [8/221] Analyzed POWERINDIA: Success
+2026-09-01 09:21:37,627 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PRAJIND.
+2026-09-01 09:21:37,627 [INFO] bsa_orchestrator: [9/221] Analyzed PRAJIND: Success
+2026-09-01 09:21:37,843 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SIEMENS.
+2026-09-01 09:21:37,844 [INFO] bsa_orchestrator: [10/221] Analyzed SIEMENS: Success
+2026-09-01 09:21:38,247 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAZDOCK.
+2026-09-01 09:21:38,248 [INFO] bsa_orchestrator: [11/221] Analyzed MAZDOCK: Success
+2026-09-01 09:21:38,509 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SJVN.
+2026-09-01 09:21:38,510 [INFO] bsa_orchestrator: [12/221] Analyzed SJVN: Success
+2026-09-01 09:21:38,859 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CANBK.
+2026-09-01 09:21:38,860 [INFO] bsa_orchestrator: [13/221] Analyzed CANBK: Success
+2026-09-01 09:21:39,128 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CENTRALBK.
+2026-09-01 09:21:39,128 [INFO] bsa_orchestrator: [14/221] Analyzed CENTRALBK: Success
+2026-09-01 09:21:39,926 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDIANB.
+2026-09-01 09:21:39,927 [INFO] bsa_orchestrator: [15/221] Analyzed INDIANB: Success
+2026-09-01 09:21:40,143 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IOB.
+2026-09-01 09:21:40,144 [INFO] bsa_orchestrator: [16/221] Analyzed IOB: Success
+2026-09-01 09:21:40,535 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAHABANK.
+2026-09-01 09:21:40,536 [INFO] bsa_orchestrator: [17/221] Analyzed MAHABANK: Success
+2026-09-01 09:21:40,801 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PSB.
+2026-09-01 09:21:40,802 [INFO] bsa_orchestrator: [18/221] Analyzed PSB: Success
+2026-09-01 09:21:41,027 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UNIONBANK.
+2026-09-01 09:21:41,028 [INFO] bsa_orchestrator: [19/221] Analyzed UNIONBANK: Success
+2026-09-01 09:21:41,265 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BPCL.
+2026-09-01 09:21:41,265 [INFO] bsa_orchestrator: [20/221] Analyzed BPCL: Success
+2026-09-01 09:21:41,533 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COALINDIA.
+2026-09-01 09:21:41,533 [INFO] bsa_orchestrator: [21/221] Analyzed COALINDIA: Success
+2026-09-01 09:21:41,827 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CONCOR.
+2026-09-01 09:21:41,828 [INFO] bsa_orchestrator: [22/221] Analyzed CONCOR: Success
+2026-09-01 09:21:42,030 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GAIL.
+2026-09-01 09:21:42,031 [INFO] bsa_orchestrator: [23/221] Analyzed GAIL: Success
+2026-09-01 09:21:42,492 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IRFC.
+2026-09-01 09:21:42,493 [INFO] bsa_orchestrator: [24/221] Analyzed IRFC: Success
+2026-09-01 09:21:42,704 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NATIONALUM.
+2026-09-01 09:21:42,705 [INFO] bsa_orchestrator: [25/221] Analyzed NATIONALUM: Success
+2026-09-01 09:21:42,897 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NHPC.
+2026-09-01 09:21:42,897 [INFO] bsa_orchestrator: [26/221] Analyzed NHPC: Success
+2026-09-01 09:21:43,260 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NMDC.
+2026-09-01 09:21:43,261 [INFO] bsa_orchestrator: [27/221] Analyzed NMDC: Success
+2026-09-01 09:21:43,462 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ONGC.
+2026-09-01 09:21:43,462 [INFO] bsa_orchestrator: [28/221] Analyzed ONGC: Success
+2026-09-01 09:21:43,692 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POWERGRID.
+2026-09-01 09:21:43,692 [INFO] bsa_orchestrator: [29/221] Analyzed POWERGRID: Success
+2026-09-01 09:21:43,892 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RECLTD.
+2026-09-01 09:21:43,892 [INFO] bsa_orchestrator: [30/221] Analyzed RECLTD: Success
+2026-09-01 09:21:44,095 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SAIL.
+2026-09-01 09:21:44,096 [INFO] bsa_orchestrator: [31/221] Analyzed SAIL: Success
+2026-09-01 09:21:44,300 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AUBANK.
+2026-09-01 09:21:44,301 [INFO] bsa_orchestrator: [32/221] Analyzed AUBANK: Success
+2026-09-01 09:21:44,697 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AXISBANK.
+2026-09-01 09:21:44,699 [INFO] bsa_orchestrator: [33/221] Analyzed AXISBANK: Success
+2026-09-01 09:21:45,100 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IDFCFIRSTB.
+2026-09-01 09:21:45,101 [INFO] bsa_orchestrator: [34/221] Analyzed IDFCFIRSTB: Success
+2026-09-01 09:21:45,311 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDUSINDBK.
+2026-09-01 09:21:45,312 [INFO] bsa_orchestrator: [35/221] Analyzed INDUSINDBK: Success
+2026-09-01 09:21:45,571 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KOTAKBANK.
+2026-09-01 09:21:45,571 [INFO] bsa_orchestrator: [36/221] Analyzed KOTAKBANK: Success
+2026-09-01 09:21:45,825 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ALKEM.
+2026-09-01 09:21:45,825 [INFO] bsa_orchestrator: [37/221] Analyzed ALKEM: Success
+2026-09-01 09:21:46,030 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RBLBANK.
+2026-09-01 09:21:46,031 [INFO] bsa_orchestrator: [38/221] Analyzed RBLBANK: Success
+2026-09-01 09:21:46,306 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BIOCON.
+2026-09-01 09:21:46,307 [INFO] bsa_orchestrator: [39/221] Analyzed BIOCON: Success
+2026-09-01 09:21:46,695 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DRREDDY.
+2026-09-01 09:21:46,696 [INFO] bsa_orchestrator: [40/221] Analyzed DRREDDY: Success
+2026-09-01 09:21:46,943 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRANULES.
+2026-09-01 09:21:46,943 [INFO] bsa_orchestrator: [41/221] Analyzed GRANULES: Success
+2026-09-01 09:21:47,176 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GLENMARK.
+2026-09-01 09:21:47,176 [INFO] bsa_orchestrator: [42/221] Analyzed GLENMARK: Success
+2026-09-01 09:21:47,460 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LAURUSLABS.
+2026-09-01 09:21:47,461 [INFO] bsa_orchestrator: [43/221] Analyzed LAURUSLABS: Success
+2026-09-01 09:21:47,677 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LUPIN.
+2026-09-01 09:21:47,677 [INFO] bsa_orchestrator: [44/221] Analyzed LUPIN: Success
+2026-09-01 09:21:47,884 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NATCOPHARM.
+2026-09-01 09:21:47,885 [INFO] bsa_orchestrator: [45/221] Analyzed NATCOPHARM: Success
+2026-09-01 09:21:48,277 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TORNTPHARM.
+2026-09-01 09:21:48,278 [INFO] bsa_orchestrator: [46/221] Analyzed TORNTPHARM: Success
+2026-09-01 09:21:48,527 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ZYDUSLIFE.
+2026-09-01 09:21:48,528 [INFO] bsa_orchestrator: [47/221] Analyzed ZYDUSLIFE: Success
+2026-09-01 09:21:48,714 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIGREEN.
+2026-09-01 09:21:48,714 [INFO] bsa_orchestrator: [48/221] Analyzed ADANIGREEN: Success
+2026-09-01 09:21:49,098 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AMBUJACEM.
+2026-09-01 09:21:49,099 [INFO] bsa_orchestrator: [49/221] Analyzed AMBUJACEM: Success
+2026-09-01 09:21:49,300 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DELHIVERY.
+2026-09-01 09:21:49,301 [INFO] bsa_orchestrator: [50/221] Analyzed DELHIVERY: Success
+2026-09-01 09:21:49,499 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ETERNAL.
+2026-09-01 09:21:49,500 [INFO] bsa_orchestrator: [51/221] Analyzed ETERNAL: Success
+2026-09-01 09:21:49,859 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GODREJCP.
+2026-09-01 09:21:49,860 [INFO] bsa_orchestrator: [52/221] Analyzed GODREJCP: Success
+2026-09-01 09:21:50,089 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ICICIPRULI.
+2026-09-01 09:21:50,090 [INFO] bsa_orchestrator: [53/221] Analyzed ICICIPRULI: Success
+2026-09-01 09:21:50,428 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDHOTEL.
+2026-09-01 09:21:50,430 [INFO] bsa_orchestrator: [54/221] Analyzed INDHOTEL: Success
+2026-09-01 09:21:50,795 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JIOFIN.
+2026-09-01 09:21:50,795 [INFO] bsa_orchestrator: [55/221] Analyzed JIOFIN: Success
+2026-09-01 09:21:51,076 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JINDALSTEL.
+2026-09-01 09:21:51,076 [INFO] bsa_orchestrator: [56/221] Analyzed JINDALSTEL: Success
+2026-09-01 09:21:51,575 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LICI.
+2026-09-01 09:21:51,575 [INFO] bsa_orchestrator: [57/221] Analyzed LICI: Success
+2026-09-01 09:21:51,896 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for M&MFIN.
+2026-09-01 09:21:51,896 [INFO] bsa_orchestrator: [58/221] Analyzed M&MFIN: Success
+2026-09-01 09:21:52,272 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MUTHOOTFIN.
+2026-09-01 09:21:52,273 [INFO] bsa_orchestrator: [59/221] Analyzed MUTHOOTFIN: Success
+2026-09-01 09:21:52,679 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PAYTM.
+2026-09-01 09:21:52,681 [INFO] bsa_orchestrator: [60/221] Analyzed PAYTM: Success
+2026-09-01 09:21:53,091 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PIDILITIND.
+2026-09-01 09:21:53,092 [INFO] bsa_orchestrator: [61/221] Analyzed PIDILITIND: Success
+2026-09-01 09:21:53,291 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POONAWALLA.
+2026-09-01 09:21:53,292 [INFO] bsa_orchestrator: [62/221] Analyzed POONAWALLA: Success
+2026-09-01 09:21:53,502 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBICARD.
+2026-09-01 09:21:53,503 [INFO] bsa_orchestrator: [63/221] Analyzed SBICARD: Success
+2026-09-01 09:21:53,755 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SOLARINDS.
+2026-09-01 09:21:53,756 [INFO] bsa_orchestrator: [64/221] Analyzed SOLARINDS: Success
+2026-09-01 09:21:54,010 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATAPOWER.
+2026-09-01 09:21:54,011 [INFO] bsa_orchestrator: [65/221] Analyzed TATAPOWER: Success
+2026-09-01 09:21:54,293 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TRENT.
+2026-09-01 09:21:54,295 [INFO] bsa_orchestrator: [66/221] Analyzed TRENT: Success
+2026-09-01 09:21:54,503 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VEDL.
+2026-09-01 09:21:54,504 [INFO] bsa_orchestrator: [67/221] Analyzed VEDL: Success
+2026-09-01 09:21:54,866 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ABFRL.
+2026-09-01 09:21:54,867 [INFO] bsa_orchestrator: [68/221] Analyzed ABFRL: Success
+2026-09-01 09:21:55,064 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VBL.
+2026-09-01 09:21:55,067 [INFO] bsa_orchestrator: [69/221] Analyzed VBL: Success
+2026-09-01 09:21:55,261 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LODHA.
+2026-09-01 09:21:55,262 [INFO] bsa_orchestrator: [70/221] Analyzed LODHA: Success
+2026-09-01 09:21:55,474 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BLUESTARCO.
+2026-09-01 09:21:55,474 [INFO] bsa_orchestrator: [71/221] Analyzed BLUESTARCO: Success
+2026-09-01 09:21:55,717 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COFORGE.
+2026-09-01 09:21:55,717 [INFO] bsa_orchestrator: [72/221] Analyzed COFORGE: Success
+2026-09-01 09:21:55,957 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CENTURYPLY.
+2026-09-01 09:21:55,958 [INFO] bsa_orchestrator: [73/221] Analyzed CENTURYPLY: Success
+2026-09-01 09:21:56,263 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KANSAINER.
+2026-09-01 09:21:56,263 [INFO] bsa_orchestrator: [74/221] Analyzed KANSAINER: Success
+2026-09-01 09:21:56,462 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRINDWELL.
+2026-09-01 09:21:56,462 [INFO] bsa_orchestrator: [75/221] Analyzed GRINDWELL: Success
+2026-09-01 09:21:56,886 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MPHASIS.
+2026-09-01 09:21:56,888 [INFO] bsa_orchestrator: [76/221] Analyzed MPHASIS: Success
+2026-09-01 09:21:57,290 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NAUKRI.
+2026-09-01 09:21:57,291 [INFO] bsa_orchestrator: [77/221] Analyzed NAUKRI: Success
+2026-09-01 09:21:57,550 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PAGEIND.
+2026-09-01 09:21:57,550 [INFO] bsa_orchestrator: [78/221] Analyzed PAGEIND: Success
+2026-09-01 09:21:57,797 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RAYMOND.
+2026-09-01 09:21:57,797 [INFO] bsa_orchestrator: [79/221] Analyzed RAYMOND: Success
+2026-09-01 09:21:58,127 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RELAXO.
+2026-09-01 09:21:58,128 [INFO] bsa_orchestrator: [80/221] Analyzed RELAXO: Success
+2026-09-01 09:21:58,507 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SHOPERSTOP.
+2026-09-01 09:21:58,508 [INFO] bsa_orchestrator: [81/221] Analyzed SHOPERSTOP: Success
+2026-09-01 09:21:58,773 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SKFINDIA.
+2026-09-01 09:21:58,774 [INFO] bsa_orchestrator: [82/221] Analyzed SKFINDIA: Success
+2026-09-01 09:21:59,095 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUPREMEIND.
+2026-09-01 09:21:59,095 [INFO] bsa_orchestrator: [83/221] Analyzed SUPREMEIND: Success
+2026-09-01 09:21:59,400 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIMKEN.
+2026-09-01 09:21:59,401 [INFO] bsa_orchestrator: [84/221] Analyzed TIMKEN: Success
+2026-09-01 09:21:59,644 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for APLAPOLLO.
+2026-09-01 09:21:59,644 [INFO] bsa_orchestrator: [85/221] Analyzed APLAPOLLO: Success
+2026-09-01 09:21:59,844 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDALCO.
+2026-09-01 09:21:59,844 [INFO] bsa_orchestrator: [86/221] Analyzed HINDALCO: Success
+2026-09-01 09:22:00,284 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDCOPPER.
+2026-09-01 09:22:00,285 [INFO] bsa_orchestrator: [87/221] Analyzed HINDCOPPER: Success
+2026-09-01 09:22:00,667 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JSWSTEEL.
+2026-09-01 09:22:00,668 [INFO] bsa_orchestrator: [88/221] Analyzed JSWSTEEL: Success
+2026-09-01 09:22:00,899 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MOIL.
+2026-09-01 09:22:00,900 [INFO] bsa_orchestrator: [89/221] Analyzed MOIL: Success
+2026-09-01 09:22:01,281 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RATNAMANI.
+2026-09-01 09:22:01,285 [INFO] bsa_orchestrator: [90/221] Analyzed RATNAMANI: Success
+2026-09-01 09:22:01,493 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATASTEEL.
+2026-09-01 09:22:01,494 [INFO] bsa_orchestrator: [91/221] Analyzed TATASTEEL: Success
+2026-09-01 09:22:01,860 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NAZARA.
+2026-09-01 09:22:01,861 [INFO] bsa_orchestrator: [92/221] Analyzed NAZARA: Success
+2026-09-01 09:22:02,075 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PVRINOX.
+2026-09-01 09:22:02,075 [INFO] bsa_orchestrator: [93/221] Analyzed PVRINOX: Success
+2026-09-01 09:22:02,409 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SAREGAMA.
+2026-09-01 09:22:02,409 [INFO] bsa_orchestrator: [94/221] Analyzed SAREGAMA: Success
+2026-09-01 09:22:02,612 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNTV.
+2026-09-01 09:22:02,613 [INFO] bsa_orchestrator: [95/221] Analyzed SUNTV: Success
+2026-09-01 09:22:03,026 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIPSMUSIC.
+2026-09-01 09:22:03,026 [INFO] bsa_orchestrator: [96/221] Analyzed TIPSMUSIC: Success
+2026-09-01 09:22:03,278 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HCLTECH.
+2026-09-01 09:22:03,278 [INFO] bsa_orchestrator: [97/221] Analyzed HCLTECH: Success
+2026-09-01 09:22:03,628 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INFY.
+2026-09-01 09:22:03,629 [INFO] bsa_orchestrator: [98/221] Analyzed INFY: Success
+2026-09-01 09:22:03,844 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LTM.
+2026-09-01 09:22:03,848 [INFO] bsa_orchestrator: [99/221] Analyzed LTM: Success
+2026-09-01 09:22:04,133 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TCS.
+2026-09-01 09:22:04,134 [INFO] bsa_orchestrator: [100/221] Analyzed TCS: Success
+2026-09-01 09:22:04,503 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WIPRO.
+2026-09-01 09:22:04,505 [INFO] bsa_orchestrator: [101/221] Analyzed WIPRO: Success
+2026-09-01 09:22:04,758 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIPORTS.
+2026-09-01 09:22:04,759 [INFO] bsa_orchestrator: [102/221] Analyzed ADANIPORTS: Success
+2026-09-01 09:22:05,100 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LT.
+2026-09-01 09:22:05,101 [INFO] bsa_orchestrator: [103/221] Analyzed LT: Success
+2026-09-01 09:22:05,410 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ULTRACEMCO.
+2026-09-01 09:22:05,411 [INFO] bsa_orchestrator: [104/221] Analyzed ULTRACEMCO: Success
+2026-09-01 09:22:05,699 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FORTIS.
+2026-09-01 09:22:05,700 [INFO] bsa_orchestrator: [105/221] Analyzed FORTIS: Success
+2026-09-01 09:22:06,015 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KIMS.
+2026-09-01 09:22:06,015 [INFO] bsa_orchestrator: [106/221] Analyzed KIMS: Success
+2026-09-01 09:22:06,303 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for METROPOLIS.
+2026-09-01 09:22:06,307 [INFO] bsa_orchestrator: [107/221] Analyzed METROPOLIS: Success
+2026-09-01 09:22:06,719 [INFO] bsa_orchestrator: [108/221] Analyzed RAINBOW: Success
+2026-09-01 09:22:07,015 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for YATHARTH.
+2026-09-01 09:22:07,016 [INFO] bsa_orchestrator: [109/221] Analyzed YATHARTH: Success
+2026-09-01 09:22:07,223 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BRITANNIA.
+2026-09-01 09:22:07,225 [INFO] bsa_orchestrator: [110/221] Analyzed BRITANNIA: Success
+2026-09-01 09:22:07,608 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DABUR.
+2026-09-01 09:22:07,608 [INFO] bsa_orchestrator: [111/221] Analyzed DABUR: Success
+2026-09-01 09:22:07,842 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HINDUNILVR.
+2026-09-01 09:22:07,843 [INFO] bsa_orchestrator: [112/221] Analyzed HINDUNILVR: Success
+2026-09-01 09:22:08,071 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ITC.
+2026-09-01 09:22:08,072 [INFO] bsa_orchestrator: [113/221] Analyzed ITC: Success
+2026-09-01 09:22:08,291 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RADICO.
+2026-09-01 09:22:08,292 [INFO] bsa_orchestrator: [114/221] Analyzed RADICO: Success
+2026-09-01 09:22:08,492 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATACONSUM.
+2026-09-01 09:22:08,493 [INFO] bsa_orchestrator: [115/221] Analyzed TATACONSUM: Success
+2026-09-01 09:22:08,866 [INFO] bsa_orchestrator: [116/221] Analyzed UBL: Success
+2026-09-01 09:22:09,093 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJAJFINSV.
+2026-09-01 09:22:09,093 [INFO] bsa_orchestrator: [117/221] Analyzed BAJAJFINSV: Success
+2026-09-01 09:22:09,290 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJFINANCE.
+2026-09-01 09:22:09,291 [INFO] bsa_orchestrator: [118/221] Analyzed BAJFINANCE: Success
+2026-09-01 09:22:09,500 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HDFCLIFE.
+2026-09-01 09:22:09,501 [INFO] bsa_orchestrator: [119/221] Analyzed HDFCLIFE: Success
+2026-09-01 09:22:09,708 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BAJAJ-AUTO.
+2026-09-01 09:22:09,708 [INFO] bsa_orchestrator: [120/221] Analyzed BAJAJ-AUTO: Success
+2026-09-01 09:22:09,946 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BALKRISIND.
+2026-09-01 09:22:09,947 [INFO] bsa_orchestrator: [121/221] Analyzed BALKRISIND: Success
+2026-09-01 09:22:10,328 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EICHERMOT.
+2026-09-01 09:22:10,333 [INFO] bsa_orchestrator: [122/221] Analyzed EICHERMOT: Success
+2026-09-01 09:22:10,598 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EXIDEIND.
+2026-09-01 09:22:10,599 [INFO] bsa_orchestrator: [123/221] Analyzed EXIDEIND: Success
+2026-09-01 09:22:10,910 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HEROMOTOCO.
+2026-09-01 09:22:10,910 [INFO] bsa_orchestrator: [124/221] Analyzed HEROMOTOCO: Success
+2026-09-01 09:22:11,132 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MARUTI.
+2026-09-01 09:22:11,133 [INFO] bsa_orchestrator: [125/221] Analyzed MARUTI: Success
+2026-09-01 09:22:11,328 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MOTHERSON.
+2026-09-01 09:22:11,330 [INFO] bsa_orchestrator: [126/221] Analyzed MOTHERSON: Success
+2026-09-01 09:22:11,628 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TIINDIA.
+2026-09-01 09:22:11,629 [INFO] bsa_orchestrator: [127/221] Analyzed TIINDIA: Success
+2026-09-01 09:22:11,844 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TVSMOTOR.
+2026-09-01 09:22:11,844 [INFO] bsa_orchestrator: [128/221] Analyzed TVSMOTOR: Success
+2026-09-01 09:22:12,035 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ADANIENT.
+2026-09-01 09:22:12,036 [INFO] bsa_orchestrator: [129/221] Analyzed ADANIENT: Success
+2026-09-01 09:22:12,446 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BHARTIARTL.
+2026-09-01 09:22:12,447 [INFO] bsa_orchestrator: [130/221] Analyzed BHARTIARTL: Success
+2026-09-01 09:22:12,636 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FEDFINA.
+2026-09-01 09:22:12,637 [INFO] bsa_orchestrator: [131/221] Analyzed FEDFINA: Success
+2026-09-01 09:22:12,862 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for JMFINANCIL.
+2026-09-01 09:22:12,864 [INFO] bsa_orchestrator: [132/221] Analyzed JMFINANCIL: Success
+2026-09-01 09:22:13,159 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KFINTECH.
+2026-09-01 09:22:13,160 [INFO] bsa_orchestrator: [133/221] Analyzed KFINTECH: Success
+2026-09-01 09:22:13,513 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MASFIN.
+2026-09-01 09:22:13,515 [INFO] bsa_orchestrator: [134/221] Analyzed MASFIN: Success
+2026-09-01 09:22:13,715 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBFC.
+2026-09-01 09:22:13,715 [INFO] bsa_orchestrator: [135/221] Analyzed SBFC: Success
+2026-09-01 09:22:13,907 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for KPITTECH.
+2026-09-01 09:22:13,908 [INFO] bsa_orchestrator: [136/221] Analyzed KPITTECH: Success
+2026-09-01 09:22:14,185 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RAMCOSYS.
+2026-09-01 09:22:14,186 [INFO] bsa_orchestrator: [137/221] Analyzed RAMCOSYS: Success
+2026-09-01 09:22:14,397 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GODREJPROP.
+2026-09-01 09:22:14,398 [INFO] bsa_orchestrator: [138/221] Analyzed GODREJPROP: Success
+2026-09-01 09:22:14,775 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HDFCBANK.
+2026-09-01 09:22:14,776 [INFO] bsa_orchestrator: [139/221] Analyzed HDFCBANK: Success
+2026-09-01 09:22:15,140 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DLF.
+2026-09-01 09:22:15,140 [INFO] bsa_orchestrator: [140/221] Analyzed DLF: Success
+2026-09-01 09:22:15,417 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for OBEROIRLTY.
+2026-09-01 09:22:15,419 [INFO] bsa_orchestrator: [141/221] Analyzed OBEROIRLTY: Success
+2026-09-01 09:22:15,709 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BRIGADE.
+2026-09-01 09:22:15,710 [INFO] bsa_orchestrator: [142/221] Analyzed BRIGADE: Success
+2026-09-01 09:22:16,060 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAHLIFE.
+2026-09-01 09:22:16,061 [INFO] bsa_orchestrator: [143/221] Analyzed MAHLIFE: Success
+2026-09-01 09:22:16,294 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for RELIANCE.
+2026-09-01 09:22:16,295 [INFO] bsa_orchestrator: [144/221] Analyzed RELIANCE: Success
+2026-09-01 09:22:16,490 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CUMMINSIND.
+2026-09-01 09:22:16,490 [INFO] bsa_orchestrator: [145/221] Analyzed CUMMINSIND: Success
+2026-09-01 09:22:16,696 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HAVELLS.
+2026-09-01 09:22:16,697 [INFO] bsa_orchestrator: [146/221] Analyzed HAVELLS: Success
+2026-09-01 09:22:17,120 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANKINDIA.
+2026-09-01 09:22:17,121 [INFO] bsa_orchestrator: [147/221] Analyzed BANKINDIA: Success
+2026-09-01 09:22:17,512 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANKBARODA.
+2026-09-01 09:22:17,566 [INFO] bsa_orchestrator: [148/221] Analyzed BANKBARODA: Success
+2026-09-01 09:22:17,878 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PNB.
+2026-09-01 09:22:17,879 [INFO] bsa_orchestrator: [149/221] Analyzed PNB: Success
+2026-09-01 09:22:18,120 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBIN.
+2026-09-01 09:22:18,120 [INFO] bsa_orchestrator: [150/221] Analyzed SBIN: Success
+2026-09-01 09:22:18,319 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UCOBANK.
+2026-09-01 09:22:18,320 [INFO] bsa_orchestrator: [151/221] Analyzed UCOBANK: Success
+2026-09-01 09:22:18,590 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IOC.
+2026-09-01 09:22:18,591 [INFO] bsa_orchestrator: [152/221] Analyzed IOC: Success
+2026-09-01 09:22:18,846 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HAL.
+2026-09-01 09:22:18,846 [INFO] bsa_orchestrator: [153/221] Analyzed HAL: Success
+2026-09-01 09:22:19,046 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IRCTC.
+2026-09-01 09:22:19,047 [INFO] bsa_orchestrator: [154/221] Analyzed IRCTC: Success
+2026-09-01 09:22:19,413 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NTPC.
+2026-09-01 09:22:19,413 [INFO] bsa_orchestrator: [155/221] Analyzed NTPC: Success
+2026-09-01 09:22:19,619 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PFC.
+2026-09-01 09:22:19,620 [INFO] bsa_orchestrator: [156/221] Analyzed PFC: Success
+2026-09-01 09:22:19,873 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BANDHANBNK.
+2026-09-01 09:22:19,873 [INFO] bsa_orchestrator: [157/221] Analyzed BANDHANBNK: Success
+2026-09-01 09:22:20,229 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for FEDERALBNK.
+2026-09-01 09:22:20,230 [INFO] bsa_orchestrator: [158/221] Analyzed FEDERALBNK: Success
+2026-09-01 09:22:20,462 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ICICIBANK.
+2026-09-01 09:22:20,463 [INFO] bsa_orchestrator: [159/221] Analyzed ICICIBANK: Success
+2026-09-01 09:22:20,732 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for AUROPHARMA.
+2026-09-01 09:22:20,733 [INFO] bsa_orchestrator: [160/221] Analyzed AUROPHARMA: Success
+2026-09-01 09:22:20,996 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CIPLA.
+2026-09-01 09:22:20,996 [INFO] bsa_orchestrator: [161/221] Analyzed CIPLA: Success
+2026-09-01 09:22:21,251 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DIVISLAB.
+2026-09-01 09:22:21,251 [INFO] bsa_orchestrator: [162/221] Analyzed DIVISLAB: Success
+2026-09-01 09:22:21,480 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IPCALAB.
+2026-09-01 09:22:21,481 [INFO] bsa_orchestrator: [163/221] Analyzed IPCALAB: Success
+2026-09-01 09:22:21,729 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SUNPHARMA.
+2026-09-01 09:22:21,730 [INFO] bsa_orchestrator: [164/221] Analyzed SUNPHARMA: Success
+2026-09-01 09:22:22,073 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BOSCHLTD.
+2026-09-01 09:22:22,074 [INFO] bsa_orchestrator: [165/221] Analyzed BOSCHLTD: Success
+2026-09-01 09:22:22,501 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ATGL.
+2026-09-01 09:22:22,502 [INFO] bsa_orchestrator: [166/221] Analyzed ATGL: Success
+2026-09-01 09:22:22,891 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CHOLAFIN.
+2026-09-01 09:22:22,892 [INFO] bsa_orchestrator: [167/221] Analyzed CHOLAFIN: Success
+2026-09-01 09:22:23,111 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for COLPAL.
+2026-09-01 09:22:23,112 [INFO] bsa_orchestrator: [168/221] Analyzed COLPAL: Success
+2026-09-01 09:22:23,315 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDUSTOWER.
+2026-09-01 09:22:23,318 [INFO] bsa_orchestrator: [169/221] Analyzed INDUSTOWER: Success
+2026-09-01 09:22:23,732 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IDEA.
+2026-09-01 09:22:23,733 [INFO] bsa_orchestrator: [170/221] Analyzed IDEA: Success
+2026-09-01 09:22:24,014 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IIFL.
+2026-09-01 09:22:24,015 [INFO] bsa_orchestrator: [171/221] Analyzed IIFL: Success
+2026-09-01 09:22:24,350 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MAXHEALTH.
+2026-09-01 09:22:24,352 [INFO] bsa_orchestrator: [172/221] Analyzed MAXHEALTH: Success
+2026-09-01 09:22:24,632 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for OFSS.
+2026-09-01 09:22:24,633 [INFO] bsa_orchestrator: [173/221] Analyzed OFSS: Success
+2026-09-01 09:22:24,858 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MARICO.
+2026-09-01 09:22:24,858 [INFO] bsa_orchestrator: [174/221] Analyzed MARICO: Success
+2026-09-01 09:22:25,245 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for POLYCAB.
+2026-09-01 09:22:25,246 [INFO] bsa_orchestrator: [175/221] Analyzed POLYCAB: Success
+2026-09-01 09:22:25,444 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SRF.
+2026-09-01 09:22:25,448 [INFO] bsa_orchestrator: [176/221] Analyzed SRF: Success
+2026-09-01 09:22:26,352 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TATAELXSI.
+2026-09-01 09:22:26,354 [INFO] bsa_orchestrator: [177/221] Analyzed TATAELXSI: Success
+2026-09-01 09:22:26,706 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for UNITDSPR.
+2026-09-01 09:22:26,709 [INFO] bsa_orchestrator: [178/221] Analyzed UNITDSPR: Success
+2026-09-01 09:22:26,953 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASIANPAINT.
+2026-09-01 09:22:26,954 [INFO] bsa_orchestrator: [179/221] Analyzed ASIANPAINT: Success
+2026-09-01 09:22:27,193 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASTRAL.
+2026-09-01 09:22:27,194 [INFO] bsa_orchestrator: [180/221] Analyzed ASTRAL: Success
+2026-09-01 09:22:27,524 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ATUL.
+2026-09-01 09:22:27,532 [INFO] bsa_orchestrator: [181/221] Analyzed ATUL: Success
+2026-09-01 09:22:27,731 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BERGEPAINT.
+2026-09-01 09:22:27,734 [INFO] bsa_orchestrator: [182/221] Analyzed BERGEPAINT: Success
+2026-09-01 09:22:28,142 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BATAINDIA.
+2026-09-01 09:22:28,143 [INFO] bsa_orchestrator: [183/221] Analyzed BATAINDIA: Success
+2026-09-01 09:22:28,549 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CAMPUS.
+2026-09-01 09:22:28,551 [INFO] bsa_orchestrator: [184/221] Analyzed CAMPUS: Success
+2026-09-01 09:22:28,824 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CARBORUNIV.
+2026-09-01 09:22:28,828 [INFO] bsa_orchestrator: [185/221] Analyzed CARBORUNIV: Success
+2026-09-01 09:22:29,044 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for CROMPTON.
+2026-09-01 09:22:29,047 [INFO] bsa_orchestrator: [186/221] Analyzed CROMPTON: Success
+2026-09-01 09:22:29,314 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DEEPAKNTR.
+2026-09-01 09:22:29,315 [INFO] bsa_orchestrator: [187/221] Analyzed DEEPAKNTR: Success
+2026-09-01 09:22:29,610 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for DMART.
+2026-09-01 09:22:29,610 [INFO] bsa_orchestrator: [188/221] Analyzed DMART: Success
+2026-09-01 09:22:29,875 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MANYAVAR.
+2026-09-01 09:22:29,875 [INFO] bsa_orchestrator: [189/221] Analyzed MANYAVAR: Success
+2026-09-01 09:22:30,124 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PERSISTENT.
+2026-09-01 09:22:30,124 [INFO] bsa_orchestrator: [190/221] Analyzed PERSISTENT: Success
+2026-09-01 09:22:30,308 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PIIND.
+2026-09-01 09:22:30,309 [INFO] bsa_orchestrator: [191/221] Analyzed PIIND: Success
+2026-09-01 09:22:30,517 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SCHAEFFLER.
+2026-09-01 09:22:30,518 [INFO] bsa_orchestrator: [192/221] Analyzed SCHAEFFLER: Success
+2026-09-01 09:22:30,800 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for VOLTAS.
+2026-09-01 09:22:30,801 [INFO] bsa_orchestrator: [193/221] Analyzed VOLTAS: Success
+2026-09-01 09:22:31,080 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WHIRLPOOL.
+2026-09-01 09:22:31,081 [INFO] bsa_orchestrator: [194/221] Analyzed WHIRLPOOL: Success
+2026-09-01 09:22:31,320 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for HATHWAY.
+2026-09-01 09:22:31,322 [INFO] bsa_orchestrator: [195/221] Analyzed HATHWAY: Success
+2026-09-01 09:22:31,518 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for WELCORP.
+2026-09-01 09:22:31,519 [INFO] bsa_orchestrator: [196/221] Analyzed WELCORP: Success
+2026-09-01 09:22:31,709 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NETWORK18.
+2026-09-01 09:22:31,710 [INFO] bsa_orchestrator: [197/221] Analyzed NETWORK18: Success
+2026-09-01 09:22:32,019 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TVTODAY.
+2026-09-01 09:22:32,021 [INFO] bsa_orchestrator: [198/221] Analyzed TVTODAY: Success
+2026-09-01 09:22:32,310 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ZEEL.
+2026-09-01 09:22:32,312 [INFO] bsa_orchestrator: [199/221] Analyzed ZEEL: Success
+2026-09-01 09:22:32,616 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TECHM.
+2026-09-01 09:22:32,617 [INFO] bsa_orchestrator: [200/221] Analyzed TECHM: Success
+2026-09-01 09:22:33,030 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for GRASIM.
+2026-09-01 09:22:33,031 [INFO] bsa_orchestrator: [201/221] Analyzed GRASIM: Success
+2026-09-01 09:22:33,440 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for APOLLOHOSP.
+2026-09-01 09:22:33,442 [INFO] bsa_orchestrator: [202/221] Analyzed APOLLOHOSP: Success
+2026-09-01 09:22:33,805 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for LALPATHLAB.
+2026-09-01 09:22:33,805 [INFO] bsa_orchestrator: [203/221] Analyzed LALPATHLAB: Success
+2026-09-01 09:22:34,008 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MEDANTA.
+2026-09-01 09:22:34,009 [INFO] bsa_orchestrator: [204/221] Analyzed MEDANTA: Success
+2026-09-01 09:22:34,250 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for STARHEALTH.
+2026-09-01 09:22:34,250 [INFO] bsa_orchestrator: [205/221] Analyzed STARHEALTH: Success
+2026-09-01 09:22:34,476 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for EMAMILTD.
+2026-09-01 09:22:34,477 [INFO] bsa_orchestrator: [206/221] Analyzed EMAMILTD: Success
+2026-09-01 09:22:34,756 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for NESTLEIND.
+2026-09-01 09:22:34,757 [INFO] bsa_orchestrator: [207/221] Analyzed NESTLEIND: Success
+2026-09-01 09:22:34,972 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for PGHH.
+2026-09-01 09:22:34,974 [INFO] bsa_orchestrator: [208/221] Analyzed PGHH: Success
+2026-09-01 09:22:35,281 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SBILIFE.
+2026-09-01 09:22:35,283 [INFO] bsa_orchestrator: [209/221] Analyzed SBILIFE: Success
+2026-09-01 09:22:35,560 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SHRIRAMFIN.
+2026-09-01 09:22:35,560 [INFO] bsa_orchestrator: [210/221] Analyzed SHRIRAMFIN: Success
+2026-09-01 09:22:35,792 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for ASHOKLEY.
+2026-09-01 09:22:35,792 [INFO] bsa_orchestrator: [211/221] Analyzed ASHOKLEY: Success
+2026-09-01 09:22:36,100 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BHARATFORG.
+2026-09-01 09:22:36,102 [INFO] bsa_orchestrator: [212/221] Analyzed BHARATFORG: Success
+2026-09-01 09:22:36,376 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for M&M.
+2026-09-01 09:22:36,377 [INFO] bsa_orchestrator: [213/221] Analyzed M&M: Success
+2026-09-01 09:22:36,576 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for MRF.
+2026-09-01 09:22:36,577 [INFO] bsa_orchestrator: [214/221] Analyzed MRF: Success
+2026-09-01 09:22:36,837 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TMCV.
+2026-09-01 09:22:36,838 [INFO] bsa_orchestrator: [215/221] Analyzed TMCV: Success
+2026-09-01 09:22:37,029 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for TITAN.
+2026-09-01 09:22:37,029 [INFO] bsa_orchestrator: [216/221] Analyzed TITAN: Success
+2026-09-01 09:22:37,434 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for IREDA.
+2026-09-01 09:22:37,437 [INFO] bsa_orchestrator: [217/221] Analyzed IREDA: Success
+2026-09-01 09:22:37,635 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for INDIASHLTR.
+2026-09-01 09:22:37,635 [INFO] bsa_orchestrator: [218/221] Analyzed INDIASHLTR: Success
+2026-09-01 09:22:37,858 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for BSE.
+2026-09-01 09:22:37,859 [INFO] bsa_orchestrator: [219/221] Analyzed BSE: Success
+2026-09-01 09:22:38,249 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SONATSOFTW.
+2026-09-01 09:22:38,249 [INFO] bsa_orchestrator: [220/221] Analyzed SONATSOFTW: Success
+2026-09-01 09:22:38,461 [INFO] bsa_orchestrator: Deduplication rule: Skipping identical analysis summary for SURYODAY.
+2026-09-01 09:22:38,462 [INFO] bsa_orchestrator: [221/221] Analyzed SURYODAY: Success
+2026-09-01 09:22:38,462 [INFO] bsa_orchestrator: Analysis process completed. Attempted: 221, Succeeded: 221, Failed: 0, Time Taken: 64.22s

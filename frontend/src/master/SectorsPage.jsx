@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit2, Tag, Plus, Trash2, ChevronDown, ChevronRight, Globe } from 'lucide-react'
+import { Edit2, Tag, Plus, Trash2, ChevronDown, ChevronRight, Globe, Upload, FileText, CheckCircle2 } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, DataTable, Pagination,
@@ -21,6 +21,14 @@ export default function SectorsPage() {
   const [confirm, setConfirm]   = useState(null)
   const [saving, setSaving]     = useState(false)
   const [form, setForm]         = useState({ name: '', description: '' })
+  
+  // File Import State
+  const [showImport, setShowImport] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [customSector, setCustomSector] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+
   const { show, ToastContainer } = useToast()
 
   const load = async () => {
@@ -87,16 +95,67 @@ export default function SectorsPage() {
     }
   }
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSelectedFile(file)
+    setImportResult(null)
+    
+    // Auto infer sector name for custom field display helper
+    let name = file.name.replace(/\.[^/.]+$/, "")
+    if (name.toLowerCase().startsWith("watchlist_")) {
+      name = name.slice(10)
+    } else if (name.toLowerCase().startsWith("watchlist")) {
+      name = name.slice(9)
+    }
+    name = name.replace(/[_-]+/g, ' ').trim()
+    if (name) {
+      const words = name.split(' ')
+      const formatted = words.map(w => ['it', 'fno', 'bse', 'nse', 'fmcg'].includes(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      setCustomSector(formatted)
+    } else {
+      setCustomSector('')
+    }
+  }
+
+  const runImport = async () => {
+    if (!selectedFile) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const res = await api.sectors.importFile(selectedFile, customSector)
+      setImportResult(res)
+      show(`Successfully processed ${selectedFile.name}`, 'success')
+      load()
+    } catch (e) {
+      show(e.message, 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="master-page">
       {ToastContainer}
       <SectionHeader
         title="Sectors"
         sub={`${filtered.length} sector${filtered.length !== 1 ? 's' : ''} · click a row to see its tickers`}
-        actions={<button className="btn-primary" onClick={openNew}><Plus size={14}/> Add Sector</button>}
+        actions={
+          <button className="btn-primary" onClick={openNew}>
+            <Plus size={14}/> Add Sector
+          </button>
+        }
       />
 
-      <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search by name…"/>
+      <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search by name…">
+        <button
+          className="btn-secondary"
+          onClick={() => { setSelectedFile(null); setImportResult(null); setCustomSector(''); setShowImport(true) }}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          <Upload size={14}/> Import Watchlist File
+        </button>
+      </SearchBar>
 
       <section className="panel data-panel">
         <div className="table-wrap">
@@ -115,53 +174,132 @@ export default function SectorsPage() {
               {!loading && paged.length === 0 && (
                 <tr><td colSpan={5}><div className="state">No sectors found.</div></td></tr>
               )}
-              {!loading && paged.map(row => [
-                <tr key={row.id} className="data-row">
-                  <td>
-                    <button className="icon-btn sm" onClick={() => toggleExpand(row)}>
-                      {expanded === row.id ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
-                    </button>
-                  </td>
-                  <td><span style={{fontWeight:700, color:'#d9eaff'}}><Tag size={12} style={{marginRight:5, verticalAlign:'middle'}}/>{row.name}</span></td>
-                  <td style={{color:'#7090b0', fontSize:12}}>{row.description || '—'}</td>
-                  <td><CountBadge count={row.ticker_count ?? '?'}/></td>
-                  <td>
-                    <div className="row-actions">
-
-                      <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
-                      <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
-                    </div>
-                  </td>
-                </tr>,
-                expanded === row.id && (
-                  <tr key={`exp-${row.id}`} className="expanded-row">
-                    <td/>
-                    <td colSpan={5}>
-                      <div className="expanded-content">
-                        <p className="eyebrow" style={{marginBottom:10}}>TICKERS IN {row.name.toUpperCase()}</p>
-                        {!sectorTickers[row.id]
-                          ? <div style={{color:'#5a7a9a', fontSize:12}}>Loading tickers…</div>
-                          : sectorTickers[row.id].length === 0
-                            ? <div style={{color:'#5a7a9a', fontSize:12}}>No tickers mapped to this sector yet.</div>
-                            : <div className="chip-wrap">
-                                {sectorTickers[row.id].map(t => (
-                                  <span key={t.ticker} className="ticker-chip" title={t.company_name}>
-                                    {t.ticker}
-                                    {t.is_fno && <span className="fno-dot" title="F&O"/>}
-                                  </span>
-                                ))}
-                              </div>
-                        }
+              {!loading && paged.map(row => (
+                <React.Fragment key={row.id}>
+                  <tr className="data-row">
+                    <td onClick={() => toggleExpand(row)} style={{cursor:'pointer', width:32, textAlign:'center'}}>
+                      <button className="icon-btn sm" onClick={() => toggleExpand(row)}>
+                        {expanded === row.id ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
+                      </button>
+                    </td>
+                    <td><span style={{fontWeight:700, color:'#d9eaff'}}><Tag size={12} style={{marginRight:5, verticalAlign:'middle'}}/>{row.name}</span></td>
+                    <td style={{color:'#7090b0', fontSize:12}}>{row.description || '—'}</td>
+                    <td><CountBadge count={row.ticker_count ?? '?'}/></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
+                        <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
                       </div>
                     </td>
                   </tr>
-                )
-              ])}
+                  {expanded === row.id && (
+                    <tr className="expanded-row">
+                      <td/>
+                      <td colSpan={4}>
+                        <div className="expanded-content">
+                          <p className="eyebrow" style={{marginBottom:10}}>TICKERS IN {row.name.toUpperCase()}</p>
+                          {!sectorTickers[row.id]
+                            ? <div style={{color:'#5a7a9a', fontSize:12}}>Loading tickers…</div>
+                            : sectorTickers[row.id].length === 0
+                              ? <div style={{color:'#5a7a9a', fontSize:12}}>No tickers mapped to this sector yet.</div>
+                              : <div className="chip-wrap">
+                                  {sectorTickers[row.id].map(t => (
+                                    <span key={t.ticker} className="ticker-chip" title={t.company_name}>
+                                      {t.ticker}
+                                      {t.is_fno && <span className="fno-dot" title="F&O"/>}
+                                    </span>
+                                  ))}
+                                </div>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         </div>
         <Pagination total={filtered.length} page={page} pageSize={PAGE_SIZE} onChange={setPage}/>
       </section>
+
+      {/* Import Watchlist Sector File Modal */}
+      {showImport && (
+        <Modal title="Import Watchlist Sector File" onClose={() => setShowImport(false)} size="md">
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px 0' }}>
+              Select a text file containing tickers. File naming convention: <code>watchlist_&lt;sector&gt;.txt</code> (e.g. <code>watchlist_pharma.txt</code>).
+            </p>
+
+            <FormGroup label="Select TXT File" required>
+              <Input
+                type="file"
+                accept=".txt,.csv"
+                onChange={handleFileSelect}
+                style={{ padding: '6px 12px' }}
+              />
+            </FormGroup>
+
+            {selectedFile && (
+              <FormGroup label="Sector Name (Inferred from filename)" hint="You can override the target sector name below">
+                <Input
+                  value={customSector}
+                  onChange={e => setCustomSector(e.target.value)}
+                  placeholder="e.g. Pharma, IT Services"
+                />
+              </FormGroup>
+            )}
+
+            {importResult && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 6,
+                padding: 14,
+                marginTop: 16,
+                fontSize: 13,
+                color: '#166534'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
+                  <CheckCircle2 size={16} color="#16a34a" /> Import Completed Successfully
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                  <div><strong>Target Sector:</strong> {importResult.sector_name}</div>
+                  <div><strong>Total Tickers:</strong> {importResult.total_tickers}</div>
+                  <div><strong>New Tickers Created:</strong> {importResult.new_tickers_added_count}</div>
+                  <div><strong>Existing Tickers Mapped:</strong> {importResult.new_mappings_count}</div>
+                  <div><strong>Already Mapped:</strong> {importResult.already_mapped_count}</div>
+                </div>
+                {importResult.tickers && importResult.tickers.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#15803d', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Parsed Tickers:
+                    </div>
+                    <div className="chip-wrap" style={{ maxHeight: 100, overflowY: 'auto' }}>
+                      {importResult.tickers.map(t => (
+                        <span key={t} className="ticker-chip" style={{ fontSize: 11 }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions">
+            <button className="btn-ghost" onClick={() => setShowImport(false)}>
+              {importResult ? 'Close' : 'Cancel'}
+            </button>
+            <button
+              className="btn-primary"
+              onClick={runImport}
+              disabled={importing || !selectedFile}
+            >
+              {importing ? 'Processing…' : 'Upload & Seed Master Data'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Add / Edit modal */}
       {showForm && (

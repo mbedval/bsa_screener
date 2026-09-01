@@ -8,7 +8,9 @@ from engine.analysis.options import analyze_options_chain
 from engine.analysis.footprint import analyze_footprint_and_news
 from engine.analysis.projection import calculate_22d_projection
 
-logger = logging.getLogger("bsa_orchestrator")
+from engine.utils.logger import setup_logger
+
+logger = setup_logger("bsa_orchestrator")
 
 def analyze_and_summarize_ticker(ticker: str) -> bool:
     """
@@ -21,9 +23,9 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         close = 0.0
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1", (ticker,))
+                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 1", (ticker,))
                 row = cur.fetchone()
-                if row:
+                if row and row[0] is not None:
                     close = float(row[0])
                 
                 # Check F&O eligibility

@@ -5,7 +5,7 @@ import {
 } from 'lightweight-charts'
 import {
   TrendingUp, BarChart3, Activity, Layers, ArrowUpRight, ArrowDownRight,
-  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle
+  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar
 } from 'lucide-react'
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export class ChartErrorBoundary extends Component {
 }
 
 // ─── Reusable TradingView Candlestick & Indicator Chart ───────────────────────
-export function StockChartVisualizer({ ticker, height = 440 }) {
+export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/intelligence' }) {
   const chartContainerRef = useRef(null)
   const chartInstanceRef = useRef(null)
   const [data, setData] = useState(null)
@@ -62,7 +62,7 @@ export function StockChartVisualizer({ ticker, height = 440 }) {
     if (!ticker) return
     setLoading(true)
     setError('')
-    fetch(`/api/charts/stock/${encodeURIComponent(ticker)}`)
+    fetch(`${apiBase}/charts/stock/${encodeURIComponent(ticker)}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch chart data`)
         return res.json()
@@ -75,7 +75,7 @@ export function StockChartVisualizer({ ticker, height = 440 }) {
         setError(err.message || 'Failed to load chart data.')
         setLoading(false)
       })
-  }, [ticker])
+  }, [ticker, apiBase])
 
   // Filter candles based on timeframe
   const filteredCandles = useMemo(() => {
@@ -567,19 +567,19 @@ export function StockVisualizerModal({ ticker, onClose }) {
 }
 
 // ─── Sector Market Breadth Heatmap Visualizer ──────────────────────────────────
-export function SectorHeatmapVisualizer({ onSelectSector }) {
+export function SectorHeatmapVisualizer({ onSelectSector, apiBase = '/api/intelligence' }) {
   const [sectors, setSectors] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/charts/sector-overview')
+    fetch(`${apiBase}/charts/sector-overview`)
       .then(r => r.json())
       .then(d => {
         setSectors(d.sectors || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [])
+  }, [apiBase])
 
   if (loading) {
     return (
@@ -654,12 +654,45 @@ export function SectorHeatmapVisualizer({ onSelectSector }) {
 }
 
 // ─── Dedicated Visualization Hub Page ─────────────────────────────────────────
-export function ChartsVisualizationsPage({ onSelectStock }) {
-  const [selectedTicker, setSelectedTicker] = useState('BEL')
+export function ChartsVisualizationsPage({ onSelectStock, apiBase = '/api/intelligence', dataset = 'intelligence' }) {
+  const isUS = dataset === 'us_intelligence'
+  const defaultTicker = isUS ? 'AAPL' : 'BEL'
+  const [selectedTicker, setSelectedTicker] = useState(defaultTicker)
   const [searchInput, setSearchInput] = useState('')
   const [activeSubTab, setActiveSubTab] = useState('stock_chart') // 'stock_chart', 'sector_breadth'
 
-  const popularTickers = ['BEL', 'RELIANCE', 'HDFCBANK', 'INFY', 'TCS', 'HAL', 'CANBK', 'PAYTM', 'PARADEEP', 'VARROC']
+  // Dynamic search history from localStorage
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('bsa_search_history') || '[]') } catch (_) { return [] }
+  })
+
+  const addSearchHistory = (term) => {
+    if (!term || typeof term !== 'string') return
+    const clean = term.trim().toUpperCase()
+    if (!clean || clean.length < 2) return
+    setSearchHistory(prev => {
+      const filtered = prev.filter(item => item !== clean)
+      const updated = [clean, ...filtered].slice(0, 10)
+      try { localStorage.setItem('bsa_search_history', JSON.stringify(updated)) } catch (_) {}
+      return updated
+    })
+  }
+
+  const defaultPopular = isUS
+    ? ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'JPM', 'SPY', 'QQQ']
+    : ['BEL', 'RELIANCE', 'HDFCBANK', 'INFY', 'TCS', 'HAL', 'CANBK', 'PAYTM', 'PARADEEP', 'VARROC']
+
+  // Combined list prioritizing search history followed by default popular tickers
+  const popularTickers = Array.from(new Set([...searchHistory, ...defaultPopular])).slice(0, 12)
+
+  const handleSearchSubmit = () => {
+    if (searchInput.trim()) {
+      const t = searchInput.trim().toUpperCase()
+      addSearchHistory(t)
+      setSelectedTicker(t)
+      setSearchInput('')
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -726,24 +759,14 @@ export function ChartsVisualizationsPage({ onSelectStock }) {
               <Search size={15} style={{ color: '#7ec8f0' }} />
               <input
                 type="text"
-                placeholder="Search symbol (e.g. RELIANCE, BEL)..."
+                placeholder={isUS ? "Search symbol (e.g. AAPL, NVDA)..." : "Search symbol (e.g. RELIANCE, BEL)..."}
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value.toUpperCase())}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && searchInput.trim()) {
-                    setSelectedTicker(searchInput.trim())
-                    setSearchInput('')
-                  }
-                }}
-                style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, outline: 'none', width: 220 }}
+                onKeyDown={e => e.key === 'Enter' && handleSearchSubmit()}
+                style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, outline: 'none', width: 230 }}
               />
               <button
-                onClick={() => {
-                  if (searchInput.trim()) {
-                    setSelectedTicker(searchInput.trim())
-                    setSearchInput('')
-                  }
-                }}
+                onClick={handleSearchSubmit}
                 style={{ background: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
               >
                 View
@@ -751,7 +774,7 @@ export function ChartsVisualizationsPage({ onSelectStock }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Quick Select:</span>
+              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Quick Tickers:</span>
               {popularTickers.map(t => (
                 <button
                   key={t}
@@ -776,11 +799,11 @@ export function ChartsVisualizationsPage({ onSelectStock }) {
 
           {/* Interactive Chart Component with Error Boundary */}
           <ChartErrorBoundary>
-            <StockChartVisualizer ticker={selectedTicker} height={480} />
+            <StockChartVisualizer ticker={selectedTicker} height={480} apiBase={apiBase} />
           </ChartErrorBoundary>
         </div>
       ) : (
-        <SectorHeatmapVisualizer />
+        <SectorHeatmapVisualizer apiBase={apiBase} />
       )}
     </div>
   )
@@ -859,7 +882,8 @@ function researchStats(series) {
   return { first: first.toFixed(2), last: last.toFixed(2), pct, high: Math.max(...closes).toFixed(2), low: Math.min(...closes).toFixed(2), days: series.length }
 }
 
-export function ResearchBoardPage() {
+export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'intelligence' }) {
+  const isUS = dataset === 'us_intelligence'
   const fmt = d => d.toISOString().slice(0, 10)
   const sub = (d, days) => { const x = new Date(d); x.setDate(x.getDate() - days); return x }
   const subY = (d, y) => { const x = new Date(d); x.setFullYear(x.getFullYear() - y); return x }
@@ -878,7 +902,24 @@ export function ResearchBoardPage() {
   const [mode, setMode] = useState('normalised')
   const [showTable, setShowTable] = useState(false)
 
-  useEffect(() => { fetch('/api/research/tickers').then(r => r.json()).then(d => setTickers(d.tickers || [])).catch(() => {}) }, [])
+  useEffect(() => {
+    fetch(`${apiBase}/research/tickers`)
+      .then(r => r.json())
+      .then(d => {
+        const list = d.tickers || []
+        setTickers(list)
+        if (list.length > 0) {
+          if (isUS) {
+            const hasAmzn = list.find(t => t.ticker === 'AMZN')
+            setTicker(hasAmzn ? 'AMZN' : (list.find(t => t.ticker === 'AAPL')?.ticker || list[0].ticker))
+          } else {
+            const hasBel = list.find(t => t.ticker === 'BEL')
+            setTicker(hasBel ? 'BEL' : list[0].ticker)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [apiBase, isUS])
 
   const filtered = useMemo(() => {
     if (!search) return tickers
@@ -888,8 +929,38 @@ export function ResearchBoardPage() {
 
   const preset = (p) => {
     const t = new Date()
-    const d = p === 'MoM' ? 30 : p === 'QoQ' ? 90 : p === '6M' ? 180 : 365
-    setR2e(fmt(t)); setR2s(fmt(sub(t, d))); setR1e(fmt(subY(t, 1))); setR1s(fmt(sub(subY(t, 1), d)))
+    if (p === 'MoM_Seq') {
+      // Sequential MoM: Last 30 Days (Base) vs Previous 30 Days before that (Compare)
+      const r2End = t
+      const r2Start = sub(t, 30)
+      const r1End = sub(t, 30)
+      const r1Start = sub(t, 60)
+      setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
+    } else if (p === 'QoQ_Seq') {
+      // Sequential QoQ: Last 90 Days (Compare) vs Previous 90 Days before that (Base)
+      const r2End = t
+      const r2Start = sub(t, 90)
+      const r1End = sub(t, 90)
+      const r1Start = sub(t, 180)
+      setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
+    } else if (p === 'YoY_MoM') {
+      // YoY MoM: Last 30 Days (Compare) vs Same 30 Days Last Year (Base)
+      const r2End = t
+      const r2Start = sub(t, 30)
+      const r1End = subY(t, 1)
+      const r1Start = sub(subY(t, 1), 30)
+      setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
+    } else if (p === 'YoY_QoQ') {
+      // YoY QoQ: Last 90 Days (Compare) vs Same 90 Days Last Year (Base)
+      const r2End = t
+      const r2Start = sub(t, 90)
+      const r1End = subY(t, 1)
+      const r1Start = sub(subY(t, 1), 90)
+      setR2e(fmt(r2End)); setR2s(fmt(r2Start)); setR1e(fmt(r1End)); setR1s(fmt(r1Start))
+    } else {
+      const d = p === '6M' ? 180 : 365
+      setR2e(fmt(t)); setR2s(fmt(sub(t, d))); setR1e(fmt(subY(t, 1))); setR1s(fmt(sub(subY(t, 1), d)))
+    }
   }
 
   const run = async () => {
@@ -897,7 +968,7 @@ export function ResearchBoardPage() {
     setErr(null); setLoading(true); setResult(null)
     try {
       const p = new URLSearchParams({ ticker, range1_start: r1s, range1_end: r1e, range2_start: r2s, range2_end: r2e })
-      const res = await fetch(`/api/research/compare?${p}`)
+      const res = await fetch(`${apiBase}/research/compare?${p}`)
       if (!res.ok) throw new Error((await res.json()).detail || 'API error')
       setResult(await res.json())
     } catch (e) { setErr(e.message) }
@@ -945,7 +1016,14 @@ export function ResearchBoardPage() {
             <div style={{ marginBottom: 14 }}>
               <span style={lbl}>⚡ Quick Presets</span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {[['MoM','Month-over-Month (30D)'],['QoQ','Quarter-over-Quarter (90D)'],['6M','6-Month Period'],['YoY','Year-over-Year']].map(([k, lText]) => (
+                {[
+                  ['MoM_Seq', '📅 Sequential MoM (Last 30D vs Prev 30D)'],
+                  ['QoQ_Seq', '📊 Sequential QoQ (Last 90D vs Prev 90D)'],
+                  ['YoY_MoM', '🗓️ YoY MoM (Last 30D vs Same 30D Last Year)'],
+                  ['YoY_QoQ', '📈 YoY QoQ (Last 90D vs Same 90D Last Year)'],
+                  ['6M', '📆 6-Month YoY'],
+                  ['1Y', '🏛️ 1-Year YoY']
+                ].map(([k, lText]) => (
                   <button key={k} onClick={() => preset(k)} style={tab(false)}>{lText}</button>
                 ))}
               </div>
@@ -957,16 +1035,56 @@ export function ResearchBoardPage() {
                   <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#38bdf8' }} />
                   <span style={{ color: '#38bdf8', fontWeight: 700, fontSize: 13 }}>Base Period (Blue)</span>
                 </div>
-                <div style={{ marginBottom: 10 }}><span style={lbl}>Start</span><input type="date" value={r1s} onChange={e => setR1s(e.target.value)} style={inp} /></div>
-                <div><span style={lbl}>End</span><input type="date" value={r1e} onChange={e => setR1e(e.target.value)} style={inp} /></div>
+                <div style={{ marginBottom: 10 }}>
+                  <span style={lbl}>Start Date</span>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input type="date" id="r1s_inp" value={r1s} onChange={e => setR1s(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
+                    <Calendar
+                      size={15}
+                      onClick={() => { try { document.getElementById('r1s_inp').showPicker() } catch (_) {} }}
+                      style={{ position: 'absolute', right: 10, color: '#38bdf8', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <span style={lbl}>End Date</span>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input type="date" id="r1e_inp" value={r1e} onChange={e => setR1e(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
+                    <Calendar
+                      size={15}
+                      onClick={() => { try { document.getElementById('r1e_inp').showPicker() } catch (_) {} }}
+                      style={{ position: 'absolute', right: 10, color: '#38bdf8', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
               </div>
               <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#f59e0b' }} />
                   <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13 }}>Compare Period (Amber)</span>
                 </div>
-                <div style={{ marginBottom: 10 }}><span style={lbl}>Start</span><input type="date" value={r2s} onChange={e => setR2s(e.target.value)} style={inp} /></div>
-                <div><span style={lbl}>End</span><input type="date" value={r2e} onChange={e => setR2e(e.target.value)} style={inp} /></div>
+                <div style={{ marginBottom: 10 }}>
+                  <span style={lbl}>Start Date</span>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input type="date" id="r2s_inp" value={r2s} onChange={e => setR2s(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
+                    <Calendar
+                      size={15}
+                      onClick={() => { try { document.getElementById('r2s_inp').showPicker() } catch (_) {} }}
+                      style={{ position: 'absolute', right: 10, color: '#f59e0b', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <span style={lbl}>End Date</span>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input type="date" id="r2e_inp" value={r2e} onChange={e => setR2e(e.target.value)} style={{ ...inp, paddingRight: 32 }} />
+                    <Calendar
+                      size={15}
+                      onClick={() => { try { document.getElementById('r2e_inp').showPicker() } catch (_) {} }}
+                      style={{ position: 'absolute', right: 10, color: '#f59e0b', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

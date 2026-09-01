@@ -38,6 +38,8 @@ def main():
     if args.mode == "download-all":
         logger.info("Triggered downloading data for all master tickers...")
         download_all_tickers()
+        logger.info("Triggered scoring and analysis engine for all master tickers...")
+        analyze_all_tickers()
     elif args.mode == "download-fno":
         logger.info("Triggered downloading F&O option chain data...")
         download_all_derivatives()

@@ -10,10 +10,11 @@ class Settings(BaseSettings):
     postgres_password: str = ""
     postgres_db_rawdata: str = "bsa_db"
     postgres_db_bsa: str = "bsa_db"
-
+    postgres_db_us: str = "bsa_db_us"
 
     rawdata_postgres_dsn: Optional[str] = None
     bsa_postgres_dsn: Optional[str] = None
+    us_postgres_dsn: Optional[str] = None
     database_schema: str = "public"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -25,6 +26,8 @@ class Settings(BaseSettings):
             self.rawdata_postgres_dsn = f"postgresql://{self.postgres_user}{pw}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db_rawdata}"
         if not self.bsa_postgres_dsn:
             self.bsa_postgres_dsn = f"postgresql://{self.postgres_user}{pw}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db_bsa}"
+        if not self.us_postgres_dsn:
+            self.us_postgres_dsn = f"postgresql://{self.postgres_user}{pw}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db_us}"
         return self
 
 

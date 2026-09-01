@@ -26,9 +26,14 @@ const apps = {
     database: 'bsa_db', accent: 'Source tables',
   },
   intelligence: {
-    title: 'Market Intelligence', eyebrow: 'BSA MARKET INTELLIGENCE',
-    description: 'Explore generated calls, scanner outputs, sector analysis and delivery signals.',
+    title: 'Market Intelligence (NSE)', eyebrow: 'BSA MARKET INTELLIGENCE',
+    description: 'Explore generated calls, scanner outputs, sector analysis and delivery signals for NSE India.',
     database: 'bsa_db', accent: 'Analysis sources',
+  },
+  us_intelligence: {
+    title: 'US Market Intelligence', eyebrow: 'BSA US MARKET INTELLIGENCE',
+    description: 'Explore S&P 500, Nasdaq-100 technical scanner outputs, US sector trends and intelligence.',
+    database: 'bsa_db_us', accent: 'US Market sources',
   },
 }
 
@@ -172,7 +177,7 @@ function Landing({ theme, setTheme, onSelectApp }) {
         <p className="eyebrow portal-title-highlight">BSA MARKET INTELLIGENCE PORTAL</p>
         <h1>Find best opputunities</h1>
         <div className="app-cards">
-          {Object.entries(apps).filter(([key]) => key === 'intelligence').map(([key, item]) => (
+          {Object.entries(apps).filter(([key]) => key === 'intelligence' || key === 'us_intelligence').map(([key, item]) => (
             <a
               className={`app-card ${key}`}
               href={`/${key}`}
@@ -183,8 +188,8 @@ function Landing({ theme, setTheme, onSelectApp }) {
               }}
             >
               <h2>{item.title}</h2>
-              <p>Explore real-time trade signals, historical calls, multi-factor technical scanners, and cash flow fundamentals.</p>
-              <b>Launch Intelligence Portal <ArrowRight size={16} /></b>
+              <p>{item.description}</p>
+              <b>Launch {key === 'us_intelligence' ? 'US Intelligence' : 'India Intelligence'} <ArrowRight size={16} /></b>
             </a>
           ))}
         </div>
@@ -255,7 +260,23 @@ function App() {
   const [selectedFnoTicker, setSelectedFnoTicker] = useState('NIFTY')
   const [expandedSection, setExpandedSection] = useState(null)
 
-  const dataset = path.startsWith('intelligence') ? 'intelligence' : 'rawdata'
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('bsa_search_history') || '[]') } catch (_) { return [] }
+  })
+
+  const addSearchHistory = useCallback((term) => {
+    if (!term || typeof term !== 'string') return
+    const clean = term.trim().toUpperCase()
+    if (!clean || clean.length < 2) return
+    setSearchHistory(prev => {
+      const filtered = prev.filter(item => item !== clean)
+      const updated = [clean, ...filtered].slice(0, 10)
+      try { localStorage.setItem('bsa_search_history', JSON.stringify(updated)) } catch (_) {}
+      return updated
+    })
+  }, [])
+
+  const dataset = path.startsWith('us_intelligence') ? 'us_intelligence' : (path.startsWith('intelligence') ? 'intelligence' : 'rawdata')
   const appInfo = apps[dataset] || apps['intelligence']
   const apiBase = `/api/${dataset}`
 
@@ -511,7 +532,7 @@ function App() {
 
 
         {active === 'dashboard' && <Dashboard apiBase={apiBase} setActive={setActive} />}
-        {active === 'charts_visualizations' && <ChartsVisualizationsPage onSelectStock={t => {}} />}
+        {active === 'charts_visualizations' && <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />}
         {active.startsWith('master:') && (
           <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} />
         )}
@@ -526,13 +547,13 @@ function App() {
         {active === 'fno_active' ? (
           <FnoActivePage data={data} loading={loading} error={error} />
         ) : active === 'option_chain_analyzer' ? (
-          <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} />
+          <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} dataset={dataset} />
         ) : active === 'best_option_strategy' ? (
-          <BestOptionStrategyPage apiBase={apiBase} />
+          <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:compare' ? (
-          <ResearchBoardPage />
+          <ResearchBoardPage apiBase={apiBase} dataset={dataset} />
         ) : !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:') && active !== 'dashboard' && active !== 'charts_visualizations' && (
-          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} />
+          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}
       </main>
     </div>
@@ -682,9 +703,11 @@ function OptionTradeNoteModal({ noteData, onClose }) {
 }
 
 // ─── Option Chain & Greek Analyzer Module ────────────────────────────────────
-function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
+function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
   const [selectedTradeNote, setSelectedTradeNote] = useState(null)
-  const initT = (initialTicker || 'NIFTY').trim().toUpperCase()
+  const isUS = dataset === 'us_intelligence'
+  const defaultTicker = isUS ? 'AAPL' : 'NIFTY'
+  const initT = (initialTicker || defaultTicker).trim().toUpperCase()
   const [tickerInput, setTickerInput] = useState(initT)
   const [activeTicker, setActiveTicker] = useState(initT)
   const [data, setData] = useState(null)
@@ -694,7 +717,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
   const [progressStage, setProgressStage] = useState('')
 
   const loadChain = useCallback(targetTicker => {
-    const t = (targetTicker || 'NIFTY').trim().toUpperCase()
+    const t = (targetTicker || defaultTicker).trim().toUpperCase()
     setActiveTicker(t)
     setTickerInput(t)
     setLoading(true)
@@ -734,13 +757,15 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
         setError(err.message || 'Failed to analyze option chain.')
         setLoading(false)
       })
-  }, [apiBase])
+  }, [apiBase, defaultTicker])
 
   useEffect(() => {
-    loadChain(initialTicker || 'NIFTY')
-  }, [initialTicker, loadChain])
+    loadChain(initialTicker || defaultTicker)
+  }, [initialTicker, loadChain, defaultTicker])
 
-  const QUICK_TICKERS = ['NIFTY', 'BANKNIFTY', 'AUBANK', 'ABB', 'HDFCBANK', 'RELIANCE', 'INFY', 'TATAMOTORS', 'BEL', 'ICICIBANK', 'TCS', 'SBIN']
+  const QUICK_TICKERS = isUS
+    ? ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'JPM', 'SPY', 'QQQ']
+    : ['NIFTY', 'BANKNIFTY', 'AUBANK', 'ABB', 'HDFCBANK', 'RELIANCE', 'INFY', 'TATAMOTORS', 'BEL', 'ICICIBANK', 'TCS', 'SBIN']
 
   return (
     <div className="option-chain-page">
@@ -809,10 +834,10 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
             <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Spot LTP & Recovery Target</span>
               <div style={{ fontSize: 17, fontWeight: 700, color: '#7ec8f0', marginTop: 2 }}>
-                {data.ticker} ₹{data.underlying_price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {data.ticker} {isUS ? '$' : '₹'}{data.underlying_price?.toLocaleString(isUS ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: 11, color: '#52c41a', marginTop: 2, fontWeight: 600 }}>
-                Target: ₹{data.rally_target?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (+3.2% Rally)
+                Target: {isUS ? '$' : '₹'}{data.rally_target?.toLocaleString(isUS ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })} (+3.2% Rally)
               </div>
             </div>
 
@@ -827,7 +852,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
                 </span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#52c41a', marginTop: 3 }}>
-                {data.best_call ? `${data.best_call.strike} CE (₹${data.best_call.ltp})` : 'ATM CE'}
+                {data.best_call ? `${data.best_call.strike} CE (${isUS ? '$' : '₹'}${data.best_call.ltp})` : 'ATM CE'}
               </div>
               <div style={{ fontSize: 11, color: '#e2e8f0', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Δ {data.best_call?.delta} · {data.best_call?.prob}% Win</span>
@@ -846,7 +871,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
                 </span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#ff4d4f', marginTop: 3 }}>
-                {data.best_put ? `${data.best_put.strike} PE (₹${data.best_put.ltp})` : 'ATM PE'}
+                {data.best_put ? `${data.best_put.strike} PE (${isUS ? '$' : '₹'}${data.best_put.ltp})` : 'ATM PE'}
               </div>
               <div style={{ fontSize: 11, color: '#e2e8f0', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Δ {data.best_put?.delta} · {data.best_put?.prob}% Win</span>
@@ -1039,9 +1064,11 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker }) {
 }
 
 // ─── Best Option Strategy Engine Module ────────────────────────────────────
-function BestOptionStrategyPage({ apiBase }) {
-  const [tickerInput, setTickerInput] = useState('HDFCBANK')
-  const [activeTicker, setActiveTicker] = useState('HDFCBANK')
+function BestOptionStrategyPage({ apiBase, dataset }) {
+  const isUS = dataset === 'us_intelligence'
+  const defaultTicker = isUS ? 'AAPL' : 'HDFCBANK'
+  const [tickerInput, setTickerInput] = useState(defaultTicker)
+  const [activeTicker, setActiveTicker] = useState(defaultTicker)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1050,7 +1077,7 @@ function BestOptionStrategyPage({ apiBase }) {
   const [selectedStratId, setSelectedStratId] = useState('bull_call_spread')
 
   const loadStrategy = useCallback(targetTicker => {
-    const t = (targetTicker || 'HDFCBANK').trim().toUpperCase()
+    const t = (targetTicker || defaultTicker).trim().toUpperCase()
     setActiveTicker(t)
     setTickerInput(t)
     setLoading(true)
@@ -1093,18 +1120,20 @@ function BestOptionStrategyPage({ apiBase }) {
         setError(`Failed to evaluate strategies for ${t}: ${err.message}`)
         setLoading(false)
       })
-  }, [apiBase])
+  }, [apiBase, defaultTicker])
 
   useEffect(() => {
-    loadStrategy('HDFCBANK')
-  }, [])
+    loadStrategy(defaultTicker)
+  }, [defaultTicker, loadStrategy])
 
   const handleSubmit = e => {
     e.preventDefault()
     if (tickerInput.trim()) loadStrategy(tickerInput)
   }
 
-  const quickTickers = ['HDFCBANK', 'ABB', 'AUBANK', 'NIFTY', 'BANKNIFTY', 'RELIANCE', 'INFY', 'TATAMOTORS', 'SBIN', 'ICICIBANK', 'BEL']
+  const quickTickers = isUS
+    ? ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'JPM', 'SPY', 'QQQ']
+    : ['HDFCBANK', 'ABB', 'AUBANK', 'NIFTY', 'BANKNIFTY', 'RELIANCE', 'INFY', 'TATAMOTORS', 'SBIN', 'ICICIBANK', 'BEL']
 
   const selectedStrat = data?.strategies?.find(s => s.id === selectedStratId) || data?.strategies?.[0]
 
@@ -1172,10 +1201,10 @@ function BestOptionStrategyPage({ apiBase }) {
             <div style={{ background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>Spot LTP & Recovery Target</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#7ec8f0', marginTop: 2 }}>
-                {data.ticker} ₹{data.underlying_price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {data.ticker} {isUS ? '$' : '₹'}{data.underlying_price?.toLocaleString(isUS ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: 11, color: '#52c41a', marginTop: 2, fontWeight: 600 }}>
-                Target: ₹{data.rally_target?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (+3.4%)
+                Target: {isUS ? '$' : '₹'}{data.rally_target?.toLocaleString(isUS ? 'en-US' : 'en-IN', { minimumFractionDigits: 2 })} (+3.4%)
               </div>
             </div>
 
@@ -1190,9 +1219,9 @@ function BestOptionStrategyPage({ apiBase }) {
             </div>
 
             <div style={{ background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>NSE Official Lot Size</span>
+              <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>{isUS ? 'US Market Contract Size' : 'NSE Official Lot Size'}</span>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 2 }}>
-                {data.lot_size?.toLocaleString('en-IN')} Shares / Lot
+                {data.lot_size?.toLocaleString(isUS ? 'en-US' : 'en-IN')} Shares / Lot
               </div>
               <div style={{ fontSize: 11, color: '#52c41a', marginTop: 2 }}>
                 Safe Limit: 5 Lots (Square-off Protected)
@@ -1348,7 +1377,7 @@ function BestOptionStrategyPage({ apiBase }) {
 
                 <div style={{ background: 'rgba(234,179,8,0.1)', padding: 12, borderRadius: 6, border: '1px solid rgba(234,179,8,0.3)' }}>
                   <span style={{ fontSize: 11, color: '#eab308', fontWeight: 700 }}>Breakeven Spot Price</span>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#eab308', marginTop: 2 }}>₹{selectedStrat.breakeven}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#eab308', marginTop: 2 }}>{isUS ? '$' : '₹'}{selectedStrat.breakeven}</div>
                 </div>
               </div>
 
@@ -1971,7 +2000,7 @@ function ReportDetailModal({ ticker, onClose }) {
 }
 
 // ─── Generic table view ───────────────────────────────────────────────────────
-function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker }) {
+function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker, dataset, searchHistory, addSearchHistory }) {
   const [sort, setSort] = useState({ key: '', asc: true })
   const [selectedSignal, setSelectedSignal] = useState('ALL')
   const [selectedSector, setSelectedSector] = useState('ALL')
@@ -2103,23 +2132,31 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     let s = String(val).trim()
     if (/^\d{12}$/.test(s) || /^\d{6}$/.test(s)) {
       const yy = s.slice(0, 2), mm = s.slice(2, 4), dd = s.slice(4, 6)
-      return `${dd}-${mm}-${yy}`
+      const fullYy = yy.length === 2 ? `20${yy}` : yy
+      return `${dd}/${mm}/${fullYy}`
     }
     if (/^\d{10,}$/.test(s)) {
       const d = new Date(Number(s) * (s.length === 10 ? 1000 : 1))
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2, '0')
         const mm = String(d.getMonth() + 1).padStart(2, '0')
-        const yy = String(d.getFullYear()).slice(-2)
-        return `${dd}-${mm}-${yy}`
+        const yyyy = String(d.getFullYear())
+        return `${dd}/${mm}/${yyyy}`
+      }
+    }
+    // Match YYYY-MM-DD or YYYY/MM/DD
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
+      const parts = s.split(/[-T /]/)
+      if (parts.length >= 3) {
+        return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`
       }
     }
     const d = new Date(s)
     if (!isNaN(d.getTime())) {
       const dd = String(d.getDate()).padStart(2, '0')
       const mm = String(d.getMonth() + 1).padStart(2, '0')
-      const yy = String(d.getFullYear()).slice(-2)
-      return `${dd}-${mm}-${yy}`
+      const yyyy = String(d.getFullYear())
+      return `${dd}/${mm}/${yyyy}`
     }
     return s
   }
@@ -2130,9 +2167,35 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1 }}>
           <div className="search">
             <Search size={17} />
-            <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSearch()} placeholder="Search ticker, company name, sector, signal (e.g. BSE LTD)..." />
-            <button onClick={onSearch}>Search</button>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  if (query) addSearchHistory(query)
+                  onSearch()
+                }
+              }}
+              placeholder={dataset === 'us_intelligence' ? "Search ticker, company name, sector, signal (e.g. AAPL, NVDA)..." : "Search ticker, company name, sector, signal (e.g. RELIANCE, BEL)..."}
+            />
+            <button onClick={() => { if (query) addSearchHistory(query); onSearch(); }}>Search</button>
           </div>
+
+          {searchHistory && searchHistory.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Recent Searches:</span>
+              {searchHistory.map(t => (
+                <button
+                  key={t}
+                  className={`filter-btn ${query.toUpperCase() === t ? 'active' : ''}`}
+                  onClick={() => { setQuery(t); onSearch(); }}
+                  style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4 }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
 
           {availableSectors.length > 0 && (
             <div className="sector-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -31,10 +31,11 @@ Endpoints:
     GET    /api/master/sectors/{sector_id}/tickers  (tickers for a sector)
 """
 
+import re
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from psycopg import sql as psql
 from pydantic import BaseModel
 
@@ -205,6 +206,126 @@ def sector_tickers(sector_id: int) -> list[dict]:
             (sector_id,),
         )
         return cur.fetchall()
+
+
+@router.post("/sectors/import-file")
+def import_watchlist_sector_file(
+    file: UploadFile = File(...),
+    custom_sector: Optional[str] = Form(None),
+) -> dict:
+    """Imports a watchlist sector txt file (e.g. watchlist_pharma.txt).
+    
+    1. Extracts sector name from filename convention `watchlist_<sector>.txt` unless `custom_sector` is given.
+    2. Ensures sector exists in `sectors` table.
+    3. Reads tickers line-by-line (or comma-separated).
+    4. For missing tickers, inserts into `ticker_master`.
+    5. Maps ticker to sector in `ticker_sector`.
+    """
+    filename = file.filename or "watchlist_sector.txt"
+    
+    # 1. Determine Sector Name
+    if custom_sector and custom_sector.strip():
+        sector_name = custom_sector.strip()
+    else:
+        # Extract from filename: watchlist_pharma.txt -> pharma -> Pharma
+        clean_name = Path(filename).stem
+        if clean_name.lower().startswith("watchlist_"):
+            clean_name = clean_name[10:]
+        elif clean_name.lower().startswith("watchlist"):
+            clean_name = clean_name[9:]
+            
+        # Clean delimiters (replace underscores/dashes with spaces and format nicely)
+        clean_name = clean_name.strip(" _-")
+        if not clean_name:
+            sector_name = "General"
+        else:
+            # Capitalize words (e.g. "it_services" -> "It Services", handle uppercase abbreviations like "IT")
+            words = clean_name.replace("_", " ").replace("-", " ").split()
+            sector_name = " ".join(w.upper() if len(w) <= 3 and w.lower() in ("it", "fno", "bse", "nse", "fmcg") else w.capitalize() for w in words)
+
+    # Read and parse file lines
+    content = file.file.read().decode("utf-8", errors="ignore")
+    raw_tokens = re.split(r"[\n\r,;\t]+", content)
+    
+    tickers_list = []
+    for token in raw_tokens:
+        tok = token.strip().upper()
+        # Remove comments or empty lines
+        if tok and not tok.startswith("#") and not tok.startswith("//"):
+            # Strip extensions if user pasted full symbols like TCS.NS -> TCS
+            clean_tok = re.sub(r"\.(NS|BO)$", "", tok)
+            if clean_tok not in tickers_list:
+                tickers_list.append(clean_tok)
+
+    if not tickers_list:
+        raise HTTPException(400, "No valid tickers found in the uploaded file.")
+
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        # 2. Get or create sector
+        cur.execute("SELECT id, name FROM sectors WHERE LOWER(name) = LOWER(%s)", (sector_name,))
+        sector_row = cur.fetchone()
+        if sector_row:
+            sector_id = sector_row["id"]
+            sector_name = sector_row["name"] # preserve actual case in DB
+        else:
+            cur.execute(
+                "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING id, name",
+                (sector_name, f"Imported from {filename}"),
+            )
+            created_sec = cur.fetchone()
+            sector_id = created_sec["id"]
+            sector_name = created_sec["name"]
+
+        # Track statistics
+        new_tickers_added = []
+        existing_tickers_found = []
+        new_mappings_created = []
+        already_mapped = []
+
+        for t in tickers_list:
+            # Check if ticker exists in ticker_master
+            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s", (t,))
+            t_row = cur.fetchone()
+            if not t_row:
+                # Add to ticker_master
+                cur.execute(
+                    "INSERT INTO ticker_master (ticker, company_name, exchange) VALUES (%s, %s, %s)",
+                    (t, t, "NSE"),
+                )
+                new_tickers_added.append(t)
+            else:
+                existing_tickers_found.append(t)
+
+            # Check if mapping exists in ticker_sector
+            cur.execute(
+                "SELECT ticker FROM ticker_sector WHERE ticker = %s AND sector_id = %s",
+                (t, sector_id),
+            )
+            m_row = cur.fetchone()
+            if not m_row:
+                cur.execute(
+                    "INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s)",
+                    (t, sector_id),
+                )
+                new_mappings_created.append(t)
+            else:
+                already_mapped.append(t)
+
+        conn.commit()
+
+    return {
+        "status": "success",
+        "filename": filename,
+        "sector_id": sector_id,
+        "sector_name": sector_name,
+        "total_tickers": len(tickers_list),
+        "new_tickers_added_count": len(new_tickers_added),
+        "new_tickers_added": new_tickers_added,
+        "existing_tickers_count": len(existing_tickers_found),
+        "new_mappings_count": len(new_mappings_created),
+        "already_mapped_count": len(already_mapped),
+        "tickers": tickers_list,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

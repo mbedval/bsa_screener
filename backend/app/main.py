@@ -31,7 +31,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(master_router)
-DATASETS = {"rawdata": settings.rawdata_postgres_dsn, "intelligence": settings.bsa_postgres_dsn}
+DATASETS = {
+    "rawdata": settings.rawdata_postgres_dsn,
+    "intelligence": settings.bsa_postgres_dsn,
+    "us_intelligence": settings.us_postgres_dsn,
+}
 
 
 def get_dsn(dataset: str) -> str:
@@ -1576,12 +1580,14 @@ def download_pdf_report(ticker: str):
     return FileResponse(report_file, media_type="application/pdf", filename=f"{ticker_clean}_report.pdf")
 
 
+@app.get("/api/{dataset}/charts/stock/{ticker}")
 @app.get("/api/charts/stock/{ticker}")
-def get_stock_chart_data(ticker: str):
+def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
     """Provides historical OHLCV daily candlestick bars and overlay indicators for interactive charts."""
     clean_t = ticker.upper().strip()
+    dsn = get_dsn(dataset)
     try:
-        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT company_name, sector, is_fno
                 FROM ticker_master
@@ -1606,14 +1612,32 @@ def get_stock_chart_data(ticker: str):
                     i.bb_upper,
                     i.bb_mid,
                     i.bb_lower,
-                    i.atr14
+                    i.tenkan_sen,
+                    i.kijun_sen,
+                    i.span_a,
+                    i.span_b
                 FROM ohlcv_daily o
                 LEFT JOIN indicators_daily i ON o.ticker = i.ticker AND o.trade_date = i.trade_date
                 WHERE o.ticker = %s
                 ORDER BY o.trade_date ASC
             """, (clean_t,))
             rows = cur.fetchall()
-            
+
+            # Fetch analysis summary details if available
+            cur.execute("""
+                SELECT close, technical_score, fundamental_score, behavioral_score, hybrid_score, overall_signal, confidence, reasons, projection_22d, option_insights, news_footprint
+                FROM analysis_summaries
+                WHERE ticker = %s
+            """, (clean_t,))
+            summary_row = cur.fetchone()
+
+            proj_22d = []
+            if summary_row and summary_row.get("projection_22d"):
+                try:
+                    proj_22d = json.loads(summary_row["projection_22d"])
+                except Exception:
+                    proj_22d = []
+
             candles = []
             sma20_data = []
             sma50_data = []
@@ -1673,20 +1697,9 @@ def get_stock_chart_data(ticker: str):
             """, (clean_t,))
             fno_rows = cur.fetchall()
 
-            # Also fetch 22-day projection if available
-            cur.execute("""
-                SELECT projection_22d, hybrid_score, overall_signal, technical_score, fundamental_score, behavioral_score
-                FROM analysis_summaries
-                WHERE ticker = %s
-            """, (clean_t,))
-            summary_row = cur.fetchone()
-            proj_22d = json.loads(summary_row["projection_22d"]) if summary_row and summary_row["projection_22d"] else []
-
             return {
                 "ticker": clean_t,
-                "company_name": meta["company_name"],
-                "sector": meta["sector"],
-                "is_fno": meta["is_fno"],
+                "meta": meta,
                 "candles": candles,
                 "volume": volume_data,
                 "sma20": sma20_data,
@@ -1704,11 +1717,13 @@ def get_stock_chart_data(ticker: str):
         raise HTTPException(500, f"Error generating chart data: {e}")
 
 
+@app.get("/api/{dataset}/charts/sector-overview")
 @app.get("/api/charts/sector-overview")
-def get_sector_overview():
+def get_sector_overview(dataset: str = "intelligence"):
     """Provides sector breakdown, average performance, and breadth distribution for market heatmaps."""
+    dsn = get_dsn(dataset)
     try:
-        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT 
                     COALESCE(t.sector, 'General') AS sector,
@@ -1732,11 +1747,13 @@ def get_sector_overview():
 
 # ─── Research Board ───────────────────────────────────────────────────────────
 
+@app.get("/api/{dataset}/research/tickers")
 @app.get("/api/research/tickers")
-def get_research_tickers():
+def get_research_tickers(dataset: str = "intelligence"):
     """Return all tickers from ticker_master for the Research Board dropdown."""
+    dsn = get_dsn(dataset)
     try:
-        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT ticker, company_name, sector
                 FROM ticker_master
@@ -1749,6 +1766,7 @@ def get_research_tickers():
         raise HTTPException(500, f"Error fetching tickers: {e}")
 
 
+@app.get("/api/{dataset}/research/compare")
 @app.get("/api/research/compare")
 def get_research_compare(
     ticker: str,
@@ -1756,6 +1774,7 @@ def get_research_compare(
     range1_end: str,
     range2_start: str,
     range2_end: str,
+    dataset: str = "intelligence",
 ):
     """
     Return daily OHLCV data for two user-defined date ranges for a given ticker.
@@ -1770,8 +1789,9 @@ def get_research_compare(
         range2_end    - YYYY-MM-DD
     """
     clean_t = ticker.upper().strip()
+    dsn = get_dsn(dataset)
     try:
-        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
             # Meta
             cur.execute(
                 "SELECT company_name, sector FROM ticker_master WHERE ticker = %s",

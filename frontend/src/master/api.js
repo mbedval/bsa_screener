@@ -29,6 +29,23 @@ export const sectors = {
   remove: (id)          => _req('DELETE', `${BASE}/sectors/${id}`),
   tickers: (id)         => _req('GET',    `${BASE}/sectors/${id}/tickers`),
   summary: ()           => _req('GET',    `${BASE}/sectors-summary`),
+  importFile: async (file, customSector) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (customSector) fd.append('custom_sector', customSector)
+    const r = await fetch(`${BASE}/sectors/import-file`, {
+      method: 'POST',
+      body: fd,
+    })
+    const ct = r.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const text = await r.text()
+      throw new Error(r.ok ? 'Invalid response format received from server.' : `HTTP ${r.status}: ${text.slice(0, 100)}`)
+    }
+    const json = await r.json()
+    if (!r.ok) throw new Error(json.detail || r.statusText)
+    return json
+  },
 }
 
 // ── Tickers ───────────────────────────────────────────────────────────────────
