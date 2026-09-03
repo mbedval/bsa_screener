@@ -115,17 +115,8 @@ def generate_html_report(ticker: str, dataset: str = "intelligence") -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
     file_path = output_dir / f"{ticker}_report.html"
 
-    target_dsn = None
-    if dataset == "us_intelligence":
-        from engine.database.connection import os
-        target_dsn = os.getenv("POSTGRES_DSN_US") or os.getenv("US_POSTGRES_DSN") or "postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db_us"
-
     try:
-        if target_dsn:
-            import psycopg2
-            conn = psycopg2.connect(target_dsn)
-        else:
-            conn = get_db_connection().__enter__()
+        conn = get_db_connection().__enter__()
 
         with conn:
             with conn.cursor() as cur:

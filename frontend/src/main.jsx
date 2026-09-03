@@ -30,26 +30,20 @@ const apps = {
     description: 'Explore generated calls, scanner outputs, sector analysis and delivery signals for NSE India.',
     database: 'bsa_db', accent: 'Analysis sources',
   },
-  us_intelligence: {
-    title: 'US Market Intelligence', eyebrow: 'BSA US MARKET INTELLIGENCE',
-    description: 'Explore S&P 500, Nasdaq-100 technical scanner outputs, US sector trends and intelligence.',
-    database: 'bsa_db_us', accent: 'US Market sources',
-  },
 }
+
 
 const cleanTicker = val => typeof val === 'string' ? val.replace(/\.(NS|BO)$/i, '') : val
 
 const maskHost = (hostStr) => {
-  if (!hostStr) return 'jmbx14'
+  if (!hostStr) return 'jmbx'
   const str = String(hostStr).trim()
   if (str === '127.0.0.1' || str === 'localhost' || str === '::1') {
-    return 'jmbx14'
+    return 'jmbx (local)'
   }
   const parts = str.split('.')
   if (parts.length === 4 && !isNaN(parts[3])) {
     const octet = parseInt(parts[3], 10)
-    // If connected to local subnet gateway .1 or loopback, display target machine jmbx14
-    if (octet === 1) return 'jmbx14'
     return `jmbx${octet}`
   }
   return str

@@ -47,8 +47,7 @@ router = APIRouter(prefix="/api/master", tags=["master"])
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def rawdata_conn(dataset: Optional[str] = None):
-    dsn = settings.us_postgres_dsn if dataset == "us_intelligence" else settings.rawdata_postgres_dsn
-    return get_connection(dsn)
+    return get_connection(settings.rawdata_postgres_dsn)
 
 
 def _not_found(entity: str, key: Any) -> HTTPException:
@@ -406,6 +405,18 @@ def create_ticker(body: TickerIn, dataset: Optional[str] = None) -> dict:
                 ),
             )
             row = cur.fetchone()
+            if body.is_fno:
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO fno_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
+                        VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
+                        ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                        """,
+                        (body.ticker.upper(), body.company_name),
+                    )
+                except Exception:
+                    pass
             conn.commit()
             return {**row, "sectors": []}
         except Exception as exc:
@@ -438,6 +449,18 @@ def update_ticker(ticker: str, body: TickerUpdate, dataset: Optional[str] = None
         row = cur.fetchone()
         if not row:
             raise _not_found("Ticker", ticker)
+        if row.get("is_fno"):
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO fno_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
+                    VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
+                    ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                    """,
+                    (row["ticker"], row["company_name"]),
+                )
+            except Exception:
+                pass
         conn.commit()
         return row
 

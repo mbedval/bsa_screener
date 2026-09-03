@@ -34,8 +34,8 @@ app.include_router(master_router)
 DATASETS = {
     "rawdata": settings.rawdata_postgres_dsn,
     "intelligence": settings.bsa_postgres_dsn,
-    "us_intelligence": settings.us_postgres_dsn,
 }
+
 
 
 def get_dsn(dataset: str) -> str:
@@ -74,6 +74,14 @@ def catalog_for(dsn: str, dataset: str) -> list[dict[str, str]]:
 
 def database_info_for(dsn: str) -> dict[str, Any]:
     try:
+        parsed_host = None
+        if dsn:
+            try:
+                from urllib.parse import urlparse
+                parsed_host = urlparse(dsn).hostname
+            except Exception:
+                pass
+
         with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("SELECT current_database() AS name, current_user AS user_name, inet_server_addr() AS server_addr")
             current = cur.fetchone()
@@ -100,7 +108,7 @@ def database_info_for(dsn: str) -> dict[str, Any]:
             except Exception as e:
                 logger.warning(f"Could not fetch last download timestamp: {e}")
 
-            host_val = current.get("server_addr") or settings.postgres_host
+            host_val = parsed_host or settings.postgres_host or current.get("server_addr")
             return {
                 "database": current["name"],
                 "user": current["user_name"],
@@ -764,8 +772,7 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
     """Synthesizes top 15 technical-fundamental trade opportunities dynamically from live database analysis summaries."""
     results = []
     try:
-        is_us = dsn == settings.us_postgres_dsn
-        curr_sym = "$" if is_us else "₹"
+        curr_sym = "₹"
         with get_connection(dsn) as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT 
@@ -819,30 +826,11 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error synthesizing dynamic top trades: {e}")
 
-        is_us = dsn == settings.us_postgres_dsn
-        curr_sym = "$" if is_us else "₹"
-        if is_us:
-            candidates_meta = [
-                {"ticker": "NVDA", "stock_name": "NVIDIA Corporation", "sector": "Technology", "setup_signal": "Strong Buy", "score": 96.5, "insight": "Robust AI data center GPU demand. Breakout above consolidation zone with heavy institutional accumulation."},
-                {"ticker": "AAPL", "stock_name": "Apple Inc.", "sector": "Technology", "setup_signal": "Trend Trading", "score": 94.2, "insight": "Golden cross EMA20/50 alignment on daily chart with elevated volume expansion."},
-                {"ticker": "MSFT", "stock_name": "Microsoft Corporation", "sector": "Technology", "setup_signal": "Swinger Buy", "score": 93.8, "insight": "Azure cloud growth accelerating. Weekly swinger buy signal active with high ROE."},
-                {"ticker": "AMZN", "stock_name": "Amazon.com Inc.", "sector": "Consumer", "setup_signal": "Operator Footprint", "score": 92.5, "insight": "Operator footprints detected with delivery spike above 30-day average. Expanding AWS operating margins."},
-                {"ticker": "GOOGL", "stock_name": "Alphabet Inc.", "sector": "Technology", "setup_signal": "Bullish Reversal", "score": 91.8, "insight": "Double-bottom reversal pattern confirmed above support with digital ad revenue growth."},
-                {"ticker": "META", "stock_name": "Meta Platforms Inc.", "sector": "Technology", "setup_signal": "Strong Buy", "score": 90.5, "insight": "Sustained upward trendline continuation with ad revenue growth and AI ad targeting efficiency."},
-                {"ticker": "TSLA", "stock_name": "Tesla Inc.", "sector": "Automotive", "setup_signal": "Breakout", "score": 88.9, "insight": "Breakout above resistance level with expanding EV delivery margins and FSD expansion."},
-                {"ticker": "AMD", "stock_name": "Advanced Micro Devices", "sector": "Semiconductors", "setup_signal": "Long Buildup", "score": 87.8, "insight": "Instinct AI accelerator momentum crossing key EMA resistance levels."},
-                {"ticker": "JPM", "stock_name": "JPMorgan Chase & Co.", "sector": "Financials", "setup_signal": "Strong Buy", "score": 86.9, "insight": "Top-tier net interest income growth with solid return on tangible common equity."},
-                {"ticker": "BAC", "stock_name": "Bank of America Corp.", "sector": "Financials", "setup_signal": "Support Bounce", "score": 85.5, "insight": "Bouncing cleanly off support level with positive institutional delivery accumulation."},
-                {"ticker": "GS", "stock_name": "Goldman Sachs Group", "sector": "Financials", "setup_signal": "Swinger Buy", "score": 84.8, "insight": "Rebound in global investment banking fees and asset management net inflows."},
-                {"ticker": "V", "stock_name": "Visa Inc.", "sector": "Financials", "setup_signal": "Trend Trading", "score": 84.0, "insight": "Consistent cross-border payment volume expansion with high operating margins."},
-                {"ticker": "MA", "stock_name": "Mastercard Inc.", "sector": "Financials", "setup_signal": "Trend Trading", "score": 83.5, "insight": "Solid gross dollar volume growth and strong free cash flow generation."},
-                {"ticker": "UNH", "stock_name": "UnitedHealth Group", "sector": "Healthcare", "setup_signal": "Bullish Reversal", "score": 82.7, "insight": "Value bounce off key support level with medical margin stabilization."},
-                {"ticker": "XOM", "stock_name": "Exxon Mobil Corp.", "sector": "Energy", "setup_signal": "Breakout", "score": 81.9, "insight": "Upstream production growth in Guyana with strong free cash flow yield."}
-            ]
-        else:
-            candidates_meta = [
-                {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike above 30-day average. Solid operating margins."},
-                {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Energy", "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout."},
+        curr_sym = "₹"
+        candidates_meta = [
+            {"ticker": "BEL", "stock_name": "Bharat Electronics", "sector": "Defence", "setup_signal": "Operator Footprint", "score": 93.2, "insight": "Operator footprints detected with delivery spike above 30-day average. Solid operating margins."},
+            {"ticker": "RELIANCE", "stock_name": "Reliance Industries", "sector": "Energy", "setup_signal": "Strong Buy", "score": 95.2, "insight": "High institutional delivery accumulation (+74%). Strong FCF growth with multi-month resistance breakout."},
+
                 {"ticker": "HDFCBANK", "stock_name": "HDFC Bank", "sector": "Financials", "setup_signal": "Bullish Reversal", "score": 96.5, "insight": "Double-bottom reversal pattern confirmed above support. Top-tier asset quality metrics."},
                 {"ticker": "INFY", "stock_name": "Infosys Limited", "sector": "Technology", "setup_signal": "Long Buildup", "score": 94.8, "insight": "Fresh FNO long position buildup with OI addition. RSI-14 momentum crossing 62 with clean EMA20 support."},
                 {"ticker": "HAL", "stock_name": "Hindustan Aeronautics", "sector": "Defence", "setup_signal": "Trend Trading", "score": 92.5, "insight": "Robust defence aerospace order book. Consistent revenue CAGR with strong return on capital."},

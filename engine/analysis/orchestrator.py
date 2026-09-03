@@ -12,6 +12,64 @@ from engine.utils.logger import setup_logger
 
 logger = setup_logger("bsa_orchestrator")
 
+def _ensure_tables_exist(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS historical_calls (
+            id SERIAL PRIMARY KEY,
+            uniqueid TEXT,
+            ticker TEXT NOT NULL,
+            recommended_call TEXT,
+            confidence DOUBLE PRECISION,
+            cmp DOUBLE PRECISION,
+            entry_price DOUBLE PRECISION,
+            stop_loss DOUBLE PRECISION,
+            target_price DOUBLE PRECISION,
+            rr_ratio TEXT DEFAULT '1:2.00',
+            status TEXT DEFAULT 'OPEN',
+            timestamp TEXT,
+            created_at TIMESTAMP DEFAULT now(),
+            review_date DATE DEFAULT CURRENT_DATE,
+            closed_at TIMESTAMP,
+            final_cmp DOUBLE PRECISION,
+            latest_cmp DOUBLE PRECISION,
+            call_status TEXT DEFAULT 'OPEN',
+            outcome TEXT DEFAULT 'OPEN',
+            min_cmp DOUBLE PRECISION,
+            max_cmp DOUBLE PRECISION,
+            closest TEXT,
+            closest_info TEXT
+        );
+        CREATE TABLE IF NOT EXISTS call_efficiency (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+            total_calls INT DEFAULT 0,
+            passed INT DEFAULT 0,
+            failed INT DEFAULT 0,
+            partial_success INT DEFAULT 0,
+            partial_fail INT DEFAULT 0,
+            success_rate_pct DOUBLE PRECISION DEFAULT 0.0,
+            last_updated TIMESTAMP DEFAULT now()
+        );
+        CREATE TABLE IF NOT EXISTS intraday_call (
+            id SERIAL PRIMARY KEY,
+            uniqueid TEXT,
+            ticker TEXT NOT NULL,
+            signal TEXT,
+            bet TEXT,
+            confidence DOUBLE PRECISION,
+            entry_price DOUBLE PRECISION,
+            stop_loss DOUBLE PRECISION,
+            target_price DOUBLE PRECISION,
+            cmp DOUBLE PRECISION,
+            actionable_insight TEXT,
+            fo_buildup TEXT,
+            tech_reason TEXT,
+            analysed_at TIMESTAMP DEFAULT now(),
+            pcr TEXT,
+            support DOUBLE PRECISION,
+            resistance DOUBLE PRECISION
+        );
+    """)
+
 def analyze_and_summarize_ticker(ticker: str) -> bool:
     """
     Executes full analysis (Technical, Fundamental, Options, Footprint, Projections)
@@ -23,6 +81,7 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         close = 0.0
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                _ensure_tables_exist(cur)
                 cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 1", (ticker,))
                 row = cur.fetchone()
                 if row and row[0] is not None:
