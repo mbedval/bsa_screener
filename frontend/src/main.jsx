@@ -4,7 +4,7 @@ import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, Plus,
   RefreshCw, Search, Settings2, Share2, Shield, TableProperties, Tag,
-  Download, Trash2, TrendingUp, User, Users, X
+  Download, Trash2, TrendingUp, User, Users, X, Star
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
 import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage } from './visualizer/index.jsx'
@@ -82,7 +82,7 @@ const signalTone = value => {
 }
 
 // Master page identifiers
-const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded']
+const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations']
 
 const parseResp = async (r) => {
   const ct = r.headers.get('content-type') || ''
@@ -183,7 +183,7 @@ function Landing({ theme, setTheme, onSelectApp }) {
             >
               <h2>{item.title}</h2>
               <p>{item.description}</p>
-              <b>Launch {key === 'us_intelligence' ? 'US Intelligence' : 'India Intelligence'} <ArrowRight size={16} /></b>
+              <b>Launch <ArrowRight size={16} /></b>
             </a>
           ))}
         </div>
@@ -405,21 +405,15 @@ function App() {
         </div>
         <nav>
           <a
-            className="nav-item"
+            className="nav-item home-link"
             href="/"
             onClick={e => {
               e.preventDefault()
-              navigateTo('')
+              setPath('')
             }}
           >
             <Home /> Home
           </a>
-          <button className={`nav-item ${active === 'dashboard' ? 'selected' : ''}`} onClick={() => setActive('dashboard')}>
-            <LayoutDashboard /> Overview
-          </button>
-          <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
-            <TrendingUp /> Charts & Visualizer
-          </button>
           <section className={`nav-section ${expandedSection === 'Research Board' ? 'expanded' : 'collapsed'}`}>
             <div className="nav-label" onClick={() => toggleSection('Research Board')} role="button" tabIndex={0}>
               <BarChart3 />
@@ -428,6 +422,12 @@ function App() {
             </div>
             {expandedSection === 'Research Board' && (
               <div className="nav-section-items">
+                <button className={`nav-item ${active === 'dashboard' ? 'selected' : ''}`} onClick={() => setActive('dashboard')}>
+                  <LayoutDashboard size={14} /> Top 15 Recommendation
+                </button>
+                <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
+                  <TrendingUp size={14} /> Charts & Visualizer
+                </button>
                 <button className={`nav-item ${active === 'research:patterns' ? 'selected' : ''}`} onClick={() => setActive('research:patterns')}>
                   <TrendingUp size={14} /> Pattern Viewer
                 </button>
@@ -468,6 +468,7 @@ function App() {
                         <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
                         <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker Master</button>
                         <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>
+                        <button className={`nav-item ${active === 'master:recommendations' ? 'selected' : ''}`} onClick={() => setActive('master:recommendations')}><Star /> Recommendations</button>
                         <button className={`nav-item ${active === 'master:users' ? 'selected' : ''}`} onClick={() => setActive('master:users')}><Users /> Users</button>
                         <button className={`nav-item ${active === 'master:aliases' ? 'selected' : ''}`} onClick={() => setActive('master:aliases')}><GitCompare /> Alternative Names</button>
                         <button className={`nav-item ${active === 'master:excluded' ? 'selected' : ''}`} onClick={() => setActive('master:excluded')}><Ban /> Excluded Tickers</button>

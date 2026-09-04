@@ -11,3 +11,4 @@ engine/database/__pycache__/*
 engine/analysis/__pycache__/*
 engine/reports/__pycache__/*
 backend/app/__pycache__/*
+output/engine.log

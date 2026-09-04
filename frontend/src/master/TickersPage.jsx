@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Edit2, Globe, Plus, Tag, Trash2, X } from 'lucide-react'
+import { Edit2, Globe, Plus, Tag, Trash2, X, Star } from 'lucide-react'
 import * as api from './api.js'
+import RecommendationsModal from './RecommendationsModal.jsx'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
   FormGroup, Input, Select, Checkbox, TagInput, MultiPicker,
@@ -23,6 +24,7 @@ export default function TickersPage({ dataset }) {
   const [editing, setEditing]     = useState(null)
   const [confirm, setConfirm]     = useState(null)
   const [sectorModal, setSectorModal] = useState(null)
+  const [recModal, setRecModal]       = useState(null)
   const [selSectors, setSelSectors]   = useState([])
   const [saving, setSaving]       = useState(false)
   const [form, setForm]           = useState({ ticker: '', company_name: '', is_fno: false, index_memberships: [], exchange: 'NSE' })
@@ -177,12 +179,13 @@ export default function TickersPage({ dataset }) {
                       </button>
                     </div>
                   </td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
-                      <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
-                    </div>
-                  </td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn sm" title="Recommendations" onClick={() => setRecModal(row)}><Star size={13}/></button>
+                        <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
+                        <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
+                      </div>
+                    </td>
                 </tr>
               ))}
             </tbody>
@@ -278,6 +281,11 @@ export default function TickersPage({ dataset }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Recommendations Modal */}
+      {recModal && (
+        <RecommendationsModal ticker={recModal} onClose={() => setRecModal(null)} />
       )}
 
       {/* Delete confirm */}

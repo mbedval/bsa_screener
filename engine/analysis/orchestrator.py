@@ -124,16 +124,31 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
 
         # Reasons breakdown
         reasons_list = tech_res["reasons"] + fund_res["reasons"] + [foot_res["insight"]]
-        reasons_str = "; ".join(reasons_list)
 
         # JSON representations
         proj_json = json.dumps(proj_22d)
         opt_json = json.dumps(opt_res)
         foot_json = json.dumps(foot_res)
 
-        # Database Deduplication check
+        # Database Deduplication check & Recommender Info
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Fetch recent broker recommendations to include in reasons
+                cur.execute("SELECT recommender, time_period FROM broker_recommendations WHERE ticker = %s ORDER BY rec_date DESC LIMIT 5", (ticker,))
+                recs = cur.fetchall()
+                if recs:
+                    unique_recs = []
+                    seen = set()
+                    for r in recs:
+                        if r[0] not in seen:
+                            seen.add(r[0])
+                            period_str = f" for {r[1]}" if r[1] else ""
+                            unique_recs.append(f"{r[0]}{period_str}")
+                    if unique_recs:
+                        reasons_list.append(f"Recommended by: {', '.join(unique_recs)}")
+
+                reasons_str = "; ".join(filter(None, reasons_list))
+
                 cur.execute("""
                     SELECT close, hybrid_score, overall_signal
                     FROM analysis_summaries

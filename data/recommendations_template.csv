@@ -1,0 +1,4 @@
+TICKER,DATE,RECOMMENDER,CMP,STOP_LOSS,TARGET,PERIOD,DESCRIPTION
+RELIANCE,2023-10-25,Zerodha,2250.50,2100.00,2600.00,Long Term,Strong quarterly results and retail growth.
+TCS,2023-10-26,Groww,3400.00,3250.00,3700.00,Short Term,Good margin expansion and deal pipeline.
+HDFCBANK,2023-10-27,Sethi,1500.00,1450.00,1750.00,Long Term,Merger synergies starting to reflect.
