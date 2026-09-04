@@ -58,7 +58,13 @@ python3 -m venv .venv
 The engine CLI runs all background pipeline jobs and supports batch downloading, analysis, on-demand reviews, and report compiles.
 
 ### Batch Operations (Indian NSE Market — `bsa_db`)
+* **Execute Full Pipeline (Download All + Download F&O + Analyze All)**:
+  Runs the complete daily process sequentially in a single command.
+  ```bash
+  .venv/bin/python3 -m engine.cli --mode full-pipeline
+  ```
 * **Download historical data & fundamentals for all master tickers**:
+  Strictly downloads data only, without running any analysis.
   ```bash
   .venv/bin/python3 -m engine.cli --mode download-all
   ```
@@ -67,6 +73,7 @@ The engine CLI runs all background pipeline jobs and supports batch downloading,
   .venv/bin/python3 -m engine.cli --mode download-fno
   ```
 * **Execute analysis & scoring for all master tickers**:
+  Strictly processes the downloaded data through the analysis engine, without downloading any new data.
   ```bash
   .venv/bin/python3 -m engine.cli --mode analyze-all
   ```

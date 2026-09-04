@@ -21,7 +21,7 @@ logger = setup_logger("bsa_cli")
 
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
-    parser.add_argument("--mode", choices=["download-all", "download-fno", "analyze-all"], help="Pipeline batch operation mode")
+    parser.add_argument("--mode", choices=["download-all", "download-fno", "analyze-all", "full-pipeline"], help="Pipeline batch operation mode")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
     parser.add_argument("--report", type=str, help="Generate report for a specific ticker")
     parser.add_argument("--pdf", action="store_true", help="Explicitly opt-in to generate PDF report alongside HTML")
@@ -38,12 +38,17 @@ def main():
     if args.mode == "download-all":
         logger.info("Triggered downloading data for all master tickers...")
         download_all_tickers()
-        logger.info("Triggered scoring and analysis engine for all master tickers...")
-        analyze_all_tickers()
     elif args.mode == "download-fno":
         logger.info("Triggered downloading F&O option chain data...")
         download_all_derivatives()
     elif args.mode == "analyze-all":
+        logger.info("Triggered scoring and analysis engine for all master tickers...")
+        analyze_all_tickers()
+    elif args.mode == "full-pipeline":
+        logger.info("Triggered full pipeline: Downloading all data...")
+        download_all_tickers()
+        logger.info("Downloading F&O option chain data...")
+        download_all_derivatives()
         logger.info("Triggered scoring and analysis engine for all master tickers...")
         analyze_all_tickers()
 

@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 ROOT_ENV = ROOT_DIR / ".env"
-LOCAL_ENV = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -24,7 +23,7 @@ class Settings(BaseSettings):
     database_schema: str = "public"
 
     model_config = SettingsConfigDict(
-        env_file=(str(ROOT_ENV), str(LOCAL_ENV)),
+        env_file=str(ROOT_ENV),
         extra="ignore",
         env_file_encoding="utf-8"
     )

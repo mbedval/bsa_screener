@@ -8,7 +8,8 @@ from dotenv import load_dotenv
 logger = logging.getLogger("bsa_database")
 
 # Load environment variables from root .env
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+load_dotenv(env_path)
 
 def get_postgres_url() -> str:
     """Resolve the PostgreSQL connection URL from environment."""
