@@ -47,6 +47,20 @@ def format_ticker(ticker: str) -> str:
         base_ticker = base_ticker[:-4]
         suffix = ".BSE"
         
+    # Yahoo Finance Index Translations
+    index_map = {
+        "NIFTY": "^NSEI",
+        "NIFTY50": "^NSEI",
+        "NIFTY 50": "^NSEI",
+        "BANKNIFTY": "^NSEBANK",
+        "BANK NIFTY": "^NSEBANK",
+        "FINNIFTY": "^CNXFIN",
+        "MIDCPNIFTY": "^NSEMDCP50",
+        "NIFTYNXT50": "^NN50"
+    }
+    if base_ticker in index_map:
+        return index_map[base_ticker]
+        
     # Check if base ticker has a mapping override
     if base_ticker in mappings:
         mapped = mappings[base_ticker]
