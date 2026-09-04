@@ -11,6 +11,9 @@ bsa_screener/
 ├── .env                     # Global database DSN configuration
 ├── seeding.sql              # Database setup and seeds (system configs, mappings)
 ├── requirements.txt         # Consolidated Python dependencies
+├── run.sh                   # Linux/macOS startup script (binds to 0.0.0.0 for network access)
+├── run.bat                  # Windows Batch startup script
+├── run.cmd                  # Windows CMD startup script
 ├── engine/                  # Core trading logic and analytical framework
 │   ├── cli.py               # Main CLI executor
 │   ├── database/            # Database pool manager (connection.py)
@@ -19,7 +22,6 @@ bsa_screener/
 │   ├── reports/             # HTML & PDF document generators
 │   └── utils/               # Loggers and database-driven formatting helpers
 ├── backend/                 # FastAPI server (database connector & route handlers)
-│   ├── run.sh               # Backend startup script
 │   └── app/
 │       ├── main.py          # FastAPI application server
 │       ├── master.py        # Master lists CRUD (tickers, sectors, watchlists)
@@ -76,23 +78,14 @@ The engine CLI runs all background pipeline jobs and supports batch downloading,
   ```
 * **Add `--pdf` to explicitly opt-in to PDF report generation**:
   ```bash
-  .venv/bin/python3 -m engine.cli --ticker INFY --pdf
-  ```
-
-### Generate Report On-Demand
-* **Compile reports for a ticker that has already been analyzed**:
-  ```bash
   .venv/bin/python3 -m engine.cli --report INFY --pdf
   ```
-  Generated reports will be saved at:
-  - HTML: `output/htmls/INFY_report.html`
-  - PDF: `output/pdf/INFY_report.pdf`
 
 ---
 
 ## 4. Web Application Setup
 
-The web application consists of a FastAPI backend (which also serves the static compiled frontend files) and a React frontend.
+The web application consists of a FastAPI backend (which serves the compiled React UI statically) and APIs accessible across your local network.
 
 ### A. Compile Frontend Production Assets
 Compile the React frontend so it can be served statically by the backend:
@@ -103,16 +96,26 @@ npm --prefix frontend run build
 ```
 This generates the static distribution folder inside `frontend/dist`.
 
-### B. Start the Web App Backend Connector
-Execute the startup script to launch the FastAPI server:
+### B. Start the Web App Portal
+Execute the startup script from the project root folder:
 
-```bash
-./backend/run.sh
-```
+* **On Linux / macOS**:
+  ```bash
+  ./run.sh
+  ```
+* **On Windows (Command Prompt / PowerShell)**:
+  ```cmd
+  run.bat
+  ```
+  or
+  ```cmd
+  run.cmd
+  ```
 
-The application is now running. Open your browser and navigate to:
-* **Web UI Dashboard**: [http://127.0.0.1:8000](http://127.0.0.1:8000)
-* **API Interactive Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+The server binds to `0.0.0.0:8000`, allowing access from local or remote machines on the network. Open your browser and navigate to:
+* **Local Machine**: [http://127.0.0.1:8000](http://127.0.0.1:8000) or [http://localhost:8000](http://localhost:8000)
+* **Remote Machine in Network**: `http://<HOST_IP_ADDRESS>:8000` (e.g., `http://192.168.1.18:8000`)
+* **API Interactive Docs**: `http://<HOST_IP_ADDRESS>:8000/docs`
 
 ### C. Active Route Endpoints
 - `/api/analysis/trigger?ticker=INFY` (`POST`): Triggers real-time live downloading and scoring for the stock.
