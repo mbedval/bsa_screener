@@ -20,33 +20,9 @@ def analyze_footprint_and_news(ticker: str) -> dict:
     phase = "Markup"
     
     try:
-        # 1. Fetch News & Sentiment from yfinance
-        try:
-            tk = yf.Ticker(formatted)
-            news = tk.news or []
-            positive_words = {"growth", "rise", "surge", "up", "profit", "gain", "buy", "bullish", "record"}
-            negative_words = {"fall", "drop", "down", "loss", "decline", "sell", "bearish", "slump", "debt"}
-            
-            hits_pos = 0
-            hits_neg = 0
-            
-            for item in news:
-                title = item.get("title", "").lower()
-                for w in title.split():
-                    if w in positive_words:
-                        hits_pos += 1
-                    elif w in negative_words:
-                        hits_neg += 1
-                        
-            total = hits_pos + hits_neg
-            if total > 0:
-                sentiment_score = (hits_pos - hits_neg) / total
-                if sentiment_score > 0.2:
-                    sentiment_label = "Bullish"
-                elif sentiment_score < -0.2:
-                    sentiment_label = "Bearish"
-        except Exception as e:
-            logger.debug(f"Failed to fetch news for {ticker}: {e}")
+        # News sentiment fetching bypassed for fast pipeline execution
+        sentiment_score = 0.0
+        sentiment_label = "Neutral"
 
         # 2. Footprint / Volume Anomalies & Smart Money Accumulation Ratio
         clean_t = ticker.upper().replace(".NS", "").replace(".BO", "").strip()

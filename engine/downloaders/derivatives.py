@@ -8,25 +8,31 @@ from engine.utils.helpers import clean_ticker
 logger = logging.getLogger("bsa_derivatives_downloader")
 
 def fetch_live_spot_price(ticker: str) -> float or None:
-    """Fetch live spot price via yfinance with fallbacks for key indices."""
+    """Fetch spot price from DB ohlcv_daily first for instant performance, with yfinance/fallback backup."""
     raw = ticker.strip().upper()
-    yf_sym = f"{raw}.NS" if not raw.endswith(".NS") and not raw.startswith("^") else raw
 
-    # Index translations for Yahoo Finance
-    if raw in ("NIFTY", "NIFTY50", "NIFTY 50"):
-        yf_sym = "^NSEI"
-    elif raw in ("BANKNIFTY", "BANK NIFTY"):
-        yf_sym = "^NSEBANK"
-    elif raw in ("FINNIFTY",):
-        yf_sym = "^CNXFIN"
-    elif raw in ("MIDCPNIFTY",):
-        yf_sym = "^NSEMDCP50"
-    elif raw in ("NIFTYNXT50",):
-        yf_sym = "^NN50"
+    # 1. Quick check from DB ohlcv_daily
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1", (raw,))
+                row = cur.fetchone()
+                if row and row[0] and float(row[0]) > 0:
+                    return round(float(row[0]), 2)
+    except Exception:
+        pass
+
+    # 2. Live yfinance fetch if not in DB
+    yf_sym = f"{raw}.NS" if not raw.endswith(".NS") and not raw.startswith("^") else raw
+    if raw in ("NIFTY", "NIFTY50", "NIFTY 50"): yf_sym = "^NSEI"
+    elif raw in ("BANKNIFTY", "BANK NIFTY"): yf_sym = "^NSEBANK"
+    elif raw in ("FINNIFTY",): yf_sym = "^CNXFIN"
+    elif raw in ("MIDCPNIFTY",): yf_sym = "^NSEMDCP50"
+    elif raw in ("NIFTYNXT50",): yf_sym = "^NN50"
 
     try:
         tk = yf.Ticker(yf_sym)
-        hist = tk.history(period="5d")
+        hist = tk.history(period="1d", timeout=3)
         if not hist.empty:
             val = float(hist["Close"].iloc[-1])
             if val > 0:
@@ -34,15 +40,12 @@ def fetch_live_spot_price(ticker: str) -> float or None:
     except Exception as e:
         logger.debug(f"Failed to fetch live price for {ticker}: {e}")
 
-    # Sector fallbacks
+    # 3. Sector fallbacks
     fallbacks = {
-        "NIFTY": 24500.0,
-        "BANKNIFTY": 51000.0,
-        "FINNIFTY": 23000.0,
-        "MIDCPNIFTY": 13000.0,
-        "NIFTYNXT50": 68000.0,
+        "NIFTY": 24500.0, "BANKNIFTY": 51000.0, "FINNIFTY": 23000.0,
+        "MIDCPNIFTY": 13000.0, "NIFTYNXT50": 68000.0,
     }
-    return fallbacks.get(raw)
+    return fallbacks.get(raw, 500.0)
 
 def get_strike_interval(ticker: str, price: float) -> float:
     """Calculates official NSE strike price step depending on ticker name & price range."""
@@ -150,24 +153,67 @@ def download_and_insert_derivatives(ticker: str) -> bool:
         logger.error(f"Error inserting derivative data for {ticker_clean}: {e}")
         return False
 
-def download_all_derivatives():
+from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
+from engine.utils.fno_seeder import seed_fno_tickers
+
+def download_all_derivatives(progress_callback=None, resume: bool = True):
     """Download option chain derivatives for all F&O enabled tickers + indices."""
-    tickers = []
+    # Automatically seed/sync F&O list from data/fno_tickers.csv
+    seed_fno_tickers()
+
+    all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            # Sync is_fno in ticker_master from fno_master if fno_master exists
+            try:
+                cur.execute("""
+                    UPDATE ticker_master
+                    SET is_fno = TRUE
+                    WHERE ticker IN (SELECT symbol FROM fno_master WHERE is_active = TRUE)
+                """)
+                conn.commit()
+            except Exception:
+                pass
+
             cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-            tickers = [row[0] for row in cur.fetchall()]
+            all_tickers = [row[0] for row in cur.fetchall()]
+
+            # Also include any symbols from fno_master that might not be in ticker_master
+            try:
+                cur.execute("SELECT symbol FROM fno_master WHERE is_active = TRUE")
+                fno_symbols = [row[0] for row in cur.fetchall()]
+                for s in fno_symbols:
+                    if s not in all_tickers:
+                        all_tickers.append(s)
+            except Exception:
+                pass
 
     indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"]
     for idx in indices:
-        if idx not in tickers:
-            tickers.append(idx)
+        if idx not in all_tickers:
+            all_tickers.append(idx)
 
-    logger.info(f"Starting F&O option chain download for {len(tickers)} derivative symbols...")
-    success_count = 0
-    for i, ticker in enumerate(tickers, 1):
+    completed_set = get_completed_tickers("fno_download") if resume else set()
+    pending_tickers = [t for t in all_tickers if t not in completed_set]
+
+    logger.info(f"Starting F&O option chain download. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+
+    if progress_callback and completed_set:
+        progress_callback(None, True, advance=len(completed_set))
+
+    if not pending_tickers:
+        logger.info("All F&O tickers already downloaded!")
+        return
+
+    success_count = len(completed_set)
+    for i, ticker in enumerate(pending_tickers, 1):
         res = download_and_insert_derivatives(ticker)
         if res:
             success_count += 1
-        logger.info(f"[{i}/{len(tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
-    logger.info(f"Derivative downloads completed: {success_count}/{len(tickers)} successful.")
+            mark_ticker_completed("fno_download", ticker)
+        if progress_callback:
+            logger.debug(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
+            progress_callback(ticker, res)
+        else:
+            logger.info(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
+    logger.info(f"Derivative downloads completed: {success_count}/{len(all_tickers)} successful.")

@@ -78,13 +78,49 @@ def _safe_float(val) -> float or None:
     except Exception:
         return None
 
-def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
-    """Download OHLCV, compute indicators, fetch meta & fundamentals and write to Postgres."""
+def get_latest_trade_date(ticker_clean: str) -> datetime or None:
+    """Query DB for the latest trade_date recorded for a ticker."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = %s", (ticker_clean,))
+                res = cur.fetchone()
+                if res and res[0]:
+                    val = res[0]
+                    if isinstance(val, str):
+                        return datetime.strptime(val, "%Y-%m-%d")
+                    elif hasattr(val, "strftime"):
+                        return datetime.combine(val, datetime.min.time()) if not isinstance(val, datetime) else val
+    except Exception:
+        pass
+    return None
+
+def download_ticker_data(ticker_raw: str, period: str = None, force: bool = False) -> bool:
+    """Download OHLCV, compute indicators, fetch meta & fundamentals with smart incremental freshness logic."""
     ticker_clean = clean_ticker(ticker_raw)
     formatted = format_ticker(ticker_raw)
     now_str = datetime.now().isoformat(timespec="seconds")
+    today_date = datetime.now().date()
 
     try:
+        # Determine smart fetch period if not specified
+        if not period:
+            last_date = get_latest_trade_date(ticker_clean)
+            if last_date and not force:
+                days_diff = (today_date - last_date.date()).days
+                # If last trade date is today (or yesterday/weekend within 1-2 days), skip download
+                if days_diff <= 0 or (today_date.weekday() in [5, 6] and days_diff <= 2):
+                    logger.info(f"Ticker {ticker_clean} is already up to date ({last_date.strftime('%Y-%m-%d')}). Skipping download.")
+                    return True
+                elif days_diff <= 7:
+                    period = "5d"
+                elif days_diff <= 30:
+                    period = "1mo"
+                else:
+                    period = "2y"
+            else:
+                period = "2y"
+
         # 1. Fetch OHLCV
         tk = yf.Ticker(formatted)
         df = tk.history(period=period, interval="1d")
@@ -106,23 +142,25 @@ def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
             return False
 
         # 2. Save stock_meta information
-        info = tk.info
+        info = tk.info or {}
         company_name = info.get("longName", info.get("shortName", ticker_clean))
         sector = info.get("sector", "Unknown")
         exchange = "BO" if formatted.endswith(".BO") else "NS"
+        has_options = bool(tk.options) if hasattr(tk, "options") else False
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Upsert ticker_master metadata (company_name, sector, exchange)
+                # Upsert ticker_master metadata while preserving/updating is_fno
                 cur.execute("""
-                    INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO ticker_master (ticker, company_name, is_fno, sector, exchange, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (ticker) DO UPDATE SET
                         company_name = EXCLUDED.company_name,
+                        is_fno = CASE WHEN EXCLUDED.is_fno = TRUE THEN TRUE ELSE ticker_master.is_fno END,
                         sector = EXCLUDED.sector,
                         exchange = EXCLUDED.exchange,
                         updated_at = EXCLUDED.updated_at
-                """, (ticker_clean, company_name, sector, exchange, now_str))
+                """, (ticker_clean, company_name, has_options, sector, exchange, now_str))
 
                 # Upsert OHLCV and Indicators
                 for idx, row in enriched.iterrows():
@@ -139,7 +177,8 @@ def download_ticker_data(ticker_raw: str, period: str = "2y") -> bool:
                         ticker_clean, date_str,
                         _safe_float(row["Open"]), _safe_float(row["High"]),
                         _safe_float(row["Low"]), _safe_float(row["Close"]),
-                        int(row["Volume"]), _safe_float(row["VWAP"]), now_str
+                        _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
+                        now_str
                     ))
 
                     cur.execute("""
@@ -219,12 +258,14 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
         is_other_income_ok = int(abs(avg_other_inc) <= (0.05 * avg_pat)) if avg_pat > 0 else int(abs(avg_other_inc) == 0.0)
 
         # PE and Debt
-        info = tk.info
-        current_pe = info.get('trailingPE') or info.get('forwardPE') or 0.0
+        info = tk.info or {}
+        raw_pe = info.get('trailingPE') or info.get('forwardPE')
+        current_pe = _safe_float(raw_pe) or 0.0
         avg_pe = 20.0  # standard fallback
         is_pe_ok = int(current_pe <= avg_pe) if current_pe > 0 else 1
 
-        debt_to_equity = info.get('debtToEquity') or 0.0
+        raw_dte = info.get('debtToEquity')
+        debt_to_equity = _safe_float(raw_dte) or 0.0
         is_debt_equity_ok = int(debt_to_equity <= 100.0)
 
         # Calculate composite score
@@ -261,27 +302,46 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
         logger.error(f"Error fetching fundamentals for {ticker_clean}: {e}")
         return False
 
-def download_all_tickers(max_workers: int = 8):
+from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
+
+def download_all_tickers(max_workers: int = 8, progress_callback=None, resume: bool = True, force: bool = False):
     """Download OHLCV and fundamentals for all tickers in the database master list."""
-    tickers = []
+    all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT ticker FROM ticker_master")
-            tickers = [row[0] for row in cur.fetchall()]
+            all_tickers = [row[0] for row in cur.fetchall()]
 
-    if not tickers:
+    if not all_tickers:
         logger.warning("No tickers found in ticker_master!")
         return
 
-    logger.info(f"Starting pipeline download for {len(tickers)} tickers...")
-    success_count = 0
+    completed_set = get_completed_tickers("spot_download") if resume else set()
+    pending_tickers = [t for t in all_tickers if t not in completed_set]
+
+    logger.info(f"Starting spot download pipeline. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+
+    # Report pre-completed items to progress callback
+    if progress_callback and completed_set:
+        progress_callback(None, True, advance=len(completed_set))
+
+    if not pending_tickers:
+        logger.info("All spot tickers already downloaded! Jumps directly to complete.")
+        return
+
+    success_count = len(completed_set)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(download_ticker_data, ticker): ticker for ticker in tickers}
+        futures = {executor.submit(download_ticker_data, ticker, force=force): ticker for ticker in pending_tickers}
         for i, future in enumerate(as_completed(futures), 1):
             t = futures[future]
             res = future.result()
             if res:
                 success_count += 1
-            logger.info(f"[{i}/{len(tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
-    failed_count = len(tickers) - success_count
-    logger.info(f"Pipeline completed. Attempted: {len(tickers)}, Succeeded: {success_count}, Failed: {failed_count}")
+                mark_ticker_completed("spot_download", t)
+            if progress_callback:
+                logger.debug(f"[{i}/{len(pending_tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
+                progress_callback(t, res)
+            else:
+                logger.info(f"[{i}/{len(pending_tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
+    failed_count = len(all_tickers) - success_count
+    logger.info(f"Pipeline completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}")

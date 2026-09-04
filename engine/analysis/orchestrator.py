@@ -326,28 +326,46 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         logger.error(f"Error orchestrating analysis for {ticker}: {e}")
         return False
 
-def analyze_all_tickers(max_workers: int = 8):
+from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
+
+def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bool = True):
     """Orchestrates analysis sequentially or concurrently for all tickers in database."""
     import time
-    tickers = []
+    all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT ticker FROM ticker_master")
-            tickers = [row[0] for row in cur.fetchall()]
+            all_tickers = [row[0] for row in cur.fetchall()]
 
-    if not tickers:
+    if not all_tickers:
         logger.warning("No tickers found to analyze.")
         return
 
+    completed_set = get_completed_tickers("analysis") if resume else set()
+    pending_tickers = [t for t in all_tickers if t not in completed_set]
+
     start_time = time.time()
-    logger.info(f"Starting analysis process for {len(tickers)} tickers...")
-    success_count = 0
-    for i, ticker in enumerate(tickers, 1):
+    logger.info(f"Starting analysis process. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+
+    if progress_callback and completed_set:
+        progress_callback(None, True, advance=len(completed_set))
+
+    if not pending_tickers:
+        logger.info("All tickers already analyzed!")
+        return
+
+    success_count = len(completed_set)
+    for i, ticker in enumerate(pending_tickers, 1):
         res = analyze_and_summarize_ticker(ticker)
         if res:
             success_count += 1
-        logger.info(f"[{i}/{len(tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
+            mark_ticker_completed("analysis", ticker)
+        if progress_callback:
+            logger.debug(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
+            progress_callback(ticker, res)
+        else:
+            logger.info(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
         
     elapsed = time.time() - start_time
-    failed_count = len(tickers) - success_count
-    logger.info(f"Analysis process completed. Attempted: {len(tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")
+    failed_count = len(all_tickers) - success_count
+    logger.info(f"Analysis process completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")
