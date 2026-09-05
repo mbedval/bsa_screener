@@ -1,0 +1,6 @@
+ticker,company_name,is_fno,sector,index_memberships,exchange
+RELIANCE,Reliance Industries Limited,true,Energy,"{NIFTY,NIFTY50}",NSE
+TCS,Tata Consultancy Services Limited,true,Information Technology,"{NIFTY,NIFTY50}",NSE
+WIPRO,Wipro Limited,true,Information Technology,"{NIFTY,NIFTY50}",NSE
+INFY,Infosys Limited,true,Information Technology,"{NIFTY,NIFTY50}",NSE
+HDFCBANK,HDFC Bank Limited,true,Banking & Financials,"{NIFTY,NIFTY50}",NSE

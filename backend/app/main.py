@@ -122,7 +122,59 @@ def database_info_for(dsn: str) -> dict[str, Any]:
         raise database_error(error)
 
 
+ANALYSIS_REPORT_TABLE_NAMES = {
+    "delivery_spikes", "sector_report", "quicktrade_timestamp", "quicktrade",
+    "operatorfootprint", "screener_timestamp", "screener", "breakout",
+    "trend_trading", "reversal_trading", "support_resistance", "swinger",
+    "monthly_swinger", "fno_active", "analysis_summaries", "intraday_call",
+    "historical_calls", "call_efficiency", "broker_recommendations"
+}
+
+def is_analysis_executed(dsn: str) -> bool:
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM analysis_summaries LIMIT 1;")
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+def get_columns_for_virtual_table(table_name: str) -> list[str]:
+    col_map = {
+        "delivery_spikes": ["ticker", "stock_name", "sector", "current_price", "latest_volume", "avg_volume_20d", "volume_ratio", "is_spike", "insight", "latest_date"],
+        "sector_report": ["sector", "total_tickers", "avg_hybrid_score", "avg_tech_score", "avg_fund_score", "bullish_count", "bearish_count", "neutral_count", "top_ticker", "sector_signal"],
+        "quicktrade_timestamp": ["run_time", "ticker", "close", "phase", "confidence", "footprint_score", "accumulation_score", "distribution_score"],
+        "quicktrade": ["run_time", "ticker", "close", "phase", "confidence", "footprint_score", "accumulation_score", "distribution_score"],
+        "operatorfootprint": ["run_time", "ticker", "close", "phase", "confidence", "footprint_score", "accumulation_score", "distribution_score"],
+        "screener_timestamp": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "screener": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "breakout": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "trend_trading": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "reversal_trading": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "support_resistance": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "swinger": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "monthly_swinger": ["ticker", "close", "rsi14", "sma20", "sma50", "macd_signal", "trend_signal", "trade_date"],
+        "fno_active": ["rank", "ticker", "stock_name", "most_active_strike", "option_type", "expiry_date", "volume", "open_interest", "change_in_oi", "ltp", "pchange", "active_score", "buildup_signal", "last_updated"],
+        "analysis_summaries": ["ticker", "close", "technical_score", "fundamental_score", "behavioral_score", "hybrid_score", "overall_signal", "confidence", "reasons", "projection_22d", "option_insights", "news_footprint", "updated_at"],
+        "intraday_call": ["id", "uniqueid", "ticker", "signal", "bet", "confidence", "entry_price", "stop_loss", "target_price", "cmp", "actionable_insight", "fo_buildup", "tech_reason", "analysed_at", "pcr", "support", "resistance"],
+        "historical_calls": ["id", "uniqueid", "ticker", "recommended_call", "confidence", "cmp", "entry_price", "stop_loss", "target_price", "rr_ratio", "status", "timestamp", "created_at", "review_date", "closed_at", "final_cmp", "latest_cmp", "call_status", "outcome", "min_cmp", "max_cmp", "closest", "closest_info"],
+        "call_efficiency": ["ticker", "total_calls", "passed", "failed", "partial_success", "partial_fail", "success_rate_pct", "last_updated"]
+    }
+    return col_map.get(table_name, ["ticker", "last_updated"])
+
+
 def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: str | None, ticker: str | None, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+    if table_name in ANALYSIS_REPORT_TABLE_NAMES and not is_analysis_executed(dsn):
+        cols = get_columns_for_virtual_table(table_name)
+        return {
+            "table": table_name,
+            "columns": cols,
+            "rows": [],
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
+            "message": "Analysis pipeline has not been executed yet. Run '--mode analyze-all' to generate analysis reports and scanner signals."
+        }
+
     all_tables = table_names(dsn)
     if table_name == "delivery_spikes":
         try:
@@ -706,7 +758,7 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
             
             raw_rows = cur.fetchall()
 
-            if table_name == "fno_master":
+            if table_name in ("fno_master", "fno_stock_master", "fno_index_master"):
                 columns = [c for c in columns if c not in ("id", "record_id", "created_at")]
                 # Bulk fetch prices from database in fast queries without blocking synchronous loop
                 symbols = [dict(r).get("symbol") or dict(r).get("ticker") for r in raw_rows]
@@ -1531,8 +1583,8 @@ def intelligence_sector_scans(
     except OperationalError as error:
         raise database_error(error)
 
-    if not tickers:
-        return {"sector": sector_name, "scan_table": scan_table, "tickers": [], "rows": [], "total": 0}
+    if not tickers or not is_analysis_executed(settings.bsa_postgres_dsn):
+        return {"sector": sector_name, "scan_table": scan_table, "tickers": tickers, "rows": [], "total": 0}
 
     # Then query the scan table in bsa_db filtered to those tickers
     allowed = set(FIXED_TABLES) | {"breakout", "trend_trading", "reversal_trading", "support_resistance"}
@@ -2053,6 +2105,82 @@ def get_ticker_patterns(ticker: str, dataset: str = "intelligence"):
 
 
 # ─── Research Board ───────────────────────────────────────────────────────────
+
+@app.get("/api/{dataset}/fno-underlyings")
+@app.get("/api/fno-underlyings")
+def get_fno_underlyings(dataset: str = "intelligence"):
+    """Return separated Stock F&O underlyings, Index F&O underlyings, and recent searches (< 8 hrs)."""
+    dsn = get_dsn(dataset)
+    stocks = []
+    indices = []
+    recent_searches = []
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            # 1. Fetch stock F&O underlyings
+            try:
+                cur.execute("""
+                    SELECT symbol, underlying_name
+                    FROM fno_stock_master
+                    WHERE is_active = TRUE
+                    ORDER BY symbol ASC
+                """)
+                stocks = [{"symbol": r["symbol"], "name": r["underlying_name"]} for r in cur.fetchall()]
+            except Exception:
+                cur.execute("SELECT ticker, company_name FROM ticker_master WHERE is_fno = TRUE ORDER BY ticker ASC")
+                stocks = [{"symbol": r["ticker"], "name": r["company_name"]} for r in cur.fetchall()]
+
+            # 2. Fetch index F&O underlyings
+            try:
+                cur.execute("""
+                    SELECT symbol, underlying_name
+                    FROM fno_index_master
+                    WHERE is_active = TRUE
+                    ORDER BY symbol ASC
+                """)
+                indices = [{"symbol": r["symbol"], "name": r["underlying_name"]} for r in cur.fetchall()]
+            except Exception:
+                indices = [
+                    {"symbol": "NIFTY", "name": "Nifty 50 Index"},
+                    {"symbol": "BANKNIFTY", "name": "Nifty Bank Index"},
+                    {"symbol": "FINNIFTY", "name": "Nifty Financial Services Index"},
+                    {"symbol": "MIDCPNIFTY", "name": "Nifty Midcap Select Index"},
+                    {"symbol": "NIFTYNXT50", "name": "Nifty Next 50 Index"},
+                    {"symbol": "BANKEX", "name": "BSE Bankex Index"}
+                ]
+
+            # 3. Fetch recent derivative searches / active underlyings from last 8 hours (max 3 items)
+            try:
+                cur.execute("""
+                    SELECT ticker, MAX(last_updated) AS max_upd
+                    FROM raw_fno_derivatives 
+                    WHERE last_updated >= (NOW() - INTERVAL '8 hours')::text
+                       OR last_updated >= (CURRENT_DATE - INTERVAL '8 hours')::text
+                    GROUP BY ticker
+                    ORDER BY max_upd DESC
+                    LIMIT 3
+                """)
+                recent_searches = [r["ticker"] for r in cur.fetchall()]
+            except Exception:
+                recent_searches = []
+
+            if not recent_searches:
+                try:
+                    cur.execute("""
+                        SELECT DISTINCT ticker FROM raw_fno_derivatives ORDER BY ticker ASC LIMIT 10
+                    """)
+                    recent_searches = [r["ticker"] for r in cur.fetchall()]
+                except Exception:
+                    pass
+
+        return {
+            "stocks": stocks,
+            "indices": indices,
+            "recent_searches": recent_searches
+        }
+    except Exception as e:
+        logger.error(f"Error fetching F&O underlyings: {e}")
+        raise HTTPException(500, f"Error fetching F&O underlyings: {e}")
+
 
 @app.get("/api/{dataset}/research/tickers")
 @app.get("/api/research/tickers")

@@ -134,18 +134,21 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # Fetch recent broker recommendations to include in reasons
-                cur.execute("SELECT recommender, time_period FROM broker_recommendations WHERE ticker = %s ORDER BY rec_date DESC LIMIT 5", (ticker,))
-                recs = cur.fetchall()
-                if recs:
-                    unique_recs = []
-                    seen = set()
-                    for r in recs:
-                        if r[0] not in seen:
-                            seen.add(r[0])
-                            period_str = f" for {r[1]}" if r[1] else ""
-                            unique_recs.append(f"{r[0]}{period_str}")
-                    if unique_recs:
-                        reasons_list.append(f"Recommended by: {', '.join(unique_recs)}")
+                try:
+                    cur.execute("SELECT recommender, time_period FROM broker_recommendations WHERE ticker = %s ORDER BY rec_date DESC LIMIT 5", (ticker,))
+                    recs = cur.fetchall()
+                    if recs:
+                        unique_recs = []
+                        seen = set()
+                        for r in recs:
+                            if r[0] and r[0] not in seen:
+                                seen.add(r[0])
+                                period_str = f" for {r[1]}" if r[1] else ""
+                                unique_recs.append(f"{r[0]}{period_str}")
+                        if unique_recs:
+                            reasons_list.append(f"Recommended by: {', '.join(unique_recs)}")
+                except Exception:
+                    conn.rollback()
 
                 reasons_str = "; ".join(filter(None, reasons_list))
 
@@ -341,14 +344,11 @@ def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bo
         logger.warning("No tickers found to analyze.")
         return
 
-    completed_set = get_completed_tickers("analysis") if resume else set()
+    completed_set = get_completed_tickers("analysis", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
     start_time = time.time()
     logger.info(f"Starting analysis process. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
-
-    if progress_callback and completed_set:
-        progress_callback(None, True, advance=len(completed_set))
 
     if not pending_tickers:
         logger.info("All tickers already analyzed!")

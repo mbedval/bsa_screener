@@ -9,6 +9,13 @@ export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR/backend:$PYTHONPATH"
 # Change directory to project root
 cd "$SCRIPT_DIR"
 
+# Automatically build frontend production bundle before server start
+if [ -f "$SCRIPT_DIR/frontend/build.sh" ]; then
+    echo "🔨 Rebuilding frontend bundle..."
+    bash "$SCRIPT_DIR/frontend/build.sh"
+fi
+
+
 # Detect Python interpreter & Uvicorn executable
 if [ -f "$SCRIPT_DIR/.venv/bin/python" ] && "$SCRIPT_DIR/.venv/bin/python" -c "import uvicorn" >/dev/null 2>&1; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"

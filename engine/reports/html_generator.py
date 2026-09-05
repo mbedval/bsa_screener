@@ -106,6 +106,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+PENDING_REPORT_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Report Pending - {ticker}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #09111f; color: #e2e8f0; margin: 0; padding: 40px 20px; display: flex; justify-content: center; align-items: center; min-height: 80vh; }}
+        .card {{ max-width: 680px; width: 100%; background: #0f172a; border: 1px solid rgba(126, 200, 240, 0.25); border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }}
+        .header-tag {{ background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; display: inline-block; margin-bottom: 12px; }}
+        h2 {{ margin: 0 0 8px 0; color: #ffffff; font-size: 22px; font-weight: 700; }}
+        .subtitle {{ color: #94a3b8; font-size: 14px; margin-bottom: 20px; }}
+        .info-box {{ background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin-bottom: 24px; }}
+        .info-box p {{ margin: 0; color: #cbd5e1; font-size: 13.5px; line-height: 1.6; }}
+        .steps-box {{ background: rgba(15, 23, 42, 0.8); border-left: 4px solid #38bdf8; border-top: 1px solid rgba(255, 255, 255, 0.05); border-right: 1px solid rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding: 18px; border-radius: 4px 8px 8px 4px; }}
+        .steps-box h4 {{ margin: 0 0 12px 0; color: #38bdf8; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .steps-box ol {{ margin: 0; padding-left: 20px; color: #e2e8f0; font-size: 13px; }}
+        .steps-box li {{ margin-bottom: 10px; line-height: 1.5; }}
+        code {{ background: #1e293b; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: 600; }}
+        .footer-note {{ font-size: 12px; color: #64748b; margin-top: 24px; padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.1); }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="header-tag">INITIAL SETUP • NO PRE-CALCULATED REPORT</span>
+        <h2>Research Report Pending: {company_name} ({ticker})</h2>
+        <div class="subtitle">Sector: {sector}</div>
+
+        <div class="info-box">
+            <p>
+                As part of initial setup, master ticker records are present in the system, but market price history and scoring analysis have not been run for <strong>{ticker}</strong> yet.
+            </p>
+        </div>
+
+        <div class="steps-box">
+            <h4>📋 Steps to Generate Report & Analysis:</h4>
+            <ol>
+                <li>
+                    <strong>Download Market Data:</strong><br>
+                    Run <code>python3 -m engine.cli --mode download-spot</code> to fetch daily OHLCV price history.
+                </li>
+                <li>
+                    <strong>Download F&amp;O Derivatives (if applicable):</strong><br>
+                    Run <code>python3 -m engine.cli --mode download-fno</code> to load active options chains.
+                </li>
+                <li>
+                    <strong>Execute Multi-Factor Scoring Engine:</strong><br>
+                    Run <code>python3 -m engine.cli --mode analyze-all</code> to generate reports for all tickers.
+                </li>
+                <li>
+                    <strong>Or Run On-Demand Single Ticker Analysis:</strong><br>
+                    Run <code>python3 -m engine.cli --ticker {ticker}</code> to instantly generate data &amp; report.
+                </li>
+            </ol>
+        </div>
+
+        <div class="footer-note">
+            💡 <strong>Initial Setup Design:</strong> Master database seeding initializes clean configuration tables without pre-populating synthetic reports.
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 def generate_html_report(ticker: str, dataset: str = "intelligence") -> str:
     """
     Generate an HTML report for a specific ticker based on analysis summaries in PostgreSQL.
@@ -133,8 +196,28 @@ def generate_html_report(ticker: str, dataset: str = "intelligence") -> str:
                 row = cur.fetchone()
 
         if not row:
-            logger.warning(f"No analysis summary record found for {ticker}. Cannot generate HTML report.")
-            return ""
+            company_name = ticker
+            sector_name = "Market Security"
+            try:
+                with get_db_connection() as conn_m:
+                    with conn_m.cursor() as cur_m:
+                        cur_m.execute("SELECT company_name, sector FROM ticker_master WHERE ticker = %s", (ticker,))
+                        m_row = cur_m.fetchone()
+                        if m_row:
+                            company_name = m_row[0] or ticker
+                            sector_name = m_row[1] or "Market Security"
+            except Exception:
+                pass
+
+            html_pending = PENDING_REPORT_TEMPLATE.format(
+                ticker=ticker,
+                company_name=company_name,
+                sector=sector_name
+            )
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(html_pending)
+            logger.info(f"Generated formatted Pending Report placeholder for {ticker} at {file_path}")
+            return str(file_path.resolve())
 
         close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
         

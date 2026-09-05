@@ -28,7 +28,8 @@ def fetch_live_spot_price(ticker: str) -> float or None:
     elif raw in ("BANKNIFTY", "BANK NIFTY"): yf_sym = "^NSEBANK"
     elif raw in ("FINNIFTY",): yf_sym = "^CNXFIN"
     elif raw in ("MIDCPNIFTY",): yf_sym = "^NSEMDCP50"
-    elif raw in ("NIFTYNXT50",): yf_sym = "^NN50"
+    elif raw in ("NIFTYNXT50",): yf_sym = "^NSMIDCP"
+    elif raw in ("BANKEX",): yf_sym = "^BSESN"
 
     try:
         tk = yf.Ticker(yf_sym)
@@ -43,7 +44,7 @@ def fetch_live_spot_price(ticker: str) -> float or None:
     # 3. Sector fallbacks
     fallbacks = {
         "NIFTY": 24500.0, "BANKNIFTY": 51000.0, "FINNIFTY": 23000.0,
-        "MIDCPNIFTY": 13000.0, "NIFTYNXT50": 68000.0,
+        "MIDCPNIFTY": 13000.0, "NIFTYNXT50": 68000.0, "BANKEX": 58000.0
     }
     return fallbacks.get(raw, 500.0)
 
@@ -158,18 +159,17 @@ from engine.utils.fno_seeder import seed_fno_tickers
 
 def download_all_derivatives(progress_callback=None, resume: bool = True):
     """Download option chain derivatives for all F&O enabled tickers + indices."""
-    # Automatically seed/sync F&O list from data/fno_tickers.csv
+    # Automatically seed/sync F&O list from F&O CSVs
     seed_fno_tickers()
 
     all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Sync is_fno in ticker_master from fno_master if fno_master exists
             try:
                 cur.execute("""
                     UPDATE ticker_master
                     SET is_fno = TRUE
-                    WHERE ticker IN (SELECT symbol FROM fno_master WHERE is_active = TRUE)
+                    WHERE ticker IN (SELECT symbol FROM fno_stock_master WHERE is_active = TRUE)
                 """)
                 conn.commit()
             except Exception:
@@ -178,9 +178,8 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
             cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
             all_tickers = [row[0] for row in cur.fetchall()]
 
-            # Also include any symbols from fno_master that might not be in ticker_master
             try:
-                cur.execute("SELECT symbol FROM fno_master WHERE is_active = TRUE")
+                cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
                 fno_symbols = [row[0] for row in cur.fetchall()]
                 for s in fno_symbols:
                     if s not in all_tickers:
@@ -188,18 +187,24 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
             except Exception:
                 pass
 
-    indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"]
+            try:
+                cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
+                idx_symbols = [row[0] for row in cur.fetchall()]
+                for s in idx_symbols:
+                    if s not in all_tickers:
+                        all_tickers.append(s)
+            except Exception:
+                pass
+
+    indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]
     for idx in indices:
         if idx not in all_tickers:
             all_tickers.append(idx)
 
-    completed_set = get_completed_tickers("fno_download") if resume else set()
+    completed_set = get_completed_tickers("fno_download", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
     logger.info(f"Starting F&O option chain download. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
-
-    if progress_callback and completed_set:
-        progress_callback(None, True, advance=len(completed_set))
 
     if not pending_tickers:
         logger.info("All F&O tickers already downloaded!")
@@ -217,3 +222,6 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
         else:
             logger.info(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
     logger.info(f"Derivative downloads completed: {success_count}/{len(all_tickers)} successful.")
+
+
+

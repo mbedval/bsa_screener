@@ -203,6 +203,34 @@ CREATE TABLE IF NOT EXISTS historical_calls (
     closest_info TEXT
 );
 
+CREATE TABLE IF NOT EXISTS historical_call_bkp (
+    id SERIAL PRIMARY KEY,
+    uniqueid TEXT,
+    ticker TEXT NOT NULL,
+    recommended_call TEXT,
+    confidence DOUBLE PRECISION,
+    cmp DOUBLE PRECISION,
+    entry_price DOUBLE PRECISION,
+    stop_loss DOUBLE PRECISION,
+    target_price DOUBLE PRECISION,
+    rr_ratio TEXT DEFAULT '1:2.00',
+    status TEXT DEFAULT 'OPEN',
+    timestamp TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    review_date DATE DEFAULT CURRENT_DATE,
+    closed_at TIMESTAMP,
+    final_cmp DOUBLE PRECISION,
+    latest_cmp DOUBLE PRECISION,
+    call_status TEXT DEFAULT 'OPEN',
+    outcome TEXT DEFAULT 'OPEN',
+    min_cmp DOUBLE PRECISION,
+    max_cmp DOUBLE PRECISION,
+    closest TEXT,
+    closest_info TEXT,
+    backed_up_at TIMESTAMP DEFAULT now()
+);
+
+
 CREATE TABLE IF NOT EXISTS call_efficiency (
     ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
     total_calls INT DEFAULT 0,

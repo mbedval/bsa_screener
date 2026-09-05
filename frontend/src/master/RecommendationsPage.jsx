@@ -19,12 +19,16 @@ export default function RecommendationsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/recommendations`)
-      if (!res.ok) throw new Error('Failed to fetch recommendations')
+      const res = await fetch('/api/recommendations')
+      if (!res.ok) {
+        setRecs([])
+        return
+      }
       const data = await res.json()
-      setRecs(data)
+      setRecs(Array.isArray(data) ? data : [])
     } catch (e) {
-      show(e.message, 'error')
+      console.warn('Failed to fetch recommendations:', e)
+      setRecs([])
     } finally {
       setLoading(false)
     }
@@ -32,7 +36,7 @@ export default function RecommendationsPage() {
 
   const del = async (id) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/recommendations/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/recommendations/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       show('Recommendation deleted', 'success')
       setConfirmDel(null)

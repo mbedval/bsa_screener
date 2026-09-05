@@ -1,0 +1,6 @@
+symbol,underlying_name,instrument_type,serial_number,is_active,entry_date
+RELIANCE,Reliance Industries Limited,STOCK,1,true,2026-09-05
+TCS,Tata Consultancy Services Limited,STOCK,2,true,2026-09-05
+WIPRO,Wipro Limited,STOCK,3,true,2026-09-05
+INFY,Infosys Limited,STOCK,4,true,2026-09-05
+HDFCBANK,HDFC Bank Limited,STOCK,5,true,2026-09-05

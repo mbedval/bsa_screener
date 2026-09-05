@@ -23,12 +23,16 @@ export default function RecommendationsModal({ ticker, onClose }) {
   const loadRecs = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/recommendations/${ticker.ticker}`)
-      if (!res.ok) throw new Error('Failed to fetch recommendations')
+      const res = await fetch(`/api/recommendations/${encodeURIComponent(ticker.ticker)}`)
+      if (!res.ok) {
+        setRecs([])
+        return
+      }
       const data = await res.json()
-      setRecs(data)
+      setRecs(Array.isArray(data) ? data : [])
     } catch (e) {
-      show(e.message, 'error')
+      console.warn('Failed to fetch recommendations:', e)
+      setRecs([])
     } finally {
       setLoading(false)
     }
@@ -54,7 +58,7 @@ export default function RecommendationsModal({ ticker, onClose }) {
         time_period: form.time_period || null,
         description: form.description || null
       }
-      const res = await fetch(`http://localhost:8000/api/recommendations`, {
+      const res = await fetch(`/api/recommendations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

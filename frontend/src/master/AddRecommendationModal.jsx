@@ -50,7 +50,7 @@ export default function AddRecommendationModal({ onClose, onSuccess }) {
         time_period: form.time_period || null,
         description: form.description || null
       }
-      const res = await fetch(`http://localhost:8000/api/recommendations`, {
+      const res = await fetch(`/api/recommendations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

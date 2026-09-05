@@ -409,7 +409,7 @@ def create_ticker(body: TickerIn, dataset: Optional[str] = None) -> dict:
                 try:
                     cur.execute(
                         """
-                        INSERT INTO fno_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
+                        INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
                         VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
                         ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
                         """,
@@ -453,7 +453,7 @@ def update_ticker(ticker: str, body: TickerUpdate, dataset: Optional[str] = None
             try:
                 cur.execute(
                     """
-                    INSERT INTO fno_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
+                    INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
                     VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
                     ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
                     """,

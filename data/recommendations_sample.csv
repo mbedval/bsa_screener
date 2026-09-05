@@ -1,0 +1,3 @@
+id,ticker,rec_date,recommender,cmp,stop_loss,target,time_period,description
+1,RELIANCE,2026-01-01,Zerodha,2450.0,2380.0,2600.0,Long Term,Strong quarterly results and retail expansion.
+2,TCS,2026-01-01,Groww,3800.0,3700.0,4050.0,Short Term,Strong margin expansion and deal pipeline.

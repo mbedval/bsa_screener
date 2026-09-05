@@ -1,0 +1,3 @@
+email,first_name,last_name,watchlist_id,is_subscribed
+admin@example.com,Admin,User,1,true
+trader@example.com,Pro,Trader,1,true

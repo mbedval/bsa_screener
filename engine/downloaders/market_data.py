@@ -315,18 +315,13 @@ def download_all_tickers(max_workers: int = 8, progress_callback=None, resume: b
     if not all_tickers:
         logger.warning("No tickers found in ticker_master!")
         return
-
-    completed_set = get_completed_tickers("spot_download") if resume else set()
+    completed_set = get_completed_tickers("spot_download", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
     logger.info(f"Starting spot download pipeline. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
 
-    # Report pre-completed items to progress callback
-    if progress_callback and completed_set:
-        progress_callback(None, True, advance=len(completed_set))
-
     if not pending_tickers:
-        logger.info("All spot tickers already downloaded! Jumps directly to complete.")
+        logger.info("All spot tickers already downloaded!")
         return
 
     success_count = len(completed_set)

@@ -66,7 +66,7 @@ The engine CLI runs all background pipeline jobs and supports batch downloading,
 * **Download historical data & fundamentals for all master tickers**:
   Strictly downloads data only, without running any analysis.
   ```bash
-  .venv/bin/python3 -m engine.cli --mode download-all
+  .venv/bin/python3 -m engine.cli --mode download-spot
   ```
 * **Download F&O derivatives option chains for F&O tickers and indices**:
   ```bash

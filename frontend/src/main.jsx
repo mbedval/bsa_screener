@@ -33,7 +33,11 @@ const apps = {
 }
 
 
-const cleanTicker = val => typeof val === 'string' ? val.replace(/\.(NS|BO)$/i, '') : val
+const cleanTicker = val => {
+  if (!val) return ''
+  const str = typeof val === 'object' ? (val.ticker || val.symbol || '') : String(val)
+  return str.replace(/\.(NS|BO)$/i, '')
+}
 
 const maskHost = (hostStr) => {
   if (!hostStr) return 'jmbx'
@@ -434,6 +438,9 @@ function App() {
                 <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
                   <Layers size={14} /> Indices Pattern Viewer
                 </button>
+                <button className={`nav-item ${active === 'operatorfootprint' ? 'selected' : ''}`} onClick={() => setActive('operatorfootprint')}>
+                  <Activity size={14} /> Operator Footprint
+                </button>
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
                   <Activity size={14} /> Period Comparison
                 </button>
@@ -448,7 +455,7 @@ function App() {
             if (grouped['Calls']) orderedGroups.push('Calls')
             if (grouped['Derivative']) orderedGroups.push('Derivative')
             Object.keys(grouped).forEach(g => {
-              if (g !== 'Raw data' && g !== 'Calls' && g !== 'Derivative') {
+              if (g !== 'Master Data' && g !== 'Research Board' && g !== 'Raw data' && g !== 'Calls' && g !== 'Derivative') {
                 orderedGroups.push(g)
               }
             })
@@ -467,6 +474,8 @@ function App() {
                       <div className="nav-section-items">
                         <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
                         <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker Master</button>
+                        <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> FNO Stock Master</button>
+                        <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> FNO Index Master</button>
                         <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>
                         <button className={`nav-item ${active === 'master:recommendations' ? 'selected' : ''}`} onClick={() => setActive('master:recommendations')}><Star /> Recommendations</button>
                         <button className={`nav-item ${active === 'master:users' ? 'selected' : ''}`} onClick={() => setActive('master:users')}><Users /> Users</button>
@@ -782,15 +791,27 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
     loadChain(initialTicker || defaultTicker)
   }, [initialTicker, loadChain, defaultTicker])
 
-  const QUICK_TICKERS = isUS
-    ? ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'JPM', 'SPY', 'QQQ']
-    : ['NIFTY', 'BANKNIFTY', 'AUBANK', 'ABB', 'HDFCBANK', 'RELIANCE', 'INFY', 'TATAMOTORS', 'BEL', 'ICICIBANK', 'TCS', 'SBIN']
+  const [fnoStockList, setFnoStockList] = useState([])
+  const [fnoIndexList, setFnoIndexList] = useState([])
+  const [recentSearches, setRecentSearches] = useState([])
+
+  useEffect(() => {
+    api.get(`${apiBase}/fno-underlyings`)
+      .then(res => {
+        if (res) {
+          setFnoStockList(res.stocks || [])
+          setFnoIndexList(res.indices || [])
+          setRecentSearches(res.recent_searches || [])
+        }
+      })
+      .catch(() => {})
+  }, [apiBase])
 
   return (
     <div className="option-chain-page">
       {/* Header Panel with Search & Quick Shortcuts */}
       <div className="panel" style={{ padding: '16px 20px', marginBottom: 16, background: 'linear-gradient(135deg, rgba(26,32,44,0.95), rgba(15,23,42,0.98))', border: '1px solid rgba(126,200,240,0.25)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, marginBottom: 14 }}>
           <div>
             <span style={{ background: 'rgba(126,200,240,0.15)', color: '#7ec8f0', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>
               DERIVATIVE ANALYSIS MODULE
@@ -800,15 +821,57 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
             </h2>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="search" style={{ minWidth: 220 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Index F&O Dropdown */}
+            <select
+              disabled={loading}
+              className="select-input"
+              value={fnoIndexList.some(i => i.symbol === activeTicker) ? activeTicker : ''}
+              onChange={e => {
+                if (e.target.value) {
+                  setTickerInput(e.target.value)
+                  loadChain(e.target.value)
+                }
+              }}
+              style={{ width: 170, padding: '8px 10px', fontSize: 13, borderRadius: 6, background: '#0f172a', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.4)', fontWeight: 600 }}
+            >
+              <option value="">📈 Select Index F&O...</option>
+              {fnoIndexList.map(item => (
+                <option key={item.symbol} value={item.symbol}>
+                  {item.symbol} ({item.name})
+                </option>
+              ))}
+            </select>
+
+            {/* Stock F&O Dropdown */}
+            <select
+              disabled={loading}
+              className="select-input"
+              value={fnoStockList.some(s => s.symbol === activeTicker) ? activeTicker : ''}
+              onChange={e => {
+                if (e.target.value) {
+                  setTickerInput(e.target.value)
+                  loadChain(e.target.value)
+                }
+              }}
+              style={{ width: 190, padding: '8px 10px', fontSize: 13, borderRadius: 6, background: '#0f172a', color: '#66e4ca', border: '1px solid rgba(102,228,202,0.4)', fontWeight: 600 }}
+            >
+              <option value="">🏢 Select Stock F&O...</option>
+              {fnoStockList.map(item => (
+                <option key={item.symbol} value={item.symbol}>
+                  {item.symbol} - {item.name}
+                </option>
+              ))}
+            </select>
+
+            <div className="search" style={{ minWidth: 150 }}>
               <Search size={16} />
               <input
                 value={tickerInput}
                 disabled={loading}
                 onChange={e => setTickerInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !loading && loadChain(tickerInput)}
-                placeholder="Enter ticker (e.g. HDFCBANK)"
+                placeholder="Or type ticker..."
               />
             </div>
             <button
@@ -832,19 +895,25 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
           </div>
         </div>
 
-        {/* Quick Ticker Shortcuts */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>Quick Tickers:</span>
-          {QUICK_TICKERS.map(t => (
-            <button
-              key={t}
-              className={`filter-btn ${activeTicker === t ? 'active' : ''}`}
-              onClick={() => { setTickerInput(t); loadChain(t); }}
-              style={{ fontSize: 12, padding: '3px 10px' }}
-            >
-              {t}
-            </button>
-          ))}
+        {/* Quick Ticker Shortcuts (Recent Searches from last 8 hrs) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            🕒 Recent 3 Search:
+          </span>
+          {recentSearches.length > 0 ? (
+            recentSearches.slice(0, 3).map(t => (
+              <button
+                key={t}
+                className={`filter-btn ${activeTicker === t ? 'active' : ''}`}
+                onClick={() => { setTickerInput(t); loadChain(t); }}
+                style={{ fontSize: 12, padding: '3px 10px' }}
+              >
+                {t}
+              </button>
+            ))
+          ) : (
+            <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>None in last 8 hours</span>
+          )}
         </div>
 
         {/* Dynamic Strategy Summary Header */}
@@ -1154,13 +1223,29 @@ function BestOptionStrategyPage({ apiBase, dataset }) {
     ? ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'JPM', 'SPY', 'QQQ']
     : ['HDFCBANK', 'ABB', 'AUBANK', 'NIFTY', 'BANKNIFTY', 'RELIANCE', 'INFY', 'TATAMOTORS', 'SBIN', 'ICICIBANK', 'BEL']
 
+  const [fnoStockList, setFnoStockList] = useState([])
+  const [fnoIndexList, setFnoIndexList] = useState([])
+  const [recentSearches, setRecentSearches] = useState([])
+
+  useEffect(() => {
+    api.get(`${apiBase}/fno-underlyings`)
+      .then(res => {
+        if (res) {
+          setFnoStockList(res.stocks || [])
+          setFnoIndexList(res.indices || [])
+          setRecentSearches(res.recent_searches || [])
+        }
+      })
+      .catch(() => {})
+  }, [apiBase])
+
   const selectedStrat = data?.strategies?.find(s => s.id === selectedStratId) || data?.strategies?.[0]
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="panel" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.95))', border: '1px solid rgba(126,200,240,0.25)', borderRadius: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
           <div>
             <span className="badge primary" style={{ fontSize: 11, letterSpacing: 1 }}>QUANTITATIVE DERIVATIVE ENGINE</span>
             <h1 style={{ fontSize: 22, margin: '6px 0 0 0', color: '#fff', fontWeight: 700 }}>
@@ -1171,47 +1256,97 @@ function BestOptionStrategyPage({ apiBase, dataset }) {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              type="text"
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Index F&O Dropdown */}
+            <select
               disabled={loading}
-              className="search-input"
-              placeholder="Enter ticker (e.g. HDFCBANK, ABB)..."
-              value={tickerInput}
-              onChange={e => setTickerInput(e.target.value)}
-              style={{ width: 220, padding: '8px 12px', fontSize: 13, borderRadius: 6 }}
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="filter-btn active"
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                borderRadius: 6,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.6 : 1
+              className="select-input"
+              value={fnoIndexList.some(i => i.symbol === activeTicker) ? activeTicker : ''}
+              onChange={e => {
+                if (e.target.value) {
+                  setTickerInput(e.target.value)
+                  loadStrategy(e.target.value)
+                }
               }}
+              style={{ width: 170, padding: '8px 10px', fontSize: 13, borderRadius: 6, background: '#0f172a', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.4)', fontWeight: 600 }}
             >
-              {loading ? '⚡ Evaluating...' : 'Evaluate Strategies'}
-            </button>
-          </form>
+              <option value="">📈 Select Index F&O...</option>
+              {fnoIndexList.map(item => (
+                <option key={item.symbol} value={item.symbol}>
+                  {item.symbol} ({item.name})
+                </option>
+              ))}
+            </select>
+
+            {/* Stock F&O Dropdown */}
+            <select
+              disabled={loading}
+              className="select-input"
+              value={fnoStockList.some(s => s.symbol === activeTicker) ? activeTicker : ''}
+              onChange={e => {
+                if (e.target.value) {
+                  setTickerInput(e.target.value)
+                  loadStrategy(e.target.value)
+                }
+              }}
+              style={{ width: 190, padding: '8px 10px', fontSize: 13, borderRadius: 6, background: '#0f172a', color: '#66e4ca', border: '1px solid rgba(102,228,202,0.4)', fontWeight: 600 }}
+            >
+              <option value="">🏢 Select Stock F&O...</option>
+              {fnoStockList.map(item => (
+                <option key={item.symbol} value={item.symbol}>
+                  {item.symbol} - {item.name}
+                </option>
+              ))}
+            </select>
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                disabled={loading}
+                className="search-input"
+                placeholder="Or type ticker..."
+                value={tickerInput}
+                onChange={e => setTickerInput(e.target.value)}
+                style={{ width: 140, padding: '8px 12px', fontSize: 13, borderRadius: 6 }}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="filter-btn active"
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  borderRadius: 6,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.6 : 1
+                }}
+              >
+                {loading ? '⚡ Evaluating...' : 'Evaluate'}
+              </button>
+            </form>
+          </div>
         </div>
 
-        {/* Quick Ticker Selection Buttons */}
+        {/* Quick Ticker Selection Buttons (Recent Searches from last 8 hrs) */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>Quick Analyze:</span>
-          {quickTickers.map(t => (
-            <button
-              key={t}
-              disabled={loading}
-              className={`filter-btn ${activeTicker === t ? 'active' : ''}`}
-              onClick={() => { if (!loading) { setTickerInput(t); loadStrategy(t); } }}
-              style={{ fontSize: 12, padding: '3px 10px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
-            >
-              {t}
-            </button>
-          ))}
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            🕒 Recent 3 Search:
+          </span>
+          {recentSearches.length > 0 ? (
+            recentSearches.slice(0, 3).map(t => (
+              <button
+                key={t}
+                disabled={loading}
+                className={`filter-btn ${activeTicker === t ? 'active' : ''}`}
+                onClick={() => { if (!loading) { setTickerInput(t); loadStrategy(t); } }}
+                style={{ fontSize: 12, padding: '3px 10px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
+              >
+                {t}
+              </button>
+            ))
+          ) : (
+            <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>None in last 8 hours</span>
+          )}
         </div>
 
         {/* Market Environment Summary */}
@@ -2020,6 +2155,7 @@ function ReportDetailModal({ ticker, onClose, dataset }) {
   )
 }
 
+
 // ─── Generic table view ───────────────────────────────────────────────────────
 function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker, dataset, searchHistory, addSearchHistory }) {
   const [sort, setSort] = useState({ key: '', asc: true })
@@ -2041,7 +2177,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     // Map id, run_time, or uniqueid to "record_id"
     cols = cols.map(c => (c === 'id' || c === 'run_time' || c.toLowerCase() === 'uniqueid') ? 'record_id' : c)
 
-    if (activeTable === 'fno_master') {
+    if (activeTable === 'fno_master' || activeTable === 'fno_stock_master' || activeTable === 'fno_index_master') {
       cols = cols.filter(c => c !== 'record_id' && c !== 'id' && c !== 'created_at')
     }
 
@@ -2485,7 +2621,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
             <tbody>
               {pagedRows.map((row, index) => {
                 const fnoSymbol = row.symbol || row.ticker
-                const isFnoMaster = activeTable === 'fno_master'
+                const isFnoMaster = activeTable === 'fno_master' || activeTable === 'fno_stock_master' || activeTable === 'fno_index_master'
                 const rowNo = (pageSize === 0 ? 0 : (page - 1) * pageSize) + index + 1
 
                 return (

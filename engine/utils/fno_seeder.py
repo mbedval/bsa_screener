@@ -4,25 +4,32 @@ import logging
 from pathlib import Path
 from engine.database.connection import get_db_connection
 
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 logger = logging.getLogger("fno_seeder")
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-FNO_CSV_PATH = ROOT_DIR / "data" / "fno_tickers.csv"
+def get_fno_csv_paths() -> list[Path]:
+    """Check ticker_master size to choose sample vs production fno CSVs."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM ticker_master")
+                count = cur.fetchone()[0]
+                if count <= 10:
+                    paths = [ROOT_DIR / "data" / "fno_stock_sample.csv", ROOT_DIR / "data" / "fno_index_sample.csv"]
+                    return [p for p in paths if p.exists()]
+    except Exception:
+        pass
+    paths = [ROOT_DIR / "data" / "fno_stock_production.csv", ROOT_DIR / "data" / "fno_index_production.csv"]
+    existing = [p for p in paths if p.exists()]
+    if existing:
+        return existing
+    legacy = ROOT_DIR / "data" / "fno_tickers.csv"
+    return [legacy] if legacy.exists() else []
 
 def seed_fno_tickers() -> int:
-    """Seed fno_master from data/fno_tickers.csv and update is_fno flag in ticker_master."""
-    symbols_data = []
-
-    if FNO_CSV_PATH.exists():
-        try:
-            with open(FNO_CSV_PATH, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                symbols_data = list(reader)
-            logger.info(f"Loaded {len(symbols_data)} F&O symbols from {FNO_CSV_PATH}")
-        except Exception as e:
-            logger.error(f"Error reading CSV file: {e}")
-
-    if not symbols_data:
+    """Seed fno_stock_master and fno_index_master from F&O CSVs and update is_fno flag in ticker_master."""
+    csv_paths = get_fno_csv_paths()
+    if not csv_paths:
         logger.warning("No F&O symbol data available to seed.")
         return 0
 
@@ -31,34 +38,41 @@ def seed_fno_tickers() -> int:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                for row in symbols_data:
-                    symbol = row.get("SYMBOL", "").strip().upper()
-                    name = row.get("UNDERLYING_NAME", symbol).strip()
-                    itype = row.get("INSTRUMENT_TYPE", "STOCK").strip().upper()
-                    if not symbol:
-                        continue
+                for path in csv_paths:
+                    with open(path, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        rows = list(reader)
+                    for row in rows:
+                        symbol = row.get("symbol") or row.get("SYMBOL") or ""
+                        symbol = symbol.strip().upper()
+                        name = row.get("underlying_name") or row.get("UNDERLYING_NAME") or symbol
+                        name = name.strip()
+                        itype = row.get("instrument_type") or row.get("INSTRUMENT_TYPE") or "STOCK"
+                        itype = itype.strip().upper()
+                        if not symbol:
+                            continue
 
-                    # 1. Insert into fno_master
-                    cur.execute("""
-                        INSERT INTO fno_master (symbol, underlying_name, instrument_type, is_active)
-                        VALUES (%s, %s, %s, TRUE)
-                        ON CONFLICT (symbol) DO UPDATE SET
-                            underlying_name = EXCLUDED.underlying_name,
-                            instrument_type = EXCLUDED.instrument_type,
-                            is_active = TRUE
-                    """, (symbol, name, itype))
-                    count += 1
+                        target_table = "fno_index_master" if itype == "INDEX" else "fno_stock_master"
+                        cur.execute(f"""
+                            INSERT INTO {target_table} (symbol, underlying_name, instrument_type, is_active)
+                            VALUES (%s, %s, %s, TRUE)
+                            ON CONFLICT (symbol) DO UPDATE SET
+                                underlying_name = EXCLUDED.underlying_name,
+                                instrument_type = EXCLUDED.instrument_type,
+                                is_active = TRUE
+                        """, (symbol, name, itype))
+                        count += 1
 
-                    # 2. Update is_fno in ticker_master (or insert missing FNO stock into ticker_master)
-                    cur.execute("""
-                        INSERT INTO ticker_master (ticker, company_name, is_fno, exchange)
-                        VALUES (%s, %s, TRUE, 'NSE')
-                        ON CONFLICT (ticker) DO UPDATE SET is_fno = TRUE
-                    """, (symbol, name))
-                    updated_count += 1
+                        if target_table == "fno_stock_master":
+                            cur.execute("""
+                                UPDATE ticker_master
+                                SET is_fno = TRUE
+                                WHERE ticker = %s
+                            """, (symbol,))
+                            updated_count += 1
                 conn.commit()
 
-        logger.info(f"F&O Seeding complete: {count} symbols loaded into fno_master, {updated_count} ticker_master records marked as is_fno=TRUE.")
+        logger.info(f"F&O Seeding complete: {count} symbols loaded into fno_stock_master / fno_index_master.")
         return count
     except Exception as e:
         logger.error(f"Error seeding F&O tickers: {e}")
