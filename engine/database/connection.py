@@ -13,7 +13,14 @@ load_dotenv(env_path)
 
 def get_postgres_url() -> str:
     """Resolve the PostgreSQL connection URL from environment."""
-    return os.environ.get("POSTGRES_DSN") or os.environ.get("DATABASE_URL") or "postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db"
+    if os.environ.get("POSTGRES_HOST"):
+        host = os.environ.get("POSTGRES_HOST")
+        port = os.environ.get("POSTGRES_PORT", "5432")
+        user = os.environ.get("POSTGRES_USER", "jmbxdbuser")
+        pwd = os.environ.get("POSTGRES_PASSWORD", "jmbxdbpassword")
+        db = os.environ.get("POSTGRES_DB", "bsa_db")
+        return f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
+    return os.environ.get("POSTGRES_DSN") or os.environ.get("DATABASE_URL") or "postgresql://jmbxdbuser:jmbxdbpassword@192.168.1.14:5432/bsa_db"
 
 _pool_lock = threading.Lock()
 _psycopg2_pool = None
@@ -48,7 +55,17 @@ def get_db_connection() -> Generator:
     conn = pool.getconn()
     try:
         yield conn
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise e
     finally:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         pool.putconn(conn)
 
 @contextlib.contextmanager

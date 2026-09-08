@@ -7,7 +7,8 @@ import {
   Download, Trash2, TrendingUp, User, Users, X, Star
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage } from './visualizer/index.jsx'
+
 import './styles.css'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -256,7 +257,8 @@ function App() {
   const [sectorScanTable, setSectorScanTable] = useState('operatorfootprint')
   const [sectorData, setSectorData] = useState(null)
   const [selectedFnoTicker, setSelectedFnoTicker] = useState('NIFTY')
-  const [expandedSection, setExpandedSection] = useState(null)
+  const [selectedProfileTicker, setSelectedProfileTicker] = useState('')
+  const [expandedSection, setExpandedSection] = useState('Research Board')
 
   const [searchHistory, setSearchHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('bsa_search_history') || '[]') } catch (_) { return [] }
@@ -286,7 +288,14 @@ function App() {
   useEffect(() => {
     const handlePopState = () => setPath(window.location.pathname.replace(/^\/|\/$/g, ''))
     const handleNavTable = (e) => {
-      if (e.detail) setActive(e.detail)
+      if (e.detail) {
+        if (typeof e.detail === 'object' && e.detail.active) {
+          if (e.detail.ticker) setSelectedProfileTicker(cleanTicker(e.detail.ticker).toUpperCase())
+          setActive(e.detail.active)
+        } else if (typeof e.detail === 'string') {
+          setActive(e.detail)
+        }
+      }
     }
     window.addEventListener('popstate', handlePopState)
     window.addEventListener('navigate_table', handleNavTable)
@@ -308,6 +317,14 @@ function App() {
     setSelectedFnoTicker(s)
     setActive('option_chain_analyzer')
   }
+
+  const handleProfileTickerSelect = (symbol) => {
+    if (!symbol) return
+    const s = cleanTicker(symbol).toUpperCase()
+    setSelectedProfileTicker(s)
+    setActive('research:ticker_profile')
+  }
+
 
   const load = async (tableName = active, search = query) => {
     setLoading(true)
@@ -356,8 +373,8 @@ function App() {
 
   useEffect(() => {
     if (path === '' || path === '/') return
-    const customPages = ['dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy']
-    if (!customPages.includes(active) && !MASTER_PAGES.includes(active) && !active.startsWith('sector:')) {
+    const customPages = ['dashboard', 'midcap_dashboard', 'smallcap_dashboard', 'largecap_dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy', 'charts_visualizations']
+    if (!customPages.includes(active) && !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:')) {
       load(active, '')
     }
     if (active.startsWith('sector:')) {
@@ -366,6 +383,7 @@ function App() {
       loadSectorData(sName, sectorScanTable)
     }
   }, [active, path])
+
 
   const grouped = useMemo(() =>
     catalog.reduce((acc, item) => ({ ...acc, [item.group]: [...(acc[item.group] || []), item] }), {}),
@@ -379,15 +397,12 @@ function App() {
       setExpandedSection('Master Data')
     } else if (active.startsWith('sector:')) {
       setExpandedSection('By Sector')
+    } else if (active === 'research:search_detail') {
+      setExpandedSection('Calls')
     } else {
-      const match = catalog.find(c => c.name === active)
-      if (match) {
-        setExpandedSection(match.group)
-      } else if (catalog.length > 0 && !expandedSection) {
-        setExpandedSection(grouped['Raw data'] ? 'Raw data' : (grouped['Calls'] ? 'Calls' : 'Master Data'))
-      }
+      setExpandedSection('Research Board')
     }
-  }, [active, catalog, grouped, path])
+  }, [active, path])
 
   const toggleSection = (groupName) => {
     setExpandedSection(prev => prev === groupName ? null : groupName)
@@ -427,8 +442,18 @@ function App() {
             {expandedSection === 'Research Board' && (
               <div className="nav-section-items">
                 <button className={`nav-item ${active === 'dashboard' ? 'selected' : ''}`} onClick={() => setActive('dashboard')}>
-                  <LayoutDashboard size={14} /> Top 15 Recommendation
+                  <LayoutDashboard size={14} /> Top 15 All Full List
                 </button>
+                <button className={`nav-item ${active === 'midcap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('midcap_dashboard')}>
+                  <TrendingUp size={14} /> Top 15 Mid-Cap Stocks
+                </button>
+                <button className={`nav-item ${active === 'smallcap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('smallcap_dashboard')}>
+                  <TrendingUp size={14} /> Top 15 Small-Cap Stocks
+                </button>
+                <button className={`nav-item ${active === 'largecap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('largecap_dashboard')}>
+                  <TrendingUp size={14} /> Top 15 Large-Cap Stocks
+                </button>
+
                 <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
                   <TrendingUp size={14} /> Charts & Visualizer
                 </button>
@@ -438,12 +463,10 @@ function App() {
                 <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
                   <Layers size={14} /> Indices Pattern Viewer
                 </button>
-                <button className={`nav-item ${active === 'operatorfootprint' ? 'selected' : ''}`} onClick={() => setActive('operatorfootprint')}>
-                  <Activity size={14} /> Operator Footprint
-                </button>
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
                   <Activity size={14} /> Period Comparison
                 </button>
+
               </div>
             )}
           </section>
@@ -499,11 +522,17 @@ function App() {
                   </div>
                   {isExpanded && (
                     <div className="nav-section-items">
-                      {items.map(item => (
+                      {items.filter(item => item.name !== 'operatorfootprint').map(item => (
                         <button key={item.name} className={`nav-item ${active === item.name ? 'selected' : ''}`} onClick={() => { setQuery(''); setActive(item.name); }}>
                           {item.label}
                         </button>
                       ))}
+                      {(group === 'Calls' || group === 'CALLS') && (
+                        <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => setActive('research:search_detail')}>
+                          <Search size={14} /> Search Detail
+                        </button>
+                      )}
+
                     </div>
                   )}
                 </section>
@@ -529,24 +558,31 @@ function App() {
       </aside>
 
       <main>
-        {!MASTER_PAGES.includes(active) && !active.startsWith('research:') && (
+        {!MASTER_PAGES.includes(active) && !active.startsWith('research:') && active !== 'charts_visualizations' && (
+
           <header>
             <div>
               <p className="eyebrow">{appInfo.eyebrow}</p>
               <h1>
                 {active === 'dashboard' ? `${appInfo.title} overview`
+                  : active === 'midcap_dashboard' ? 'Top 15 Mid-Cap Stocks'
+                  : active === 'smallcap_dashboard' ? 'Top 15 Small-Cap Stocks'
+                  : active === 'largecap_dashboard' ? 'Top 15 Large-Cap Stocks'
                   : active.startsWith('sector:') ? `Sector: ${activeSector}`
                   : current?.label || active}
               </h1>
               <p className="subhead">
                 {active === 'dashboard' ? appInfo.description
+                  : active === 'midcap_dashboard' ? 'Algorithmically filtered mid-cap momentum plays — growth-oriented setups from the Nifty Midcap universe.'
+                  : active === 'smallcap_dashboard' ? 'High-growth small-cap opportunities screened from the Nifty Smallcap 100 — aggressive setups with asymmetric risk-reward.'
+                  : active === 'largecap_dashboard' ? 'Institutional-grade large-cap setups screened from the Nifty 50 / Nifty 100 — stable, high-conviction swing trade opportunities.'
                   : active.startsWith('sector:') ? `Intelligence data filtered to ${activeSector} tickers`
                   : `${data?.total ?? '—'} records · Latest rows first`}
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <ThemeSelector currentTheme={theme} onSelectTheme={setTheme} />
-              <button className="refresh" onClick={() => active === 'dashboard' ? refreshDashboard() : load()}>
+              <button className="refresh" onClick={() => (['dashboard','midcap_dashboard','smallcap_dashboard','largecap_dashboard'].includes(active)) ? refreshDashboard() : load()}>
                 <RefreshCw size={16} /> Refresh
               </button>
             </div>
@@ -555,34 +591,46 @@ function App() {
         )}
 
 
-        {active === 'dashboard' && <Dashboard apiBase={apiBase} setActive={setActive} />}
-        {active === 'charts_visualizations' && <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />}
-        {active.startsWith('master:') && (
+        {active === 'dashboard' ? (
+          <Dashboard apiBase={apiBase} setActive={setActive} />
+        ) : active === 'midcap_dashboard' ? (
+          <MidCapDashboard apiBase={apiBase} setActive={setActive} />
+        ) : active === 'smallcap_dashboard' ? (
+          <SmallCapDashboard apiBase={apiBase} setActive={setActive} />
+        ) : active === 'largecap_dashboard' ? (
+          <LargeCapDashboard apiBase={apiBase} setActive={setActive} />
+        ) : active === 'charts_visualizations' ? (
+          <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />
+        ) : active.startsWith('master:') ? (
           <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} dataset={dataset} />
-        )}
-        {active.startsWith('sector:') && (
+        ) : active.startsWith('sector:') ? (
           <SectorIntelligencePage
             sectorName={activeSector}
             data={sectorData}
             scanTable={sectorScanTable}
             onScanTableChange={handleSectorScanChange}
           />
-        )}
-        {active === 'fno_active' ? (
+        ) : active === 'fno_active' ? (
           <FnoActivePage data={data} loading={loading} error={error} />
         ) : active === 'option_chain_analyzer' ? (
           <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} dataset={dataset} />
         ) : active === 'best_option_strategy' ? (
           <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:search_detail' ? (
+          <SearchDetailPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:ticker_profile' ? (
+          <TickerResearchProfilePage apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker} onNavigate={(tab) => setActive(tab)} />
         ) : active === 'research:patterns' ? (
           <PatternViewerPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:indices_patterns' ? (
           <IndicesPatternViewerPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:compare' ? (
           <ResearchBoardPage apiBase={apiBase} dataset={dataset} />
-        ) : !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:') && active !== 'dashboard' && active !== 'charts_visualizations' && (
-          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
+        ) : (
+          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleProfileTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}
+
+
       </main>
     </div>
   )
@@ -1807,7 +1855,7 @@ function Dashboard({ apiBase, setActive }) {
       <header className="page-header" style={{ marginBottom: 20 }}>
         <div>
           <span className="eyebrow" style={{ color: '#52c41a' }}>HIGH-CONVICTION OPPORTUNITIES</span>
-          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Technical-Fundamental Trades</h1>
+          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 All Full List</h1>
           <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
             Algorithmically screened high-probability setups across Nifty momentum, institutional accumulation, and technical-fundamental confluence.
           </p>
@@ -1913,6 +1961,394 @@ function Dashboard({ apiBase, setActive }) {
                       {t.target_price2 && <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>(T2: ₹{t.target_price2.toLocaleString('en-IN')})</span>}
                     </div>
                   </td>
+                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy">{t.setup_signal}</span></td>
+                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
+    </div>
+  )
+}
+
+// ─── MidCap Dashboard ─────────────────────────────────────────────────────────
+function MidCapDashboard({ apiBase, setActive }) {
+  const [trades, setTrades] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [sortKey, setSortKey] = useState('rank')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    api.get(`${apiBase}/top-midcap-trades`)
+      .then(d => {
+        if (Array.isArray(d)) {
+          setTrades(d)
+        } else {
+          setTrades([])
+        }
+        setLoading(false)
+      })
+      .catch(err => {
+        setError(err.message || 'Failed to load mid-cap trades.')
+        setLoading(false)
+      })
+  }, [apiBase])
+
+  const sortedTrades = useMemo(() => {
+    if (!trades.length) return []
+    const list = [...trades]
+    list.sort((a, b) => {
+      let valA = a[sortKey] ?? ''
+      let valB = b[sortKey] ?? ''
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return (valA - valB) * (sortAsc ? 1 : -1)
+      }
+      return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
+    })
+    return list
+  }, [trades, sortKey, sortAsc])
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
+  }
+
+  return (
+    <div className="top-trades-dashboard">
+      <header className="page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <span className="eyebrow" style={{ color: '#f59e0b' }}>MID-CAP OPPORTUNITIES</span>
+          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Mid-Cap Stocks</h1>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
+            Growth-oriented mid-cap momentum plays screened from the Nifty Midcap universe — high-probability setups with institutional accumulation and technical-fundamental confluence.
+          </p>
+        </div>
+      </header>
+
+      <section className="panel data-panel">
+        <div className="table-wrap">
+          <table className="top-trades-table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
+                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
+                <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
+                <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
+                <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
+                <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
+                <th>Trade Insight &amp; Technical Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={10}><div className="state">Scanning mid-cap universe &amp; generating top 15 opportunities…</div></td></tr>}
+              {error && <tr><td colSpan={10}><div className="state error">{error}</div></td></tr>}
+              {!loading && !error && sortedTrades.map(t => (
+                <tr key={t.ticker} className="data-row">
+                  <td style={{ fontWeight: 700, color: '#fbbf24' }}>#{t.rank}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div>
+                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDetailTicker(t.ticker)
+                        }}
+                        title={`View Interactive Detail Report for ${t.ticker}`}
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.12)',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          color: '#38bdf8',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          transition: 'all .15s ease',
+                        }}
+                      >
+                        <FileText size={11} />
+                        <span>Detail</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setVisualizerTicker(t.ticker)
+                        }}
+                        title={`View Interactive Candlestick Chart for ${t.ticker}`}
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.12)',
+                          border: '1px solid rgba(245, 158, 11, 0.3)',
+                          color: '#fbbf24',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          transition: 'all .15s ease',
+                        }}
+                      >
+                        <TrendingUp size={11} />
+                        <span>Chart</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td>
+                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                      {t.best_buy_zone}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                      {t.stop_loss}
+                    </span>
+                  </td>
+                  <td>
+                    <div>
+                      <b style={{ color: '#52c41a' }}>{t.target_price}</b>
+                    </div>
+                  </td>
+                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy">{t.setup_signal}</span></td>
+                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
+    </div>
+  )
+}
+
+// ─── SmallCap Dashboard ───────────────────────────────────────────────────────
+function SmallCapDashboard({ apiBase, setActive }) {
+  const [trades, setTrades] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [sortKey, setSortKey] = useState('rank')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    api.get(`${apiBase}/top-smallcap-trades`)
+      .then(d => { setTrades(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(err => { setError(err.message || 'Failed to load small-cap trades.'); setLoading(false) })
+  }, [apiBase])
+
+  const sortedTrades = useMemo(() => {
+    if (!trades.length) return []
+    const list = [...trades]
+    list.sort((a, b) => {
+      let valA = a[sortKey] ?? '', valB = b[sortKey] ?? ''
+      if (typeof valA === 'number' && typeof valB === 'number') return (valA - valB) * (sortAsc ? 1 : -1)
+      return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
+    })
+    return list
+  }, [trades, sortKey, sortAsc])
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(true) }
+  }
+
+  return (
+    <div className="top-trades-dashboard">
+      <header className="page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <span className="eyebrow" style={{ color: '#a78bfa' }}>SMALL-CAP OPPORTUNITIES</span>
+          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Small-Cap Stocks</h1>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
+            High-growth small-cap momentum plays screened from the Nifty Smallcap 100 — asymmetric risk-reward setups with emerging institutional interest.
+          </p>
+        </div>
+      </header>
+      <section className="panel data-panel">
+        <div className="table-wrap">
+          <table className="top-trades-table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
+                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
+                <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
+                <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
+                <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
+                <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
+                <th>Trade Insight &amp; Technical Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={10}><div className="state">Scanning small-cap universe &amp; generating top 15 opportunities…</div></td></tr>}
+              {error && <tr><td colSpan={10}><div className="state error">{error}</div></td></tr>}
+              {!loading && !error && sortedTrades.map(t => (
+                <tr key={t.ticker} className="data-row">
+                  <td style={{ fontWeight: 700, color: '#a78bfa' }}>#{t.rank}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div>
+                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                      </div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
+                        title={`View Interactive Detail Report for ${t.ticker}`}
+                        style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <FileText size={11} /><span>Detail</span>
+                      </button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setVisualizerTicker(t.ticker) }}
+                        title={`View Interactive Candlestick Chart for ${t.ticker}`}
+                        style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <TrendingUp size={11} /><span>Chart</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.best_buy_zone}</span></td>
+                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.stop_loss}</span></td>
+                  <td><b style={{ color: '#52c41a' }}>{t.target_price}</b></td>
+                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy">{t.setup_signal}</span></td>
+                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
+    </div>
+  )
+}
+
+// ─── LargeCap Dashboard ───────────────────────────────────────────────────────
+function LargeCapDashboard({ apiBase, setActive }) {
+  const [trades, setTrades] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [sortKey, setSortKey] = useState('rank')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    api.get(`${apiBase}/top-largecap-trades`)
+      .then(d => { setTrades(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(err => { setError(err.message || 'Failed to load large-cap trades.'); setLoading(false) })
+  }, [apiBase])
+
+  const sortedTrades = useMemo(() => {
+    if (!trades.length) return []
+    const list = [...trades]
+    list.sort((a, b) => {
+      let valA = a[sortKey] ?? '', valB = b[sortKey] ?? ''
+      if (typeof valA === 'number' && typeof valB === 'number') return (valA - valB) * (sortAsc ? 1 : -1)
+      return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
+    })
+    return list
+  }, [trades, sortKey, sortAsc])
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(true) }
+  }
+
+  return (
+    <div className="top-trades-dashboard">
+      <header className="page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <span className="eyebrow" style={{ color: '#22d3ee' }}>LARGE-CAP OPPORTUNITIES</span>
+          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Large-Cap Stocks</h1>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
+            Institutional-grade large-cap swing setups screened from the Nifty 50 / Nifty 100 — high-conviction opportunities with deep liquidity and fundamental backing.
+          </p>
+        </div>
+      </header>
+      <section className="panel data-panel">
+        <div className="table-wrap">
+          <table className="top-trades-table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
+                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
+                <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
+                <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
+                <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
+                <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
+                <th>Trade Insight &amp; Technical Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={10}><div className="state">Scanning large-cap universe &amp; generating top 15 opportunities…</div></td></tr>}
+              {error && <tr><td colSpan={10}><div className="state error">{error}</div></td></tr>}
+              {!loading && !error && sortedTrades.map(t => (
+                <tr key={t.ticker} className="data-row">
+                  <td style={{ fontWeight: 700, color: '#22d3ee' }}>#{t.rank}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div>
+                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                      </div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
+                        title={`View Interactive Detail Report for ${t.ticker}`}
+                        style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <FileText size={11} /><span>Detail</span>
+                      </button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setVisualizerTicker(t.ticker) }}
+                        title={`View Interactive Candlestick Chart for ${t.ticker}`}
+                        style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: '#22d3ee', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <TrendingUp size={11} /><span>Chart</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.best_buy_zone}</span></td>
+                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.stop_loss}</span></td>
+                  <td><b style={{ color: '#52c41a' }}>{t.target_price}</b></td>
                   <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
                   <td><span className="badge buy">{t.setup_signal}</span></td>
                   <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
@@ -2157,7 +2593,8 @@ function ReportDetailModal({ ticker, onClose, dataset }) {
 
 
 // ─── Generic table view ───────────────────────────────────────────────────────
-function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker, dataset, searchHistory, addSearchHistory }) {
+function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker, onSelectProfileTicker, dataset, searchHistory, addSearchHistory }) {
+
   const [sort, setSort] = useState({ key: '', asc: true })
   const [selectedSignal, setSelectedSignal] = useState('ALL')
   const [selectedSector, setSelectedSector] = useState('ALL')
@@ -2650,105 +3087,26 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                         if (isFnoMaster) {
                           return (
                             <td key={key}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                <b
-                                  className="fno-ticker-badge"
-                                  style={{
-                                    color: '#66e4ca',
-                                    fontFamily: "'DM Mono'",
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <TrendingUp size={13} />
-                                  {cleanT}
-                                </b>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setDetailTicker(cleanT)
-                                  }}
-                                  title={`View Interactive Detail & Analysis Report for ${cleanT}`}
-                                  style={{
-                                    background: 'rgba(56, 189, 248, 0.12)',
-                                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                                    color: '#38bdf8',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    padding: '2px 7px',
-                                    borderRadius: 4,
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    transition: 'all .15s ease',
-                                  }}
-                                >
-                                  <FileText size={11} />
-                                  <span>Detail</span>
-                                </button>
-                              </div>
+                              <b
+                                className="fno-ticker-badge"
+                                style={{
+                                  color: '#66e4ca',
+                                  fontFamily: "'DM Mono'",
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <TrendingUp size={13} />
+                                {cleanT}
+                              </b>
                             </td>
                           )
                         }
                         return (
                           <td key={key}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                              <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'" }}>{cleanT}</b>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setDetailTicker(cleanT)
-                                }}
-                                title={`View Interactive Detail & Analysis Report for ${cleanT}`}
-                                style={{
-                                  background: 'rgba(56, 189, 248, 0.12)',
-                                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                                  color: '#38bdf8',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 3,
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  transition: 'all .15s ease',
-                                }}
-                              >
-                                <FileText size={11} />
-                                <span>Detail</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setVisualizerTicker(cleanT)
-                                }}
-                                title={`View Interactive Candlestick Chart for ${cleanT}`}
-                                style={{
-                                  background: 'rgba(168, 85, 247, 0.12)',
-                                  border: '1px solid rgba(168, 85, 247, 0.3)',
-                                  color: '#c084fc',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 3,
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  transition: 'all .15s ease',
-                                }}
-                              >
-                                <TrendingUp size={11} />
-                                <span>Chart</span>
-                              </button>
-                            </div>
+                            <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'" }}>{cleanT}</b>
                           </td>
                         )
                       }

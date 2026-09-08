@@ -38,6 +38,32 @@ def seed_fno_tickers() -> int:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS fno_stock_master (
+                        id SERIAL PRIMARY KEY,
+                        symbol TEXT UNIQUE NOT NULL,
+                        underlying_name TEXT NOT NULL,
+                        instrument_type TEXT DEFAULT 'STOCK',
+                        serial_number INTEGER,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        entry_date TEXT DEFAULT CURRENT_DATE::text,
+                        exit_date TEXT,
+                        created_at TEXT DEFAULT NOW()::text
+                    );
+                    CREATE TABLE IF NOT EXISTS fno_index_master (
+                        id SERIAL PRIMARY KEY,
+                        symbol TEXT UNIQUE NOT NULL,
+                        underlying_name TEXT NOT NULL,
+                        instrument_type TEXT DEFAULT 'INDEX',
+                        serial_number INTEGER,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        entry_date TEXT DEFAULT CURRENT_DATE::text,
+                        exit_date TEXT,
+                        created_at TEXT DEFAULT NOW()::text
+                    );
+                """)
+                conn.commit()
+
                 for path in csv_paths:
                     with open(path, "r", encoding="utf-8") as f:
                         reader = csv.DictReader(f)

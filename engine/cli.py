@@ -52,21 +52,24 @@ def main():
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 fno_set = set()
-                cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-                for row in cur.fetchall():
-                    fno_set.add(row[0])
+                try:
+                    cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
+                    for row in cur.fetchall():
+                        fno_set.add(row[0])
+                except Exception:
+                    conn.rollback()
                 try:
                     cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
                     for row in cur.fetchall():
                         fno_set.add(row[0])
                 except Exception:
-                    pass
+                    conn.rollback()
                 try:
                     cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
                     for row in cur.fetchall():
                         fno_set.add(row[0])
                 except Exception:
-                    pass
+                    conn.rollback()
                 for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
                     fno_set.add(idx)
                 return list(fno_set)
@@ -158,6 +161,35 @@ def main():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Ensure base historical_calls table exists with required columns
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS historical_calls (
+                        id SERIAL PRIMARY KEY,
+                        uniqueid TEXT,
+                        ticker TEXT NOT NULL,
+                        recommended_call TEXT,
+                        confidence DOUBLE PRECISION,
+                        cmp DOUBLE PRECISION,
+                        entry_price DOUBLE PRECISION,
+                        stop_loss DOUBLE PRECISION,
+                        target_price DOUBLE PRECISION,
+                        rr_ratio TEXT DEFAULT '1:2.00',
+                        status TEXT DEFAULT 'OPEN',
+                        timestamp TEXT,
+                        created_at TIMESTAMP DEFAULT now(),
+                        review_date DATE DEFAULT CURRENT_DATE,
+                        closed_at TIMESTAMP,
+                        final_cmp DOUBLE PRECISION,
+                        latest_cmp DOUBLE PRECISION,
+                        call_status TEXT DEFAULT 'OPEN',
+                        outcome TEXT DEFAULT 'OPEN',
+                        min_cmp DOUBLE PRECISION,
+                        max_cmp DOUBLE PRECISION,
+                        closest TEXT,
+                        closest_info TEXT
+                    );
+                """)
+
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS historical_call_bkp (
                         id SERIAL PRIMARY KEY,
@@ -186,6 +218,36 @@ def main():
                         backed_up_at TIMESTAMP DEFAULT now()
                     );
                 """)
+
+                # Ensure all columns exist on both tables if created from older/incomplete schema
+                columns_schema = [
+                    ("uniqueid", "TEXT"),
+                    ("recommended_call", "TEXT"),
+                    ("confidence", "DOUBLE PRECISION"),
+                    ("cmp", "DOUBLE PRECISION"),
+                    ("entry_price", "DOUBLE PRECISION"),
+                    ("stop_loss", "DOUBLE PRECISION"),
+                    ("target_price", "DOUBLE PRECISION"),
+                    ("rr_ratio", "TEXT DEFAULT '1:2.00'"),
+                    ("status", "TEXT DEFAULT 'OPEN'"),
+                    ("timestamp", "TEXT"),
+                    ("created_at", "TIMESTAMP DEFAULT now()"),
+                    ("review_date", "DATE DEFAULT CURRENT_DATE"),
+                    ("closed_at", "TIMESTAMP"),
+                    ("final_cmp", "DOUBLE PRECISION"),
+                    ("latest_cmp", "DOUBLE PRECISION"),
+                    ("call_status", "TEXT DEFAULT 'OPEN'"),
+                    ("outcome", "TEXT DEFAULT 'OPEN'"),
+                    ("min_cmp", "DOUBLE PRECISION"),
+                    ("max_cmp", "DOUBLE PRECISION"),
+                    ("closest", "TEXT"),
+                    ("closest_info", "TEXT"),
+                ]
+                for tbl in ["historical_calls", "historical_call_bkp"]:
+                    for col_name, col_type in columns_schema:
+                        cur.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+                conn.commit()
+
                 cur.execute("""
                     INSERT INTO historical_call_bkp (
                         uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price,
@@ -193,11 +255,16 @@ def main():
                         call_status, outcome, min_cmp, max_cmp, closest, closest_info
                     )
                     SELECT 
-                        uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price,
-                        rr_ratio, status, timestamp, created_at, review_date, closed_at, final_cmp, latest_cmp,
-                        call_status, outcome, min_cmp, max_cmp, closest, closest_info
-                    FROM historical_calls
-                    WHERE uniqueid IS NOT NULL AND uniqueid NOT IN (SELECT uniqueid FROM historical_call_bkp WHERE uniqueid IS NOT NULL);
+                        hc.uniqueid, hc.ticker, hc.recommended_call, hc.confidence, hc.cmp, hc.entry_price, hc.stop_loss, hc.target_price,
+                        hc.rr_ratio, hc.status, hc.timestamp, hc.created_at, hc.review_date, hc.closed_at, hc.final_cmp, hc.latest_cmp,
+                        hc.call_status, hc.outcome, hc.min_cmp, hc.max_cmp, hc.closest, hc.closest_info
+                    FROM historical_calls hc
+                    WHERE hc.uniqueid IS NOT NULL 
+                      AND hc.uniqueid NOT IN (
+                          SELECT bkp.uniqueid 
+                          FROM historical_call_bkp bkp 
+                          WHERE bkp.uniqueid IS NOT NULL
+                      );
                 """)
                 copied = cur.rowcount
                 conn.commit()
@@ -224,6 +291,17 @@ def main():
     elif args.mode == "analyze-all":
         logger.info("Triggered scoring and analysis engine for all master tickers...")
         run_phase_3()
+    elif args.mode == "full-pipeline":
+        logger.info("Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...")
+        logger.info("--- Starting Phase 1: Spot Data Download ---")
+        run_phase_1()
+        logger.info("--- Starting Phase 2: F&O Derivatives Download ---")
+        run_phase_2()
+        logger.info("--- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---")
+        run_phase_3()
+        logger.info("--- Starting Backup: Retaining Historical Calls ---")
+        backup_historical_calls()
+        logger.info("[✓] Full pipeline execution completed successfully!")
     elif args.mode == "backup":
         backup_historical_calls()
     elif args.mode == "news-analyze":

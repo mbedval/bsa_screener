@@ -50,9 +50,10 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
     # 1. Real-time live market fetch via yfinance (History-first, 100% accurate)
     if yf is not None:
         try:
+            from engine.utils.rate_limiter import yfinance_safe_call
             tk = yf.Ticker(yf_symbol)
-            hist = tk.history(period="5d")
-            if not hist.empty:
+            hist = yfinance_safe_call(lambda: tk.history(period="5d"))
+            if hist is not None and not hist.empty:
                 val = float(hist["Close"].iloc[-1])
                 if val > 0:
                     _PRICE_CACHE[raw_ticker] = (round(val, 2), now)
@@ -61,8 +62,9 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
             pass
 
         try:
+            from engine.utils.rate_limiter import yfinance_safe_call
             tk = yf.Ticker(yf_symbol)
-            p = getattr(tk.fast_info, "last_price", None)
+            p = yfinance_safe_call(lambda: getattr(tk.fast_info, "last_price", None))
             if p and float(p) > 0:
                 _PRICE_CACHE[raw_ticker] = (round(float(p), 2), now)
                 return round(float(p), 2)

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS ticker_master (
     company_name       TEXT NOT NULL,
     is_fno             BOOLEAN DEFAULT FALSE,
     sector             TEXT,
+    market_cap_category TEXT DEFAULT 'Largecap',
     index_memberships  TEXT[] DEFAULT '{}',
     exchange           TEXT DEFAULT 'NSE',
     updated_at         TIMESTAMP DEFAULT now()
