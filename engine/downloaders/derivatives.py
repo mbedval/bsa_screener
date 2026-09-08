@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from engine.database.connection import get_db_connection
 from engine.utils.helpers import clean_ticker
 
+from engine.utils.rate_limiter import yfinance_safe_call
+
 logger = logging.getLogger("bsa_derivatives_downloader")
 
 def fetch_live_spot_price(ticker: str) -> float or None:
@@ -33,8 +35,8 @@ def fetch_live_spot_price(ticker: str) -> float or None:
 
     try:
         tk = yf.Ticker(yf_sym)
-        hist = tk.history(period="1d", timeout=3)
-        if not hist.empty:
+        hist = yfinance_safe_call(lambda: tk.history(period="1d", timeout=3))
+        if hist is not None and not hist.empty:
             val = float(hist["Close"].iloc[-1])
             if val > 0:
                 return round(val, 2)
@@ -173,10 +175,13 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
                 """)
                 conn.commit()
             except Exception:
-                pass
+                conn.rollback()
 
-            cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-            all_tickers = [row[0] for row in cur.fetchall()]
+            try:
+                cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
+                all_tickers = [row[0] for row in cur.fetchall()]
+            except Exception:
+                conn.rollback()
 
             try:
                 cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
@@ -185,7 +190,7 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
                     if s not in all_tickers:
                         all_tickers.append(s)
             except Exception:
-                pass
+                conn.rollback()
 
             try:
                 cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
@@ -194,7 +199,7 @@ def download_all_derivatives(progress_callback=None, resume: bool = True):
                     if s not in all_tickers:
                         all_tickers.append(s)
             except Exception:
-                pass
+                conn.rollback()
 
     indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]
     for idx in indices:

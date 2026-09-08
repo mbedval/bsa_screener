@@ -72,15 +72,25 @@ def generate_pdf_report(ticker: str) -> str:
 
         close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
         
-        from engine.analysis.options import analyze_options_chain
-        from engine.analysis.footprint import analyze_footprint_and_news
-
         # Parse JSON
         proj_list = json.loads(proj_raw) if proj_raw else []
-        opt_data = analyze_options_chain(ticker)
-        foot_data = analyze_footprint_and_news(ticker)
-        beh_s = round((foot_data["sentiment_score"] * 0.4) + ((foot_data["accumulation_score"] - 50.0) / 50.0 * 0.6), 2)
-        hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
+        opt_data = json.loads(opt_raw) if opt_raw and isinstance(opt_raw, str) else (opt_raw if isinstance(opt_raw, dict) else {})
+        foot_data = json.loads(foot_raw) if foot_raw and isinstance(foot_raw, str) else (foot_raw if isinstance(foot_raw, dict) else {})
+
+        if not opt_data or not foot_data:
+            try:
+                from engine.analysis.options import analyze_options_chain
+                from engine.analysis.footprint import analyze_footprint_and_news
+                if not opt_data:
+                    opt_data = analyze_options_chain(ticker)
+                if not foot_data:
+                    foot_data = analyze_footprint_and_news(ticker)
+            except Exception:
+                pass
+
+        if foot_data:
+            beh_s = round((foot_data.get("sentiment_score", 0.0) * 0.4) + ((foot_data.get("accumulation_score", 50) - 50.0) / 50.0 * 0.6), 2)
+            hyb_s = round((tech_s * 0.5) + (beh_s * 0.5), 2)
         
         timestamp_str = updated.strftime("%Y-%m-%d %H:%M:%S") if updated else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

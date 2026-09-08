@@ -1,3 +1,4 @@
+import time
 import logging
 import yfinance as yf
 import pandas as pd
@@ -6,6 +7,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from engine.database.connection import get_db_connection
 from engine.utils.helpers import format_ticker, clean_ticker
+from engine.utils.rate_limiter import pace_yfinance_request, yfinance_safe_call, DEFAULT_MAX_WORKERS
 
 logger = logging.getLogger("bsa_market_downloader")
 
@@ -121,10 +123,10 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
             else:
                 period = "2y"
 
-        # 1. Fetch OHLCV
+        # 1. Fetch OHLCV with rate limit protection & backoff
         tk = yf.Ticker(formatted)
-        df = tk.history(period=period, interval="1d")
-        if df.empty:
+        df = yfinance_safe_call(lambda: tk.history(period=period, interval="1d"))
+        if df is None or df.empty:
             logger.warning(f"No price data found for {ticker_clean}")
             return False
 
@@ -141,12 +143,12 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
             logger.warning(f"No valid close prices for {ticker_clean}")
             return False
 
-        # 2. Save stock_meta information
-        info = tk.info or {}
+        # 2. Save stock_meta information with rate limit protection
+        info = yfinance_safe_call(lambda: tk.info) or {}
         company_name = info.get("longName", info.get("shortName", ticker_clean))
         sector = info.get("sector", "Unknown")
         exchange = "BO" if formatted.endswith(".BO") else "NS"
-        has_options = bool(tk.options) if hasattr(tk, "options") else False
+        has_options = bool(yfinance_safe_call(lambda: tk.options)) if hasattr(tk, "options") else False
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -227,7 +229,7 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
     """Download quarterly financials and current PE ratios from yfinance and save to DB."""
     try:
         tk = yf_ticker_obj or yf.Ticker(formatted)
-        qf = tk.quarterly_financials
+        qf = yfinance_safe_call(lambda: tk.quarterly_financials)
         if qf is None or qf.empty:
             return False
 
@@ -258,7 +260,7 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
         is_other_income_ok = int(abs(avg_other_inc) <= (0.05 * avg_pat)) if avg_pat > 0 else int(abs(avg_other_inc) == 0.0)
 
         # PE and Debt
-        info = tk.info or {}
+        info = yfinance_safe_call(lambda: tk.info) or {}
         raw_pe = info.get('trailingPE') or info.get('forwardPE')
         current_pe = _safe_float(raw_pe) or 0.0
         avg_pe = 20.0  # standard fallback
@@ -304,8 +306,8 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
 
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 
-def download_all_tickers(max_workers: int = 8, progress_callback=None, resume: bool = True, force: bool = False):
-    """Download OHLCV and fundamentals for all tickers in the database master list."""
+def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False):
+    """Download OHLCV and fundamentals for all tickers in the database master list with rate limit protection."""
     all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -318,7 +320,7 @@ def download_all_tickers(max_workers: int = 8, progress_callback=None, resume: b
     completed_set = get_completed_tickers("spot_download", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
-    logger.info(f"Starting spot download pipeline. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+    logger.info(f"Starting spot download pipeline (max_workers={max_workers}). Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
 
     if not pending_tickers:
         logger.info("All spot tickers already downloaded!")
@@ -338,5 +340,10 @@ def download_all_tickers(max_workers: int = 8, progress_callback=None, resume: b
                 progress_callback(t, res)
             else:
                 logger.info(f"[{i}/{len(pending_tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
+            
+            # Batch sleep every 10 tickers to avoid triggering Yahoo Finance rate limit blocks
+            if i % 10 == 0 and i < len(pending_tickers):
+                time.sleep(1.0)
+                
     failed_count = len(all_tickers) - success_count
     logger.info(f"Pipeline completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}")

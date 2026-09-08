@@ -1597,3 +1597,434 @@ export function ResearchBoardPage({ apiBase = '/api/intelligence', dataset = 'in
     </div>
   )
 }
+
+// ─── Ticker Research Profile Page ──────────────────────────────────────────────
+export function TickerResearchProfilePage({ apiBase = '/api/intelligence', dataset = 'intelligence', onNavigate, initialTicker }) {
+  const [searchInput, setSearchInput] = useState(initialTicker || '')
+  const [activeSymbol, setActiveSymbol] = useState(initialTicker || '')
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (initialTicker) {
+      setSearchInput(initialTicker)
+      setActiveSymbol(initialTicker)
+    }
+  }, [initialTicker])
+
+  const executeSearch = useCallback((symbolToSearch) => {
+    const sym = (symbolToSearch || searchInput).trim().toUpperCase()
+    if (!sym) return
+    setActiveSymbol(sym)
+    setLoading(true)
+    setError(null)
+    fetch(`${apiBase}/ticker-profile/${encodeURIComponent(sym)}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(res => {
+        if (res.found === false) {
+          setError(res.message || `No ticker found matching '${sym}'`)
+          setData(null)
+        } else {
+          setData(res)
+        }
+      })
+      .catch(e => {
+        setError(e.message)
+        setData(null)
+      })
+      .finally(() => setLoading(false))
+  }, [apiBase, searchInput])
+
+  useEffect(() => {
+    if (activeSymbol) {
+      executeSearch(activeSymbol)
+    }
+  }, [activeSymbol])
+
+  const meta = data?.meta || {}
+  const fund = data?.fundamentals || {}
+  const summary = data?.analysis_summary || {}
+  const scanners = data?.scanners || {}
+
+  const cardStyle = {
+    background: 'rgba(15, 23, 42, 0.8)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 20,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+  }
+
+  const badgeStyle = (color = '#38bdf8', bg = 'rgba(56, 189, 248, 0.15)') => ({
+    background: bg,
+    color: color,
+    border: `1px solid ${color}40`,
+    borderRadius: 6,
+    padding: '3px 8px',
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4
+  })
+
+  return (
+    <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Search Hero Card */}
+      <div style={{ ...cardStyle, background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))', border: '1px solid rgba(56, 189, 248, 0.3)', textAlign: 'center', padding: '32px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 22, fontWeight: 800, color: '#f8fafc', marginBottom: 6 }}>
+          <Search size={24} style={{ color: '#38bdf8' }} />
+          <span>Lookup Ticker Master Data</span>
+        </div>
+        <p style={{ color: '#94a3b8', fontSize: 14, margin: '0 0 20px 0' }}>
+          Enter any symbol (e.g. HDFCBANK, RELIANCE, TCS) to search live records from ticker database
+        </p>
+
+        {/* Search Box & Button */}
+        <div style={{ maxWidth: 550, margin: '0 auto', display: 'flex', gap: 10, background: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)' }}>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') executeSearch() }}
+            placeholder="Enter symbol, e.g. HDFCBANK"
+            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', padding: '10px 14px', fontSize: 15, fontFamily: "'DM Mono', monospace", outline: 'none', textTransform: 'uppercase' }}
+          />
+          <button
+            onClick={() => executeSearch()}
+            style={{ background: 'linear-gradient(135deg, #38bdf8, #0284c7)', color: '#0f172a', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Search size={16} /> Search
+          </button>
+        </div>
+
+        {/* Quick Chip Suggestions */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+          <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Popular Searches:</span>
+          {['HDFCBANK', 'RELIANCE', 'TCS', 'INFY', 'ICICIBANK', 'TATAMOTORS'].map(sym => (
+            <button
+              key={sym}
+              onClick={() => { setSearchInput(sym); executeSearch(sym) }}
+              style={{
+                background: activeSymbol === sym ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                border: activeSymbol === sym ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                color: activeSymbol === sym ? '#38bdf8' : '#cbd5e1',
+                borderRadius: 16,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              {sym}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#38bdf8', fontSize: 15, fontWeight: 600 }}>
+          Querying ticker database for '{activeSymbol}'...
+        </div>
+      )}
+
+      {/* Error / Not Found State */}
+      {error && !loading && (
+        <div style={{ ...cardStyle, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', textAlign: 'center', padding: '24px' }}>
+          <AlertCircle size={32} style={{ marginBottom: 8 }} />
+          <h4 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700 }}>{error}</h4>
+          <p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>Please verify the ticker symbol name and try searching again.</p>
+        </div>
+      )}
+
+      {/* Details Result Section */}
+      {data && data.found && !loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Header Card */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#f8fafc', fontFamily: "'DM Mono', monospace" }}>
+                    {meta.ticker}
+                  </h2>
+                  <span style={{ fontSize: 16, color: '#94a3b8', fontWeight: 600 }}>{meta.company_name}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.12)')}>Sector: {meta.sector || 'General'}</span>
+                  {meta.is_fno && <span style={badgeStyle('#c084fc', 'rgba(168, 85, 247, 0.12)')}>F&O Eligible</span>}
+                  <span style={badgeStyle('#34d399', 'rgba(52, 211, 153, 0.12)')}>Active Master</span>
+                </div>
+              </div>
+
+              {summary.overall_signal && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5, marginBottom: 4 }}>OVERALL SIGNAL</div>
+                  <span style={badgeStyle(summary.overall_signal.includes('BUY') ? '#34d399' : '#f87171', summary.overall_signal.includes('BUY') ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)')}>
+                    {summary.overall_signal}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Metrics Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>LAST CLOSE PRICE</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {summary.close ? `₹${summary.close}` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>P/E RATIO</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fund.current_pe != null ? fund.current_pe : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fund.last_pat ? `₹${fund.last_pat} Cr` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>TECHNICAL SCORE</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#c084fc', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {summary.technical_score != null ? `${summary.technical_score}/100` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Fundamentals & Scanners Details */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
+            {/* Fundamental Details */}
+            <div style={cardStyle}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BarChart3 size={18} style={{ color: '#f59e0b' }} /> Fundamental Overview
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Debt / Equity:</span>
+                  <b style={{ color: '#fff' }}>{fund.debt_to_equity ?? '—'}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Cash Flow Status:</span>
+                  <b style={{ color: '#34d399' }}>{fund.cash_flow_status ?? '—'}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>PAT Trend:</span>
+                  <b style={{ color: '#fff' }}>{fund.pat_trend ?? '—'}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Fundamental Score:</span>
+                  <b style={{ color: '#f59e0b' }}>{fund.fundamental_score ?? '—'}</b>
+                </div>
+              </div>
+            </div>
+
+            {/* Technical Scanners Summary */}
+            <div style={cardStyle}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <TrendingUp size={18} style={{ color: '#38bdf8' }} /> Technical Scanners Summary
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {Object.entries(scanners).map(([scKey, scData]) => {
+                  const sig = scData.trend_signal || scData.breakout_signal || scData.overall_call || scData.signal || 'ACTIVE'
+                  return (
+                    <div key={scKey} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: 10 }}>
+                      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
+                        {scKey.replace('_', ' ')}
+                      </div>
+                      <span style={badgeStyle(sig.includes('BUY') || sig.includes('UPTREND') ? '#34d399' : '#38bdf8')}>
+                        {sig}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Stock Chart */}
+          <div style={cardStyle}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TrendingUp size={18} style={{ color: '#38bdf8' }} /> Candlestick Chart & Price Action
+            </h3>
+            <ChartErrorBoundary>
+              <StockChartVisualizer ticker={data.ticker} height={420} />
+            </ChartErrorBoundary>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Search Detail Page (Ticker Master Dedicated Lookup) ──────────────────────
+export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'intelligence' }) {
+  const [tickerInput, setTickerInput] = useState('')
+  const [searchedSymbol, setSearchedSymbol] = useState('')
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleSearch = useCallback((overrideSymbol) => {
+    const sym = (overrideSymbol || tickerInput).trim().toUpperCase()
+    if (!sym) return
+    setSearchedSymbol(sym)
+    setLoading(true)
+    setError(null)
+    fetch(`${apiBase}/ticker-master-search/${encodeURIComponent(sym)}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(res => {
+        if (res.found === false) {
+          setError(res.message || `No record found in ticker_master for '${sym}'`)
+          setData(null)
+        } else {
+          setData(res.data)
+        }
+      })
+      .catch(e => {
+        setError(e.message)
+        setData(null)
+      })
+      .finally(() => setLoading(false))
+  }, [apiBase, tickerInput])
+
+  const cardStyle = {
+    background: 'rgba(15, 23, 42, 0.8)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 24,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)'
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Search Input Box Card */}
+      <div style={{ ...cardStyle, background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))', border: '1px solid rgba(56, 189, 248, 0.4)', textAlign: 'center' }}>
+        <h2 style={{ margin: '0 0 8px 0', fontSize: 22, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <Search size={22} style={{ color: '#38bdf8' }} /> Search Detail — Ticker Master Query
+        </h2>
+        <p style={{ color: '#94a3b8', fontSize: 14, margin: '0 0 20px 0' }}>
+          Enter a ticker name (e.g. HDFCBANK, RELIANCE, TCS) to inspect master database record
+        </p>
+
+        {/* Input Box & Search Button */}
+        <div style={{ maxWidth: 500, margin: '0 auto', display: 'flex', gap: 10, background: 'rgba(0,0,0,0.4)', padding: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)' }}>
+          <input
+            type="text"
+            value={tickerInput}
+            onChange={e => setTickerInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+            placeholder="Enter ticker name (e.g. HDFCBANK)"
+            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', padding: '10px 14px', fontSize: 15, fontFamily: "'DM Mono', monospace", outline: 'none', textTransform: 'uppercase' }}
+            autoFocus
+          />
+          <button
+            onClick={() => handleSearch()}
+            style={{ background: 'linear-gradient(135deg, #38bdf8, #0284c7)', color: '#0f172a', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Search size={16} /> Search
+          </button>
+        </div>
+
+        {/* Quick Click Ticker Pills */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+          <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Quick Lookup:</span>
+          {['HDFCBANK', 'RELIANCE', 'TCS', 'INFY', 'ICICIBANK', 'TATAMOTORS'].map(sym => (
+            <button
+              key={sym}
+              onClick={() => { setTickerInput(sym); handleSearch(sym) }}
+              style={{
+                background: searchedSymbol === sym ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                border: searchedSymbol === sym ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                color: searchedSymbol === sym ? '#38bdf8' : '#cbd5e1',
+                borderRadius: 16,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              {sym}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#38bdf8', fontSize: 15, fontWeight: 600 }}>
+          Querying ticker_master table for '{searchedSymbol}'...
+        </div>
+      )}
+
+      {/* Error / Not Found State */}
+      {error && !loading && (
+        <div style={{ ...cardStyle, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', textAlign: 'center' }}>
+          <AlertCircle size={32} style={{ marginBottom: 8 }} />
+          <h4 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700 }}>{error}</h4>
+          <p style={{ margin: 0, fontSize: 13, color: '#fca5a5' }}>Please check the symbol name and search again.</p>
+        </div>
+      )}
+
+      {/* Output Display Card */}
+      {data && !loading && (
+        <div style={cardStyle}>
+          <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 16, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 700, letterSpacing: 1 }}>TICKER MASTER RECORD</span>
+              <h3 style={{ margin: '4px 0 0 0', fontSize: 24, fontWeight: 800, color: '#f8fafc', fontFamily: "'DM Mono', monospace" }}>
+                {data.ticker}
+              </h3>
+            </div>
+            <span style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.4)', padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
+              RECORD FOUND
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Company Name</div>
+              <div style={{ fontSize: 15, color: '#fff', fontWeight: 700, marginTop: 4 }}>{data.company_name || '—'}</div>
+            </div>
+
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Sector</div>
+              <div style={{ fontSize: 15, color: '#38bdf8', fontWeight: 700, marginTop: 4 }}>{data.sector || 'General'}</div>
+            </div>
+
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Exchange</div>
+              <div style={{ fontSize: 15, color: '#34d399', fontWeight: 700, marginTop: 4 }}>{data.exchange || 'NSE'}</div>
+            </div>
+
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>F&O Eligibility</div>
+              <div style={{ fontSize: 15, color: data.is_fno ? '#c084fc' : '#94a3b8', fontWeight: 700, marginTop: 4 }}>
+                {data.is_fno ? 'F&O Eligible' : 'Equity Only'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+
+
