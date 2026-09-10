@@ -3606,6 +3606,20 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error computing pattern history for {actual_ticker}: {e}")
 
+            # Fetch Mutual Fund holdings
+            mf_holdings = []
+            try:
+                cur.execute("""
+                    SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
+                    FROM mf_holdings
+                    WHERE ticker = %s
+                    ORDER BY rank ASC, holding_pct DESC
+                """, (actual_ticker,))
+                mf_rows = cur.fetchall()
+                mf_holdings = [dict(r) for r in mf_rows]
+            except Exception as e:
+                logger.error(f"Error querying mf_holdings for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
@@ -3618,11 +3632,31 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "volume_spikes": volume_spikes,
                 "fundamentals": fundamentals,
                 "pattern_history": pattern_history,
-                "pattern_stats": pattern_stats
+                "pattern_stats": pattern_stats,
+                "mf_holdings": mf_holdings
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
         raise HTTPException(500, f"Database error querying ticker_master: {e}")
+
+
+@app.get('/api/{dataset}/mf-holdings/{ticker}')
+@app.get('/api/mf-holdings/{ticker}')
+def get_mf_holdings(ticker: str, dataset: str = 'intelligence'):
+    try:
+        actual_ticker = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+        with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
+                FROM mf_holdings
+                WHERE ticker = %s
+                ORDER BY rank ASC, holding_pct DESC
+            """, (actual_ticker,))
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"Error fetching MF holdings for {ticker}: {e}")
+        raise HTTPException(500, str(e))
 
 
 

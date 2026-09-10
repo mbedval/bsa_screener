@@ -16,12 +16,13 @@ from engine.downloaders.derivatives import download_all_derivatives, download_an
 from engine.analysis.orchestrator import analyze_all_tickers, analyze_and_summarize_ticker
 from engine.reports.html_generator import generate_html_report
 from engine.reports.pdf_generator import generate_pdf_report
+from engine.downloaders.mutual_fund import download_all_mf_holdings, download_mf_holdings_for_ticker
 
 logger = setup_logger("bsa_cli")
 
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
-    parser.add_argument("--mode", choices=["download-spot", "download-fno", "analyze-all", "full-pipeline", "news-analyze", "backup"], help="Pipeline batch operation mode")
+    parser.add_argument("--mode", choices=["download-spot", "download-fno", "analyze-all", "full-pipeline", "news-analyze", "backup", "mutualfund"], help="Pipeline batch operation mode")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
     parser.add_argument("--report", type=str, help="Generate report for a specific ticker")
     parser.add_argument("--pdf", action="store_true", help="Explicitly opt-in to generate PDF report alongside HTML")
@@ -318,6 +319,20 @@ def main():
         logger.info("[✓] Full pipeline execution completed successfully!")
     elif args.mode == "backup":
         backup_historical_calls()
+    elif args.mode == "mutualfund":
+        logger.info("Triggered downloading Mutual Fund holdings from Screener.in...")
+        if args.ticker:
+            ticker = args.ticker.upper().strip()
+            ok, count = download_mf_holdings_for_ticker(ticker)
+            logger.info(f"Mutual Fund download for {ticker}: ok={ok}, saved={count} funds.")
+        else:
+            total_tickers = len(get_spot_tickers())
+            progress, task_id = create_phase_progress(1, "Mutual Fund Holdings", total_tickers)
+            with progress:
+                def cb(current, total, ticker, count):
+                    progress.update(task_id, advance=1)
+                download_all_mf_holdings(progress_callback=cb)
+            logger.info("[✓] Mutual Fund holdings download completed!")
     elif args.mode == "news-analyze":
         if not args.ticker:
             logger.error("--ticker argument is required when running --mode news-analyze (e.g. --mode news-analyze --ticker CROMPTON)")

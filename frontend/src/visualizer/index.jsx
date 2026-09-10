@@ -1979,6 +1979,11 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   const fundamentals = data?.fundamentals || {}
   const patternHistory = data?.pattern_history || []
   const patternStats = data?.pattern_stats || { total: 0, pass: 0, fail: 0, pass_rate: 0.0 }
+  const mfHoldings = data?.mf_holdings || []
+
+  // Pagination for Mutual Fund Holdings table
+  const [mfPage, setMfPage] = useState(1)
+  const [mfPageSize, setMfPageSize] = useState(10)
 
   // Selected Recommendation Detail Modal state
   const [selectedRecModal, setSelectedRecModal] = useState(null)
@@ -2647,6 +2652,125 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* 6. Mutual Fund Holdings Section */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🏛️ Mutual Fund Holdings (Screener.in Data)
+                </h3>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                  Disclosed institutional holdings & percentage stake per fund for {data.ticker}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>
+                  Total Funds: <b>{mfHoldings.length.toFixed(1)}</b>
+                </span>
+                {mfHoldings.length > 0 && (
+                  <span style={badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.15)')}>
+                    Top Holder: <b>{mfHoldings[0].holding_pct.toFixed(2)}%</b>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {mfHoldings.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#64748b', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+                No Mutual Fund holdings data recorded for {data.ticker} yet.
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
+                  Run <code style={{ color: '#38bdf8', background: 'rgba(56,189,248,0.1)', padding: '2px 6px', borderRadius: 4 }}>python3 -m engine.cli --mode mutualfund --ticker {data.ticker}</code> to download holdings from Screener.in.
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(0,0,0,0.4)', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <th style={{ padding: '10px 12px', width: 60, textAlign: 'center' }}>Rank</th>
+                        <th style={{ padding: '10px 12px' }}>Mutual Fund Scheme Name</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Holding (%)</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Last Disclosure</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const pageSize = mfPageSize === 'All' ? mfHoldings.length : Number(mfPageSize)
+                        const startIdx = (mfPage - 1) * pageSize
+                        const pageData = mfPageSize === 'All' ? mfHoldings : mfHoldings.slice(startIdx, startIdx + pageSize)
+                        return pageData.map((h, idx) => {
+                          const isTop3 = h.rank <= 3
+                          const bg = isTop3 ? 'rgba(245, 158, 11, 0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)')
+                          const rankColor = h.rank === 1 ? '#f59e0b' : (h.rank === 2 ? '#cbd5e1' : (h.rank === 3 ? '#b45309' : '#94a3b8'))
+
+                          return (
+                            <tr key={h.rank || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: bg }}>
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                <span style={{ color: rankColor, fontWeight: isTop3 ? 800 : 600, fontSize: isTop3 ? 14 : 12, fontFamily: "'DM Mono', monospace" }}>
+                                  #{h.rank}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 12px', fontWeight: isTop3 ? 700 : 500, color: isTop3 ? '#f8fafc' : '#cbd5e1' }}>
+                                {renderTruncatedCell(h.fund_name)}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: "'DM Mono', monospace", fontWeight: 800, color: isTop3 ? '#f59e0b' : '#38bdf8' }}>
+                                {h.holding_pct.toFixed(2)}%
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94a3b8', fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
+                                {h.disclosure_date || '—'}
+                              </td>
+                            </tr>
+                          )
+                        })
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 10, fontSize: 12, color: '#94a3b8' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>Items per page:</span>
+                    <select
+                      value={mfPageSize}
+                      onChange={e => { setMfPageSize(e.target.value); setMfPage(1); }}
+                      style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '3px 8px', fontSize: 12, outline: 'none' }}
+                    >
+                      {[10, 25, 50, 100, 'All'].map(s => (
+                        <option key={s} value={s} style={{ background: '#0f172a' }}>{s}</option>
+                      ))}
+                    </select>
+                    <span>
+                      Showing {mfPageSize === 'All' ? 1 : Math.min(mfHoldings.length, (mfPage - 1) * Number(mfPageSize) + 1)}–
+                      {mfPageSize === 'All' ? mfHoldings.length : Math.min(mfHoldings.length, mfPage * Number(mfPageSize))} of {mfHoldings.length}
+                    </span>
+                  </div>
+
+                  {mfPageSize !== 'All' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        onClick={() => setMfPage(p => Math.max(1, p - 1))}
+                        disabled={mfPage === 1}
+                        style={{ background: 'rgba(255,255,255,0.05)', color: mfPage === 1 ? '#475569' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 10px', fontSize: 12, cursor: mfPage === 1 ? 'default' : 'pointer' }}
+                      >
+                        ◄ Prev
+                      </button>
+                      <span style={{ color: '#fff', fontWeight: 600 }}>Page {mfPage} of {Math.max(1, Math.ceil(mfHoldings.length / Number(mfPageSize)))}</span>
+                      <button
+                        onClick={() => setMfPage(p => Math.min(Math.ceil(mfHoldings.length / Number(mfPageSize)), p + 1))}
+                        disabled={mfPage >= Math.ceil(mfHoldings.length / Number(mfPageSize))}
+                        style={{ background: 'rgba(255,255,255,0.05)', color: mfPage >= Math.ceil(mfHoldings.length / Number(mfPageSize)) ? '#475569' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '4px 10px', fontSize: 12, cursor: mfPage >= Math.ceil(mfHoldings.length / Number(mfPageSize)) ? 'default' : 'pointer' }}
+                      >
+                        Next ►
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
