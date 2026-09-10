@@ -6,8 +6,9 @@ import UsersPage from './UsersPage.jsx'
 import AlternativeNamesPage from './AlternativeNamesPage.jsx'
 import ExcludedTickersPage from './ExcludedTickersPage.jsx'
 import RecommendationsPage from './RecommendationsPage.jsx'
+import OpportunitiesRiskPage from './OpportunitiesRiskPage.jsx'
 
-export { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage }
+export { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage }
 
 export default function MasterSubmodule({ subView, onNavigate, dataset }) {
   switch (subView) {
@@ -15,6 +16,8 @@ export default function MasterSubmodule({ subView, onNavigate, dataset }) {
     case 'watchlists': return <WatchlistsPage dataset={dataset} />
     case 'users':      return <UsersPage dataset={dataset} />
     case 'recommendations': return <RecommendationsPage dataset={dataset} />
+    case 'opportunities':
+    case 'opportunities_risk': return <OpportunitiesRiskPage dataset={dataset} />
     case 'aliases':
     case 'alternativenames': return <AlternativeNamesPage dataset={dataset} />
     case 'excluded':

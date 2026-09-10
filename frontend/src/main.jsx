@@ -140,7 +140,7 @@ const signalTone = value => {
 }
 
 // Master page identifiers
-const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations']
+const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations', 'master:opportunities']
 
 const parseResp = async (r) => {
   const ct = r.headers.get('content-type') || ''
@@ -626,6 +626,7 @@ function App() {
                       <div className="nav-section-items">
                         <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
                         <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker Master</button>
+                        <button className={`nav-item ${active === 'master:opportunities' ? 'selected' : ''}`} onClick={() => setActive('master:opportunities')}><Shield /> About Company</button>
                         <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> FNO Stock Master</button>
                         <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> FNO Index Master</button>
                         <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>

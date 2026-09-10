@@ -5,7 +5,7 @@ import {
 } from 'lightweight-charts'
 import {
   TrendingUp, BarChart3, Activity, Layers, ArrowUpRight, ArrowDownRight,
-  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star
+  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star, Printer
 } from 'lucide-react'
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
@@ -1701,29 +1701,6 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
             <Search size={16} /> Search
           </button>
         </div>
-
-        {/* Quick Chip Suggestions */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
-          <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Popular Searches:</span>
-          {['HDFCBANK', 'RELIANCE', 'TCS', 'INFY', 'ICICIBANK', 'TATAMOTORS'].map(sym => (
-            <button
-              key={sym}
-              onClick={() => { setSearchInput(sym); executeSearch(sym) }}
-              style={{
-                background: activeSymbol === sym ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                border: activeSymbol === sym ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                color: activeSymbol === sym ? '#38bdf8' : '#cbd5e1',
-                borderRadius: 16,
-                padding: '4px 12px',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {sym}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Loading State */}
@@ -1980,6 +1957,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   const patternHistory = data?.pattern_history || []
   const patternStats = data?.pattern_stats || { total: 0, pass: 0, fail: 0, pass_rate: 0.0 }
   const mfHoldings = data?.mf_holdings || []
+  const oppRisk = data?.opportunities_risk || null
 
   // Pagination for Mutual Fund Holdings table
   const [mfPage, setMfPage] = useState(1)
@@ -1987,6 +1965,44 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
 
   // Selected Recommendation Detail Modal state
   const [selectedRecModal, setSelectedRecModal] = useState(null)
+
+  // Direct PDF Download Handler (html2pdf.js)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  const handleDownloadPdf = async () => {
+    const element = document.getElementById('ticker-full-report-container')
+    if (!element) return
+
+    setDownloadingPdf(true)
+    const symbol = master.ticker || searchedSymbol || 'TICKER'
+    const fileName = `BSA_Market_Intelligence_Report_${symbol}.pdf`
+
+    // Dynamically detect current active theme background color from DOM stylesheet
+    const computedStyle = window.getComputedStyle(document.body)
+    const activeBgColor = computedStyle.backgroundColor || '#09111f'
+
+    const opt = {
+      margin:       [8, 8, 10, 8],
+      filename:     fileName,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: activeBgColor, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    }
+
+    try {
+      if (window.html2pdf) {
+        await window.html2pdf().set(opt).from(element).save()
+      } else {
+        window.print()
+      }
+    } catch (err) {
+      console.error('PDF Generation Error:', err)
+      window.print()
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   return (
     <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -2025,30 +2041,8 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
           </button>
         </div>
 
-        {/* Quick Searches & Recent Searches */}
+        {/* Recent Searches */}
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
-            <span style={{ color: '#38bdf8', fontWeight: 700, letterSpacing: 0.5 }}>⚡ QUICK SEARCHES:</span>
-            {['HDFCBANK', 'RELIANCE', 'TCS', 'INFY', 'ICICIBANK', 'TATAMOTORS'].map(sym => (
-              <button
-                key={sym}
-                onClick={() => { setTickerInput(sym); handleSearch(sym) }}
-                style={{
-                  background: searchedSymbol === sym ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  border: searchedSymbol === sym ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                  color: searchedSymbol === sym ? '#38bdf8' : '#cbd5e1',
-                  borderRadius: 6,
-                  padding: '3px 10px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                {sym}
-              </button>
-            ))}
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
             <span style={{ color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5 }}>⏱️ RECENT SEARCHES (LAST 20):</span>
             {recentSearches.map(sym => (
@@ -2091,71 +2085,127 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
 
       {/* ─── Search Results Main Display ─────────────────────────────────── */}
       {data && data.found && !loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div id="ticker-full-report-container" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* 1. Ticker Master Metadata Card */}
-          <div style={cardStyle}>
-            <div style={{ marginBottom: 16 }}>
-              <h1 style={{ margin: '0 0 6px 0', fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>
-                {master.company_name || master.ticker || searchedSymbol}
-              </h1>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.2)')}>{master.ticker || searchedSymbol}</span>
-                <span style={badgeStyle('#a855f7', 'rgba(168, 85, 247, 0.2)')}>{master.exchange || 'NS'}</span>
-                <span style={badgeStyle('#22c55e', 'rgba(34, 197, 94, 0.2)')}>{master.is_fno ? 'EQUITY / F&O' : 'EQUITY'}</span>
+          <div style={cardStyle} className="printable-report-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+              <div>
+                <h1 style={{ margin: '0 0 6px 0', fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>
+                  {master.company_name || master.ticker || searchedSymbol}
+                </h1>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.2)')}>{master.ticker || searchedSymbol}</span>
+                  <span style={badgeStyle('#a855f7', 'rgba(168, 85, 247, 0.2)')}>{master.exchange || 'NS'}</span>
+                  <span style={badgeStyle('#22c55e', 'rgba(34, 197, 94, 0.2)')}>{master.is_fno ? 'EQUITY / F&O' : 'EQUITY'}</span>
+                </div>
               </div>
+
+              {/* Direct Download PDF Button */}
+              <button
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="no-print"
+                style={{
+                  background: 'linear-gradient(135deg, #38bdf8, #0284c7)',
+                  color: '#0f172a',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '10px 18px',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: downloadingPdf ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  boxShadow: '0 4px 14px rgba(56, 189, 248, 0.35)',
+                  opacity: downloadingPdf ? 0.7 : 1,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Printer size={16} /> {downloadingPdf ? 'Generating PDF...' : 'Download PDF Report'}
+              </button>
             </div>
 
-            {/* 6 Metric Box Cards Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>TICKER ID</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                  #{master.id || 1}
+            {/* Sector Master & Overall Suggestion Custom Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 16 }}>
+              {/* Custom Variant Wide Sector Name Card with All Mapped Sectors */}
+              <div style={{ ...metricBoxStyle, textAlign: 'left', padding: '14px 18px', background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                <div style={{ fontSize: 11, color: '#38bdf8', fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+                  MAPPED BUSINESS SECTORS ({ (master.mapped_sectors || [master.sector || 'Energy']).length })
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {(master.mapped_sectors && master.mapped_sectors.length > 0
+                    ? master.mapped_sectors
+                    : [master.sector || 'Energy']
+                  ).map((sec, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(30, 58, 138, 0.25))',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: 20,
+                        padding: '5px 14px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        letterSpacing: 0.3,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+                        backdropFilter: 'blur(4px)'
+                      }}
+                    >
+                      {idx === 0 ? <span style={{ color: '#facc15', fontSize: 13 }}>⭐</span> : <span style={{ color: '#38bdf8', fontSize: 12 }}>🏷️</span>}
+                      {renderTruncatedCell(sec)}
+                    </span>
+                  ))}
                 </div>
               </div>
 
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>ISIN CODE</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                  {renderTruncatedCell(master.isin_code || 'INE001A01010')}
-                </div>
-              </div>
-
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>SECTOR NAME</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginTop: 4 }}>
-                  {renderTruncatedCell(master.sector || 'Energy')}
-                </div>
-              </div>
-
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>INDUSTRY</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginTop: 4 }}>
-                  {renderTruncatedCell(master.industry || 'Banking & Finance / Energy')}
-                </div>
-              </div>
-
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>ACTIVE STATUS</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>
-                  {master.active_status || 'Active'}
-                </div>
-              </div>
-
-              <div style={metricBoxStyle}>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>OVERALL SUGGESTION</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
+              {/* Overall Suggestion Card */}
+              <div style={{ ...metricBoxStyle, textAlign: 'center', padding: '14px 18px', background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>OVERALL SUGGESTION</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', marginTop: 6, letterSpacing: 0.5 }}>
                   {renderTruncatedCell(master.overall_suggestion || 'TRADING ONLY')}
                 </div>
               </div>
             </div>
 
             {/* Suggestion Remarks Banner */}
-            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
               <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 💬 SUGGESTION REMARKS:
               </b>
               {master.suggestion_remarks || `Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only.`}
+            </div>
+
+            {/* About Company Card */}
+            <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+              <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 14 }}>
+                🏢 About Company (Products & Services Overview)
+              </b>
+              {oppRisk && oppRisk.about_company ? (
+                <div style={{ color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
+                  {oppRisk.about_company}
+                </div>
+              ) : (
+                <div style={{ color: '#64748b', fontStyle: 'italic', fontWeight: 600 }}>
+                  Not Recorded in the System
+                </div>
+              )}
+
+              {/* Additional Information / Note Banner */}
+              {oppRisk && oppRisk.additional_note && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed rgba(56, 189, 248, 0.25)' }}>
+                  <b style={{ color: '#facc15', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>
+                    📌 Additional Information:
+                  </b>
+                  <div style={{ color: '#cbd5e1', fontSize: 12, fontStyle: 'italic', lineHeight: 1.5 }}>
+                    {oppRisk.additional_note}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2769,6 +2819,85 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* 7. Strategic Growth Opportunities & Business Risk Assessment Card */}
+          <div style={{ ...cardStyle, background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(9, 13, 22, 0.95))', border: '1px solid rgba(56, 189, 248, 0.35)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🛡️ Strategic Opportunities & Business Risk Profile
+                </h3>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                  Qualitative & fundamental growth catalysts vs business risks for {data.ticker}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {oppRisk?.is_multibagger && (
+                  <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#facc15', border: '1px solid #f59e0b', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    🌟 POTENTIAL MULTIBAGGER
+                  </span>
+                )}
+                <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>
+                  {oppRisk ? 'Analysis Active' : 'Pending Review'}
+                </span>
+              </div>
+            </div>
+
+            {!oppRisk || (!oppRisk.about_company && !oppRisk.opportunities && !oppRisk.risk) ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#64748b', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+                No custom About Company & Risk analysis logged for {data.ticker} yet.
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
+                  Navigate to <b style={{ color: '#38bdf8' }}>Master Data Admin → About Company</b> to add company overview, growth catalysts, risk factors, and secondary sector mappings.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* About Company Box (Products & Services Overview) */}
+                {oppRisk.about_company && (
+                  <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 10, padding: 16 }}>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: 14, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      🏢 About Company (Products & Services Overview)
+                    </h4>
+                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {oppRisk.about_company}
+                    </div>
+                  </div>
+                )}
+
+                {/* Positives vs Negatives 2-Column Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+                  
+                  {/* Bullish / Positives High Lighter Box */}
+                  <div style={{ background: 'rgba(34, 197, 94, 0.06)', border: '1px solid rgba(34, 197, 94, 0.25)', borderRadius: 10, padding: 16 }}>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: 14, fontWeight: 800, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      🚀 Growth Opportunities (Positives)
+                    </h4>
+                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {oppRisk.opportunities || 'No explicit positive growth opportunities entered.'}
+                    </div>
+                  </div>
+
+                  {/* Bearish / Negatives High Lighter Box */}
+                  <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 10, padding: 16 }}>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: 14, fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      ⚠️ Business Risks & Threats (Negatives)
+                    </h4>
+                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {oppRisk.risk || 'No explicit business risks entered.'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Note Banner if present */}
+                {oppRisk.additional_note && (
+                  <div style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1' }}>
+                    <b style={{ color: '#38bdf8', display: 'block', marginBottom: 4 }}>💡 Additional Analyst Note:</b>
+                    {oppRisk.additional_note}
+                  </div>
+                )}
               </div>
             )}
           </div>

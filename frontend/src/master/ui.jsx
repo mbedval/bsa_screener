@@ -249,7 +249,7 @@ export function TagInput({ value = [], onChange, placeholder = 'Type and press E
 }
 
 // ── Multi-select picker (for sector/ticker assignment) ────────────────────────
-export function MultiPicker({ items, selected, onChange, labelKey = 'name', valueKey = 'id', search = true }) {
+export function MultiPicker({ items, selected, onChange, labelKey = 'name', valueKey = 'id', search = true, listStyle }) {
   const [q, setQ] = useState('')
   const filtered = items.filter(i => !q || String(i[labelKey]).toLowerCase().includes(q.toLowerCase()))
   const toggle = val => onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val])
@@ -262,7 +262,7 @@ export function MultiPicker({ items, selected, onChange, labelKey = 'name', valu
           {q && <button onClick={() => setQ('')}><X size={12}/></button>}
         </div>
       )}
-      <div className="multi-picker-list">
+      <div className="multi-picker-list" style={listStyle}>
         {filtered.length === 0 && <div className="multi-picker-empty">No items</div>}
         {filtered.map(item => {
           const val = item[valueKey]

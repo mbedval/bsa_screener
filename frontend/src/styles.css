@@ -363,6 +363,180 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background-color: rgba(78, 139, 255, 0.20) !important;
 }
 
+/* ── MultiPicker Component Styles ────────────────────────────────────────── */
+.multi-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.multi-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0b1929;
+  border: 1px solid #294566;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #94a3b8;
+}
+.multi-picker-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-size: 12px;
+}
+.multi-picker-search button {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+.multi-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 85px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+.multi-picker-list::-webkit-scrollbar {
+  width: 5px;
+}
+.multi-picker-list::-webkit-scrollbar-thumb {
+  background: #1e3250;
+  border-radius: 3px;
+}
+.multi-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0d192b;
+  border: 1px solid #1e3250;
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.multi-picker-item:hover {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.06);
+}
+.multi-picker-item.checked {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  font-weight: 700;
+}
+.multi-picker-item input[type="checkbox"] {
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+.multi-picker-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+}
+.multi-picker-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #94a3b8;
+  padding-top: 4px;
+  border-top: 1px solid #1e3250;
+}
+.multi-picker-footer .link-btn {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* ── Professional PDF Report Print Styles ─────────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 12mm 15mm 12mm;
+  }
+
+  body, html, .app-shell, main {
+    background: var(--bg-deep) !important;
+    color: #f4f8ff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  aside, header, .no-print, .theme-selector, .search, .search-bar, button.no-print, .landing-header, .landing-footer {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Printable Cards & Panels */
+  .panel, [style*="border-radius"], div[style*="background"] {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure text & colors remain bright and high-contrast on dark PDF background */
+  h1, h2, h3, h4, b, strong {
+    color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  table {
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  /* Footer print timestamp & page branding */
+  .printable-report-card::after {
+    content: "BSA Market Intelligence Master Report — Generated Confidential";
+    display: block;
+    margin-top: 10px;
+    font-size: 10px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: right;
+  }
+}
+
+
+
 
 
 

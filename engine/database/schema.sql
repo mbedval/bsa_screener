@@ -102,6 +102,17 @@ CREATE TABLE IF NOT EXISTS fno_index_master (
     created_at TEXT DEFAULT NOW()::text
 );
 
+-- 11. Opportunities and Risk Table
+CREATE TABLE IF NOT EXISTS opportunities_risk (
+    ticker            TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    opportunities     TEXT,
+    risk              TEXT,
+    is_multibagger    BOOLEAN DEFAULT FALSE,
+    additional_note   TEXT,
+    created_at        TIMESTAMP DEFAULT NOW(),
+    updated_at        TIMESTAMP DEFAULT NOW()
+);
+
 -- 3. Market Data Tables
 CREATE TABLE IF NOT EXISTS ohlcv_daily (
     ticker          TEXT NOT NULL,
@@ -302,6 +313,17 @@ CREATE TABLE IF NOT EXISTS fno_active (
     active_score DOUBLE PRECISION,
     buildup_signal TEXT,
     last_updated TEXT
+);
+
+CREATE TABLE IF NOT EXISTS opportunities_risk (
+    ticker VARCHAR(50) PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    about_company TEXT,
+    opportunities TEXT,
+    risk TEXT,
+    is_multibagger BOOLEAN DEFAULT FALSE,
+    additional_note TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
 );
 
 -- Indexes for Optimization

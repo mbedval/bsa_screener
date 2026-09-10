@@ -4,6 +4,7 @@ import * as api from './api.js'
 
 export default function AddRecommendationModal({ onClose, onSuccess }) {
   const [tickers, setTickers] = useState([])
+  const [tickerSearch, setTickerSearch] = useState('')
   const [loadingTickers, setLoadingTickers] = useState(true)
   const [saving, setSaving] = useState(false)
   
@@ -19,6 +20,15 @@ export default function AddRecommendationModal({ onClose, onSuccess }) {
   })
   
   const { show, ToastContainer } = useToast()
+
+  const filteredTickers = (tickers || []).filter(t => {
+    if (!tickerSearch) return true
+    const q = tickerSearch.toLowerCase()
+    return (
+      (t.ticker || '').toLowerCase().includes(q) ||
+      (t.company_name || '').toLowerCase().includes(q)
+    )
+  })
 
   useEffect(() => {
     const fetchTickers = async () => {
@@ -71,17 +81,27 @@ export default function AddRecommendationModal({ onClose, onSuccess }) {
       <div style={{ background: 'var(--panel-bg)', padding: 15, borderRadius: 6, marginBottom: 15, border: '1px solid var(--border)' }}>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 10 }}>
-          <FormGroup label="Ticker">
-            <Select 
-              value={form.ticker} 
-              onChange={e => setForm({...form, ticker: e.target.value})}
-              disabled={loadingTickers}
-            >
-              <option value="">-- Select Ticker --</option>
-              {tickers.map(t => (
-                <option key={t.ticker} value={t.ticker}>{t.ticker} - {t.company_name}</option>
-              ))}
-            </Select>
+          <FormGroup label="Ticker (Filter by Ticker or Company Name)">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Input
+                type="text"
+                placeholder="Type to filter ticker or company name..."
+                value={tickerSearch}
+                onChange={e => setTickerSearch(e.target.value)}
+                disabled={loadingTickers}
+                style={{ fontSize: 13 }}
+              />
+              <Select 
+                value={form.ticker} 
+                onChange={e => setForm({...form, ticker: e.target.value})}
+                disabled={loadingTickers}
+              >
+                <option value="">-- Select Ticker ({filteredTickers.length} matched) --</option>
+                {filteredTickers.map(t => (
+                  <option key={t.ticker} value={t.ticker}>{t.ticker} — {t.company_name}</option>
+                ))}
+              </Select>
+            </div>
           </FormGroup>
           <FormGroup label="Recommender (e.g. Zerodha)">
             <Input value={form.recommender} onChange={e => setForm({...form, recommender: e.target.value})} />

@@ -179,6 +179,33 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                             print(f"    [!] Batch error inserting into {table_name}: {err}")
                         conn.rollback()
 
+        # Synchronize sector master and ticker_sector mappings from ticker_master
+        try:
+            if verbose:
+                print("  [+] Synchronizing sector master & ticker_sector mappings from ticker_master...")
+            cursor.execute("""
+                INSERT INTO sectors (name)
+                SELECT DISTINCT sector 
+                FROM ticker_master 
+                WHERE sector IS NOT NULL AND TRIM(sector) != ''
+                ON CONFLICT (name) DO NOTHING;
+            """)
+            cursor.execute("""
+                INSERT INTO ticker_sector (ticker, sector_id)
+                SELECT tm.ticker, s.id
+                FROM ticker_master tm
+                JOIN sectors s ON s.name = tm.sector
+                WHERE tm.sector IS NOT NULL AND TRIM(tm.sector) != ''
+                ON CONFLICT (ticker, sector_id) DO NOTHING;
+            """)
+            conn.commit()
+            if verbose:
+                print("  [✓] Sector master & ticker_sector mappings synchronized.")
+        except Exception as sync_err:
+            if verbose:
+                print(f"  [!] Warning synchronizing sector master: {sync_err}")
+            conn.rollback()
+
         # Reset sequences
         for table, seq in SEQUENCE_TABLES:
             try:

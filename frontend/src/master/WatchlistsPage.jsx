@@ -23,13 +23,20 @@ export default function WatchlistsPage() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [saving, setSaving]         = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [masterTickers, setMasterTickers] = useState([])
+  const [tickerQuery, setTickerQuery]     = useState('')
+  const [selectedFoundTicker, setSelectedFoundTicker] = useState('')
   const { show, ToastContainer }    = useToast()
 
   const load = async () => {
     setLoading(true)
     try {
-      const w = await api.watchlists.list()
+      const [w, tList] = await Promise.all([
+        api.watchlists.list(),
+        api.tickers.list({})
+      ])
       setWatchlists(w)
+      setMasterTickers(tList || [])
     } catch (e) { show(e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -64,6 +71,8 @@ export default function WatchlistsPage() {
   // ── Open Excel-like Editor ──────────────────────────────────────────────────
   const openEditor = (w) => {
     setErrorMsg('')
+    setTickerQuery('')
+    setSelectedFoundTicker('')
     if (w) {
       setEditingWl(w)
       setEditName(w.name)
@@ -82,6 +91,8 @@ export default function WatchlistsPage() {
     setShowCreate(false)
     setEditingWl(null)
     setErrorMsg('')
+    setTickerQuery('')
+    setSelectedFoundTicker('')
   }
 
   // ── Save Watchlist + Tickers in Excel Editor ─────────────────────────────
@@ -302,7 +313,59 @@ export default function WatchlistsPage() {
             </div>
 
             <div className="excel-tickers-col">
-              <div className="form-group" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Ticker Search & Select Helper Box */}
+              <div className="form-group" style={{ marginBottom: 12, background: '#0a1727', border: '1px solid #1e3550', padding: 10, borderRadius: 8 }}>
+                <label style={{ color: '#7ec8f0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>
+                  🔍 Lookup Ticker Master Name
+                </label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <input
+                    className="form-input"
+                    style={{ flex: 1, fontSize: 12 }}
+                    placeholder="Search by Ticker or Company Name (e.g. Reliance)..."
+                    value={tickerQuery}
+                    onChange={e => { setTickerQuery(e.target.value); setSelectedFoundTicker(''); }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select
+                    className="form-input"
+                    style={{ flex: 1, fontSize: 12 }}
+                    value={selectedFoundTicker}
+                    onChange={e => setSelectedFoundTicker(e.target.value)}
+                  >
+                    {(() => {
+                      const q = tickerQuery.trim().toLowerCase()
+                      const matches = masterTickers.filter(t => !q || (t.ticker || '').toLowerCase().includes(q) || (t.company_name || '').toLowerCase().includes(q))
+                      return (
+                        <>
+                          <option value="">-- {matches.length} Matched Ticker Master Records --</option>
+                          {matches.slice(0, 100).map(t => (
+                            <option key={t.ticker} value={t.ticker}>{t.ticker} — {t.company_name}</option>
+                          ))}
+                        </>
+                      )
+                    })()}
+                  </select>
+                  <button
+                    className="btn-secondary sm"
+                    type="button"
+                    disabled={!selectedFoundTicker}
+                    onClick={() => {
+                      if (!selectedFoundTicker) return
+                      const existing = rawTickers.split(/[\n,\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean)
+                      if (!existing.includes(selectedFoundTicker)) {
+                        setRawTickers(prev => (prev ? prev.trim() + '\n' + selectedFoundTicker : selectedFoundTicker))
+                      }
+                      setSelectedFoundTicker('')
+                    }}
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ height: 'calc(100% - 90px)', display: 'flex', flexDirection: 'column' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Tickers Grid (Text / Excel List)</span>
                   <span style={{ color: '#4e8bff', font: '700 11px "DM Mono"' }}>

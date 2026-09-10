@@ -2935,7 +2935,7 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
                     SELECT 
                         a.ticker,
                         COALESCE(tm.company_name, a.ticker) AS company_name,
-                        COALESCE(NULLIF(s.name, ''), NULLIF(tm.sector, ''), 'General') AS sector,
+                        COALESCE(NULLIF(sec_lat.name, ''), NULLIF(tm.sector, ''), 'General') AS sector,
                         a.close,
                         o.volume,
                         ind.rsi14,
@@ -2969,8 +2969,14 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
                         ) AS rnk
                     FROM analysis_summaries a
                     LEFT JOIN ticker_master tm ON a.ticker = tm.ticker
-                    LEFT JOIN ticker_sector ts ON ts.ticker = a.ticker
-                    LEFT JOIN sectors s ON s.id = ts.sector_id
+                    LEFT JOIN LATERAL (
+                        SELECT s.name 
+                        FROM ticker_sector ts
+                        JOIN sectors s ON s.id = ts.sector_id
+                        WHERE ts.ticker = a.ticker
+                        ORDER BY ts.sector_id ASC
+                        LIMIT 1
+                    ) sec_lat ON true
                     LEFT JOIN LATERAL (
                         SELECT volume FROM ohlcv_daily WHERE ticker = a.ticker ORDER BY trade_date DESC LIMIT 1
                     ) o ON true
@@ -3315,11 +3321,26 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             actual_ticker = master_row["ticker"]
             master_data = dict(master_row)
 
-            # Assign fallbacks for standard reference metadata cards
-            master_data["id"] = 1
-            master_data["isin_code"] = "INE001A01010"
-            master_data["industry"] = "Banking & Finance / Energy"
-            master_data["active_status"] = "Active"
+            # Fetch all primary & secondary mapped sectors for this ticker from ticker_sector & sectors
+            all_sectors = []
+            try:
+                cur.execute("""
+                    SELECT DISTINCT s.name 
+                    FROM ticker_sector ts
+                    JOIN sectors s ON s.id = ts.sector_id
+                    WHERE ts.ticker = %s
+                    ORDER BY s.name ASC
+                """, (actual_ticker,))
+                s_rows = cur.fetchall()
+                all_sectors = [r["name"] for r in s_rows if r.get("name")]
+            except Exception as e:
+                logger.error(f"Error querying mapped sectors for {actual_ticker}: {e}")
+
+            # Ensure primary sector from ticker_master is included if not already present
+            if master_data.get("sector") and master_data["sector"] not in all_sectors:
+                all_sectors.insert(0, master_data["sector"])
+
+            master_data["mapped_sectors"] = all_sectors
             master_data["overall_suggestion"] = "TRADING ONLY"
             master_data["suggestion_remarks"] = "Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only."
 
@@ -3620,6 +3641,20 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error querying mf_holdings for {actual_ticker}: {e}")
 
+            # Fetch Opportunities & Risk record
+            opportunities_risk = None
+            try:
+                cur.execute("""
+                    SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at
+                    FROM opportunities_risk
+                    WHERE ticker = %s
+                """, (actual_ticker,))
+                opp_row = cur.fetchone()
+                if opp_row:
+                    opportunities_risk = dict(opp_row)
+            except Exception as e:
+                logger.error(f"Error querying opportunities_risk for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
@@ -3633,7 +3668,8 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "fundamentals": fundamentals,
                 "pattern_history": pattern_history,
                 "pattern_stats": pattern_stats,
-                "mf_holdings": mf_holdings
+                "mf_holdings": mf_holdings,
+                "opportunities_risk": opportunities_risk
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
@@ -3903,7 +3939,7 @@ def get_watchlist_monitor(
                 SELECT
                     wi.ticker,
                     COALESCE(tm.company_name, wi.ticker) AS company_name,
-                    COALESCE(NULLIF(s.name, ''), NULLIF(tm.sector, ''), 'General') AS sector,
+                    COALESCE(NULLIF(sec_lat.name, ''), NULLIF(tm.sector, ''), 'General') AS sector,
                     COALESCE(a.close, 0)                   AS current_price,
                     COALESCE(a.technical_score, 0)         AS technical_score,
                     COALESCE(a.fundamental_score, 0)       AS fundamental_score,
@@ -3928,8 +3964,14 @@ def get_watchlist_monitor(
                     COALESCE(a.updated_at::text, '') AS updated_at
                 FROM watchlist_items wi
                 LEFT JOIN ticker_master tm ON tm.ticker = wi.ticker
-                LEFT JOIN ticker_sector ts ON ts.ticker = wi.ticker
-                LEFT JOIN sectors s ON s.id = ts.sector_id
+                LEFT JOIN LATERAL (
+                    SELECT s.name 
+                    FROM ticker_sector ts
+                    JOIN sectors s ON s.id = ts.sector_id
+                    WHERE ts.ticker = wi.ticker
+                    ORDER BY ts.sector_id ASC
+                    LIMIT 1
+                ) sec_lat ON true
                 LEFT JOIN analysis_summaries a ON a.ticker = wi.ticker
                 LEFT JOIN LATERAL (
                     SELECT volume, trade_date FROM ohlcv_daily
@@ -3983,6 +4025,121 @@ def get_watchlist_monitor(
     except Exception as e:
         logger.error(f"Error fetching watchlist monitor data: {e}")
         raise HTTPException(500, f"Error fetching watchlist monitor: {e}")
+
+
+class OpportunitiesRiskIn(BaseModel):
+    ticker: str
+    about_company: Optional[str] = None
+    opportunities: Optional[str] = None
+    risk: Optional[str] = None
+    is_multibagger: Optional[bool] = False
+    additional_note: Optional[str] = None
+    sector_ids: Optional[list[int]] = []
+
+
+@app.get('/api/{dataset}/opportunities-risk/{ticker}')
+@app.get('/api/opportunities-risk/{ticker}')
+def get_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
+    try:
+        actual_ticker = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+        with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, created_at, updated_at
+                FROM opportunities_risk
+                WHERE ticker = %s
+            """, (actual_ticker,))
+            row = cur.fetchone()
+
+            # Get sector mappings
+            cur.execute("""
+                SELECT sector_id FROM ticker_sector WHERE ticker = %s
+            """, (actual_ticker,))
+            sector_ids = [r['sector_id'] for r in cur.fetchall()]
+
+            data = dict(row) if row else {
+                "ticker": actual_ticker,
+                "about_company": "",
+                "opportunities": "",
+                "risk": "",
+                "is_multibagger": False,
+                "additional_note": ""
+            }
+            data["sector_ids"] = sector_ids
+            return data
+    except Exception as e:
+        logger.error(f"Error fetching opportunities_risk for {ticker}: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.get('/api/{dataset}/opportunities-risk')
+@app.get('/api/opportunities-risk')
+def list_opportunities_risk(dataset: str = 'intelligence'):
+    try:
+        with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT o.ticker, o.about_company, o.opportunities, o.risk, o.is_multibagger, o.additional_note, o.updated_at,
+                       tm.company_name
+                FROM opportunities_risk o
+                LEFT JOIN ticker_master tm ON o.ticker = tm.ticker
+                ORDER BY o.updated_at DESC
+            """)
+            rows = cur.fetchall()
+            result = []
+            for r in rows:
+                item = dict(r)
+                cur.execute("SELECT sector_id FROM ticker_sector WHERE ticker = %s", (item['ticker'],))
+                item['sector_ids'] = [s['sector_id'] for s in cur.fetchall()]
+                result.append(item)
+            return result
+    except Exception as e:
+        logger.error(f"Error listing opportunities_risk: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.post('/api/{dataset}/opportunities-risk')
+@app.post('/api/opportunities-risk')
+def save_opportunities_risk(body: OpportunitiesRiskIn, dataset: str = 'intelligence'):
+    try:
+        actual_ticker = body.ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+        with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
+            # 1. Upsert opportunities_risk table
+            cur.execute("""
+                INSERT INTO opportunities_risk (ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (ticker) DO UPDATE SET
+                    about_company = EXCLUDED.about_company,
+                    opportunities = EXCLUDED.opportunities,
+                    risk = EXCLUDED.risk,
+                    is_multibagger = EXCLUDED.is_multibagger,
+                    additional_note = EXCLUDED.additional_note,
+                    updated_at = NOW()
+            """, (actual_ticker, body.about_company, body.opportunities, body.risk, body.is_multibagger or False, body.additional_note))
+
+            # 2. Update multi-sector mappings in ticker_sector
+            if body.sector_ids is not None:
+                cur.execute("DELETE FROM ticker_sector WHERE ticker = %s", (actual_ticker,))
+                for s_id in body.sector_ids:
+                    cur.execute("INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (actual_ticker, s_id))
+
+            conn.commit()
+            return {"success": True, "ticker": actual_ticker}
+    except Exception as e:
+        logger.error(f"Error saving opportunities_risk for {body.ticker}: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.delete('/api/{dataset}/opportunities-risk/{ticker}')
+@app.delete('/api/opportunities-risk/{ticker}')
+def delete_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
+    try:
+        actual_ticker = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+        with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM opportunities_risk WHERE ticker = %s", (actual_ticker,))
+            conn.commit()
+            return {"success": True}
+    except Exception as e:
+        logger.error(f"Error deleting opportunities_risk for {ticker}: {e}")
+        raise HTTPException(500, str(e))
 
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
