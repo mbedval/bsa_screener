@@ -5,7 +5,7 @@ import RecommendationsModal from './RecommendationsModal.jsx'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
   FormGroup, Input, Select, Checkbox, TagInput, MultiPicker,
-  FnoBadge, IndexChip, SectorChip, CountBadge, EmptyState
+  FnoBadge, IndexChip, SectorChip, CountBadge, EmptyState, TruncatedCellText
 } from './ui.jsx'
 
 const PAGE_SIZE = 50
@@ -23,6 +23,8 @@ export default function TickersPage({ dataset }) {
   const [showForm, setShowForm]   = useState(false)
   const [editing, setEditing]     = useState(null)
   const [confirm, setConfirm]     = useState(null)
+  const [confirmBatch, setConfirmBatch] = useState(false)
+  const [selectedTickers, setSelectedTickers] = useState(new Set())
   const [sectorModal, setSectorModal] = useState(null)
   const [recModal, setRecModal]       = useState(null)
   const [selSectors, setSelSectors]   = useState([])
@@ -63,6 +65,25 @@ export default function TickersPage({ dataset }) {
   }, [rows, search, filterFno, filterSector, sortKey, sortAsc])
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const allPagedSelected = paged.length > 0 && paged.every(row => selectedTickers.has(row.ticker))
+
+  const toggleSelectAllPaged = () => {
+    const next = new Set(selectedTickers)
+    if (allPagedSelected) {
+      paged.forEach(row => next.delete(row.ticker))
+    } else {
+      paged.forEach(row => next.add(row.ticker))
+    }
+    setSelectedTickers(next)
+  }
+
+  const toggleSelect = ticker => {
+    const next = new Set(selectedTickers)
+    if (next.has(ticker)) next.delete(ticker)
+    else next.add(ticker)
+    setSelectedTickers(next)
+  }
 
   const sort = key => { setSortKey(key); setSortAsc(k => sortKey === key ? !sortAsc : true); setPage(1) }
 
@@ -107,8 +128,27 @@ export default function TickersPage({ dataset }) {
   }
 
   const del = async ticker => {
-    try { await api.tickers.remove(ticker, dataset); show('Ticker deleted'); load() }
-    catch (e) { show(e.message, 'error') }
+    try {
+      await api.tickers.remove(ticker, dataset)
+      show('Ticker deleted')
+      setSelectedTickers(prev => {
+        const next = new Set(prev)
+        next.delete(ticker)
+        return next
+      })
+      load()
+    } catch (e) { show(e.message, 'error') }
+  }
+
+  const delBatch = async () => {
+    try {
+      const tickersList = Array.from(selectedTickers)
+      const res = await api.tickers.removeBatch(tickersList, dataset)
+      show(`Deleted ${res.deleted_count || tickersList.length} tickers successfully`)
+      setSelectedTickers(new Set())
+      setConfirmBatch(false)
+      load()
+    } catch (e) { show(e.message, 'error') }
   }
 
   const SortTh = ({ k, children }) => (
@@ -123,7 +163,16 @@ export default function TickersPage({ dataset }) {
       <SectionHeader
         title="Ticker Master"
         sub={`${filtered.length} of ${rows.length} tickers`}
-        actions={<button className="btn-primary" onClick={openNew}><Plus size={14}/> Add Ticker</button>}
+        actions={
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {selectedTickers.size > 0 && (
+              <button className="btn-danger" onClick={() => setConfirmBatch(true)}>
+                <Trash2 size={14}/> Delete Selected ({selectedTickers.size})
+              </button>
+            )}
+            <button className="btn-primary" onClick={openNew}><Plus size={14}/> Add Ticker</button>
+          </div>
+        }
       />
 
       {/* Toolbar: search + filters */}
@@ -148,6 +197,12 @@ export default function TickersPage({ dataset }) {
               <X size={12}/> Clear
             </button>
           }
+          {selectedTickers.size > 0 && (
+            <span style={{ fontSize: 13, color: '#7ec8f0', marginLeft: 'auto' }}>
+              {selectedTickers.size} ticker{selectedTickers.size > 1 ? 's' : ''} selected
+              <button className="btn-ghost sm" onClick={() => setSelectedTickers(new Set())} style={{ marginLeft: 8 }}>Deselect all</button>
+            </span>
+          )}
         </div>
       </div>
 
@@ -156,21 +211,41 @@ export default function TickersPage({ dataset }) {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allPagedSelected}
+                    onChange={toggleSelectAllPaged}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 <SortTh k="ticker">Ticker</SortTh>
                 <SortTh k="company_name">Company</SortTh>
                 <th>Sectors</th>
-                <th style={{width:90}}/>
+                <th style={{width:110, textAlign:'right'}}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={4}><div className="state">Loading tickers…</div></td></tr>}
+              {loading && <tr><td colSpan={5}><div className="state">Loading tickers…</div></td></tr>}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={4}><div className="state">No tickers match your filters.</div></td></tr>
+                <tr><td colSpan={5}><div className="state">No tickers match your filters.</div></td></tr>
               )}
               {!loading && paged.map(row => (
-                <tr key={row.ticker} className="data-row">
+                <tr key={row.ticker} className={`data-row ${selectedTickers.has(row.ticker) ? 'selected-row' : ''}`}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTickers.has(row.ticker)}
+                      onChange={() => toggleSelect(row.ticker)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td><b style={{color:'#7ec8f0', fontFamily:"'DM Mono'"}}>{row.ticker}</b></td>
-                  <td style={{maxWidth:280, overflow:'hidden', textOverflow:'ellipsis'}}>{row.company_name}</td>
+                  <td style={{maxWidth:280}}>
+                    <span style={{ color: '#e2e8f0', display: 'inline-block', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }} title={row.company_name}>
+                      {row.company_name || '—'}
+                    </span>
+                  </td>
                   <td>
                     <div className="chip-wrap sm" style={{alignItems:'center'}}>
                       {(row.sectors || []).map(s => <SectorChip key={s.id} label={s.name}/>)}
@@ -179,17 +254,16 @@ export default function TickersPage({ dataset }) {
                       </button>
                     </div>
                   </td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="icon-btn sm" title="Recommendations" onClick={() => setRecModal(row)}><Star size={13}/></button>
-                        <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
-                        <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
-                      </div>
-                    </td>
+                  <td style={{textAlign:'right'}}>
+                    <div className="row-actions">
+                      <button className="icon-btn sm" title="Recommendations" onClick={() => setRecModal(row)}><Star size={13}/></button>
+                      <button className="icon-btn sm" title="Edit" onClick={() => openEdit(row)}><Edit2 size={13}/></button>
+                      <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(row)}><Trash2 size={13}/></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
-
           </table>
         </div>
         <Pagination total={filtered.length} page={page} pageSize={PAGE_SIZE} onChange={setPage}/>
@@ -295,6 +369,17 @@ export default function TickersPage({ dataset }) {
           message={`"${confirm.ticker}" (${confirm.company_name}) will be removed from ticker_master and all sector and watchlist mappings.`}
           onConfirm={() => del(confirm.ticker)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {/* Batch delete confirm */}
+      {confirmBatch && (
+        <ConfirmDialog
+          title={`Delete ${selectedTickers.size} Tickers?`}
+          message={`Are you sure you want to remove ${selectedTickers.size} selected tickers from ticker_master? This will also remove them from all sector and watchlist mappings.`}
+          confirmLabel={`Delete ${selectedTickers.size} Tickers`}
+          onConfirm={delBatch}
+          onClose={() => setConfirmBatch(false)}
         />
       )}
     </div>

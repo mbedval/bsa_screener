@@ -3,7 +3,7 @@ import { BookMarked, Edit2, Plus, Trash2, Check, X, AlertCircle } from 'lucide-r
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
-  CountBadge, TickerChip
+  CountBadge, TickerChip, TruncatedCellText
 } from './ui.jsx'
 
 const PAGE_SIZE = 25
@@ -19,6 +19,8 @@ export default function WatchlistsPage() {
   const [rawTickers, setRawTickers] = useState('')   // Textarea string (one per line or comma separated)
   const [errorMsg, setErrorMsg]     = useState('')
   const [confirmDel, setConfirmDel] = useState(null)
+  const [confirmBatch, setConfirmBatch] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
   const [saving, setSaving]         = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const { show, ToastContainer }    = useToast()
@@ -39,6 +41,25 @@ export default function WatchlistsPage() {
     [watchlists, search]
   )
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const allPagedSelected = paged.length > 0 && paged.every(w => selectedIds.has(w.id))
+
+  const toggleSelectAllPaged = () => {
+    const next = new Set(selectedIds)
+    if (allPagedSelected) {
+      paged.forEach(w => next.delete(w.id))
+    } else {
+      paged.forEach(w => next.add(w.id))
+    }
+    setSelectedIds(next)
+  }
+
+  const toggleSelect = id => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
 
   // ── Open Excel-like Editor ──────────────────────────────────────────────────
   const openEditor = (w) => {
@@ -92,9 +113,15 @@ export default function WatchlistsPage() {
           .filter(Boolean)
       ))
 
-      // Save tickers
-      await api.watchlists.setTickers(wlId, parsedTickers)
-      show(editingWl.id ? 'Watchlist updated successfully' : 'Watchlist created successfully')
+      // Save tickers — backend validates against ticker_master
+      const result = await api.watchlists.setTickers(wlId, parsedTickers)
+
+      if (result.skipped_count > 0) {
+        const baseMsg = editingWl.id ? 'Watchlist updated' : 'Watchlist created'
+        show(`${baseMsg} — ${result.saved_count} ticker(s) saved. ⚠️ ${result.skipped_count} unrecognised ticker(s) skipped: ${result.skipped.join(', ')}`)
+      } else {
+        show(editingWl.id ? 'Watchlist updated successfully' : 'Watchlist created successfully')
+      }
       closeEditor()
       load()
     } catch (e) {
@@ -104,12 +131,31 @@ export default function WatchlistsPage() {
     }
   }
 
+
   // ── Permanent Deletion (No soft delete) ───────────────────────────────────
   const handleDelete = async (w) => {
     try {
       await api.watchlists.remove(w.id)
       show(`Watchlist "${w.name}" deleted permanently from all references.`)
       setConfirmDel(null)
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        next.delete(w.id)
+        return next
+      })
+      load()
+    } catch (e) {
+      show(e.message, 'error')
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    try {
+      const ids = Array.from(selectedIds)
+      const res = await api.watchlists.removeBatch(ids)
+      show(`Permanently deleted ${res.deleted_count || ids.length} watchlists and updated all references.`)
+      setSelectedIds(new Set())
+      setConfirmBatch(false)
       load()
     } catch (e) {
       show(e.message, 'error')
@@ -122,16 +168,41 @@ export default function WatchlistsPage() {
       <SectionHeader
         title="Watchlists"
         sub={`${filtered.length} watchlist${filtered.length !== 1 ? 's' : ''} available`}
-        actions={<button className="btn-primary" onClick={() => openEditor(null)}><Plus size={14}/> Create Watchlist</button>}
+        actions={
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {selectedIds.size > 0 && (
+              <button className="btn-danger" onClick={() => setConfirmBatch(true)}>
+                <Trash2 size={14}/> Delete Selected ({selectedIds.size})
+              </button>
+            )}
+            <button className="btn-primary" onClick={() => openEditor(null)}><Plus size={14}/> Create Watchlist</button>
+          </div>
+        }
       />
 
-      <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search watchlist by name or description…"/>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search watchlist by name or description…"/>
+        {selectedIds.size > 0 && (
+          <span style={{ fontSize: 13, color: '#7ec8f0' }}>
+            {selectedIds.size} watchlist{selectedIds.size > 1 ? 's' : ''} selected
+            <button className="btn-ghost sm" onClick={() => setSelectedIds(new Set())} style={{ marginLeft: 8 }}>Deselect all</button>
+          </span>
+        )}
+      </div>
 
       <section className="panel data-panel">
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style={{ width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allPagedSelected}
+                    onChange={toggleSelectAllPaged}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 <th>Watchlist Name</th>
                 <th>Count</th>
                 <th>Sectors / Scope</th>
@@ -139,16 +210,24 @@ export default function WatchlistsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={4}><div className="state">Loading watchlists…</div></td></tr>}
+              {loading && <tr><td colSpan={5}><div className="state">Loading watchlists…</div></td></tr>}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={4}><div className="state">No watchlists found.</div></td></tr>
+                <tr><td colSpan={5}><div className="state">No watchlists found.</div></td></tr>
               )}
               {!loading && paged.map(w => (
-                <tr key={w.id} className="data-row">
+                <tr key={w.id} className={`data-row ${selectedIds.has(w.id) ? 'selected-row' : ''}`}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(w.id)}
+                      onChange={() => toggleSelect(w.id)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td>
                     <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'", display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <BookMarked size={13} style={{ color: '#4e8bff' }}/>
-                      {w.name}
+                      <BookMarked size={13} style={{ color: '#4e8bff', flexShrink: 0 }}/>
+                      <TruncatedCellText text={w.name} title="Watchlist Name" maxLen={20} truncLen={16} />
                     </b>
                   </td>
                   <td><CountBadge count={(w.tickers || []).length}/></td>
@@ -267,6 +346,17 @@ export default function WatchlistsPage() {
           confirmLabel="Delete Permanently"
           onConfirm={() => handleDelete(confirmDel)}
           onClose={() => setConfirmDel(null)}
+        />
+      )}
+
+      {/* Batch Delete Confirmation */}
+      {confirmBatch && (
+        <ConfirmDialog
+          title={`Permanently Delete ${selectedIds.size} Watchlists?`}
+          message={`Are you sure you want to permanently delete ${selectedIds.size} selected watchlists? This action CANNOT be undone and will remove them from all user & ticker mappings.`}
+          confirmLabel={`Delete ${selectedIds.size} Permanently`}
+          onConfirm={handleBatchDelete}
+          onClose={() => setConfirmBatch(false)}
         />
       )}
     </div>

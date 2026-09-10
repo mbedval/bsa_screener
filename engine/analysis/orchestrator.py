@@ -7,6 +7,9 @@ from engine.analysis.fundamental import analyze_fundamental
 from engine.analysis.options import analyze_options_chain
 from engine.analysis.footprint import analyze_footprint_and_news
 from engine.analysis.projection import calculate_22d_projection
+from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+from engine.analysis.sector_followers import generate_sector_followers_analysis
+from engine.analysis.retracement import generate_retracement_speculator_analysis
 
 from engine.utils.logger import setup_logger
 
@@ -369,3 +372,8 @@ def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bo
     elapsed = time.time() - start_time
     failed_count = len(all_tickers) - success_count
     logger.info(f"Analysis process completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")
+    try:
+        generate_retracement_speculator_analysis()
+    except Exception as e:
+        logger.error(f"Error running Retracement Speculator Analysis: {e}")
+

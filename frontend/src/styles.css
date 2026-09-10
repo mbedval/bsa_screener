@@ -230,6 +230,8 @@ body[data-theme="warm"] .badge.neutral {
 .btn-secondary{background:#162c46;border:1px solid #32547a;color:#7ec8f0;padding:9px 16px;border-radius:8px;font:700 12px Manrope;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}.btn-secondary:hover{background:#1d3a5c;border-color:#4a7eb5;color:#fff}
 .btn-ghost{background:transparent;border:1px solid #304765;color:#a8b8cf;padding:9px 16px;border-radius:8px;font:600 12px Manrope;cursor:pointer;transition:border-color .15s}.btn-ghost:hover{border-color:#5d8fcb;color:#d9eaff}
 .icon-btn{background:transparent;border:1px solid #2a405e;color:#7d97b8;width:30px;height:30px;border-radius:6px;display:grid;place-items:center;cursor:pointer;transition:all .15s}.icon-btn:hover{background:#1e3550;color:#d9eaff;border-color:#4a6fa0}.icon-btn.danger:hover{background:#3d1e2e;color:#ff93a8;border-color:#7a3050}
+.icon-btn.sm{width:26px;height:26px}
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
 .chip-edit-btn{background:transparent;border:1px dashed #2a4a6a;color:#5d88b8;width:22px;height:22px;border-radius:5px;display:inline-grid;place-items:center;cursor:pointer;transition:all .15s;flex-shrink:0}.chip-edit-btn:hover{background:#1e3550;border-color:#5d8fcb;color:#d9eaff}
 
 /* ── Chips ─────────────────────────────────────────────────────────────────── */
@@ -353,6 +355,14 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
   transform: scale(1.15);
 }
+
+.selected-row {
+  background-color: rgba(78, 139, 255, 0.12) !important;
+}
+.selected-row:hover {
+  background-color: rgba(78, 139, 255, 0.20) !important;
+}
+
 
 
 

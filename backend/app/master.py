@@ -138,6 +138,19 @@ class TickerAssign(BaseModel):
     tickers: list[str]
 
 
+class BatchDeleteTickers(BaseModel):
+    tickers: list[str]
+
+
+class BatchDeleteWatchlists(BaseModel):
+    ids: list[int]
+
+
+class BatchDeleteUsers(BaseModel):
+    emails: list[str]
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Sectors
 # ─────────────────────────────────────────────────────────────────────────────
@@ -477,6 +490,22 @@ def delete_ticker(ticker: str, dataset: Optional[str] = None) -> None:
         conn.commit()
 
 
+@router.post("/tickers/batch-delete")
+def delete_tickers_batch(body: BatchDeleteTickers, dataset: Optional[str] = None) -> dict:
+    if not body.tickers:
+        return {"deleted_count": 0}
+    clean_tickers = [t.upper() for t in body.tickers]
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM ticker_master WHERE ticker = ANY(%s) RETURNING ticker",
+            (clean_tickers,),
+        )
+        deleted = cur.fetchall()
+        conn.commit()
+        return {"deleted_count": len(deleted), "deleted_tickers": [r["ticker"] for r in deleted]}
+
+
+
 @router.post("/tickers/{ticker}/sectors")
 def assign_ticker_sectors(ticker: str, body: SectorAssign, dataset: Optional[str] = None) -> dict:
     """Replace the sector assignments for a ticker."""
@@ -583,23 +612,58 @@ def delete_watchlist(watchlist_id: int) -> None:
         conn.commit()
 
 
+@router.post("/watchlists/batch-delete")
+def delete_watchlists_batch(body: BatchDeleteWatchlists) -> dict:
+    if not body.ids:
+        return {"deleted_count": 0}
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM watchlist WHERE id = ANY(%s) RETURNING id",
+            (body.ids,),
+        )
+        deleted = cur.fetchall()
+        conn.commit()
+        return {"deleted_count": len(deleted), "deleted_ids": [r["id"] for r in deleted]}
+
+
+
 
 @router.post("/watchlists/{watchlist_id}/tickers")
 def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
-    """Replace ticker assignments for a watchlist."""
+    """Replace ticker assignments for a watchlist. Silently skips tickers not in ticker_master."""
     with rawdata_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM watchlist WHERE id=%s", (watchlist_id,))
         if not cur.fetchone():
             raise _not_found("Watchlist", watchlist_id)
-        cur.execute("DELETE FROM watchlist_items WHERE watchlist_id=%s", (watchlist_id,))
-        tickers_upper = [t.upper() for t in body.tickers]
+
+        tickers_upper = list(dict.fromkeys(t.upper().strip() for t in body.tickers if t.strip()))
+
+        # Validate: only keep tickers that exist in ticker_master (FK constraint)
+        valid_tickers: list[str] = []
+        skipped_tickers: list[str] = []
         if tickers_upper:
+            cur.execute(
+                "SELECT ticker FROM ticker_master WHERE ticker = ANY(%s)",
+                (tickers_upper,)
+            )
+            known = {r["ticker"] for r in cur.fetchall()}
+            valid_tickers = [t for t in tickers_upper if t in known]
+            skipped_tickers = [t for t in tickers_upper if t not in known]
+
+        cur.execute("DELETE FROM watchlist_items WHERE watchlist_id=%s", (watchlist_id,))
+        if valid_tickers:
             cur.executemany(
                 "INSERT INTO watchlist_items (watchlist_id, ticker) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                [(watchlist_id, t) for t in tickers_upper],
+                [(watchlist_id, t) for t in valid_tickers],
             )
         conn.commit()
-    return {"watchlist_id": watchlist_id, "tickers": tickers_upper}
+    return {
+        "watchlist_id": watchlist_id,
+        "tickers": valid_tickers,
+        "skipped": skipped_tickers,
+        "saved_count": len(valid_tickers),
+        "skipped_count": len(skipped_tickers),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -680,6 +744,22 @@ def delete_user(email: str) -> None:
         if not cur.fetchone():
             raise _not_found("User", email)
         conn.commit()
+
+
+@router.post("/users/batch-delete")
+def delete_users_batch(body: BatchDeleteUsers) -> dict:
+    if not body.emails:
+        return {"deleted_count": 0}
+    clean_emails = [e.lower() for e in body.emails]
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM users WHERE email = ANY(%s) RETURNING email",
+            (clean_emails,),
+        )
+        deleted = cur.fetchall()
+        conn.commit()
+        return {"deleted_count": len(deleted), "deleted_emails": [r["email"] for r in deleted]}
+
 
 
 # ─── Alternative Names (Ticker Aliases) ───────────────────────────────────────

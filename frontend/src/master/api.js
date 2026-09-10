@@ -65,6 +65,7 @@ export const tickers = {
   create: (data, dataset) => _req('POST', `${BASE}/tickers${dataset ? '?dataset=' + dataset : ''}`, data),
   update: (ticker, data, dataset) => _req('PUT', `${BASE}/tickers/${ticker}${dataset ? '?dataset=' + dataset : ''}`, data),
   remove: (ticker, dataset) => _req('DELETE', `${BASE}/tickers/${ticker}${dataset ? '?dataset=' + dataset : ''}`),
+  removeBatch: (tickers, dataset) => _req('POST', `${BASE}/tickers/batch-delete${dataset ? '?dataset=' + dataset : ''}`, { tickers }),
   setSectors: (ticker, ids, dataset) => _req('POST', `${BASE}/tickers/${ticker}/sectors${dataset ? '?dataset=' + dataset : ''}`, { sector_ids: ids }),
 }
 
@@ -74,6 +75,7 @@ export const watchlists = {
   create: (data)           => _req('POST',   `${BASE}/watchlists`,              data),
   update: (id, data)       => _req('PUT',    `${BASE}/watchlists/${id}`,        data),
   remove: (id)             => _req('DELETE', `${BASE}/watchlists/${id}`),
+  removeBatch: (ids)       => _req('POST',   `${BASE}/watchlists/batch-delete`, { ids }),
   setTickers: (id, tickers) => _req('POST',  `${BASE}/watchlists/${id}/tickers`, { tickers }),
 }
 
@@ -83,8 +85,15 @@ export const users = {
   create: (data)        => _req('POST',   `${BASE}/users`,             data),
   update: (email, data) => _req('PUT',    `${BASE}/users/${email}`,    data),
   remove: (email)       => _req('DELETE', `${BASE}/users/${email}`),
+  removeBatch: (emails) => _req('POST',   `${BASE}/users/batch-delete`, { emails }),
   sendNewsletter: (email) => _req('POST',  `${BASE}/users/${email}/newsletter-send`),
 }
+
+// ── Recommendations ───────────────────────────────────────────────────────────
+export const recommendations = {
+  removeBatch: (ids)    => _req('POST',   '/api/recommendations/batch-delete', { ids }),
+}
+
 
 // ── Alternative Names (Ticker Aliases) ────────────────────────────────────────
 export const alternativeNames = {

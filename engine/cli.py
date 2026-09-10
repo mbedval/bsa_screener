@@ -156,6 +156,20 @@ def main():
                 if ticker is not None:
                     progress.update(task_id, advance=advance)
             analyze_all_tickers(progress_callback=cb, resume=resume)
+        
+        # Pre-calculate Stocks Respecting Chart Patterns for database
+        try:
+            from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+            generate_stocks_respecting_patterns()
+        except Exception as e:
+            logger.error(f"Error running pre-calculation for stocks respecting patterns: {e}")
+
+        # Pre-calculate Sectorwise Lead-Follow Relationship Groups for database
+        try:
+            from engine.analysis.sector_followers import generate_sector_followers_analysis
+            generate_sector_followers_analysis()
+        except Exception as e:
+            logger.error(f"Error running pre-calculation for sectorwise followers: {e}")
 
     def backup_historical_calls():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")

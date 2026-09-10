@@ -47,3 +47,12 @@ To maintain strict data integrity, zero contamination, and explicit control flow
 ### Rule 2.2: Historical Calls Data Retaining & Backup
 - **Command**: `python3 -m engine.cli --mode backup`
 - **Rule**: Backs up generated historical calls from `historical_calls` table into `historical_call_bkp` table and exports to `data/historical_call_bkp.csv` to ensure historical calls are preserved independently without polluting fresh golden baseline setups.
+
+---
+
+## 3. UI Navigation Rules
+
+### Rule 3.1: Ticker Click Navigation
+- **Rule**: Clicking on any ticker symbol in list/report/monitor pages (e.g., Watchlist Monitor, Sectorwise Followers, Retracement Pattern, Sector-wise Board) MUST navigate to the **Lookup Ticker Master Data** page (`research:search_detail`), NOT a separate or alternative ticker profile page.
+- **Implementation**: Use `handleLookupTickerSelect(ticker)` in `main.jsx`, which sets `selectedProfileTicker`, increments `searchCounter`, and sets `active = 'research:search_detail'`.
+- **Prohibition**: Do NOT route ticker clicks from report/monitor pages to `research:ticker_profile` or any other page unless explicitly requested by the user.

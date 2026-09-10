@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, ChevronDown, ChevronRight,
-  Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, Plus,
+  Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, PieChart, Plus,
   RefreshCw, Search, Settings2, Share2, Shield, TableProperties, Tag,
-  Download, Trash2, TrendingUp, User, Users, X, Star
+  Download, Trash2, TrendingUp, User, Users, X, Star, Target
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage } from './visualizer/index.jsx'
+
+
 
 import './styles.css'
 
@@ -20,15 +22,66 @@ const groupIcon = {
   Derivative: Layers, DERIVATIVE: Layers,
 }
 
+const subApps = {
+  'ticker-search': {
+    id: 'ticker-search',
+    title: 'Lookup Ticker Master Data',
+    eyebrow: 'SEARCH & REPORTS',
+    icon: Search,
+    description: 'Lookup ticker master data, PDF-aligned technical analysis reports, volume spikes & financial metrics.',
+    defaultView: 'research:search_detail'
+  },
+  'calls': {
+    id: 'calls',
+    title: 'Trading Calls & Strategy',
+    eyebrow: 'MOMENTUM TRADES',
+    icon: Activity,
+    description: 'Algorithmic momentum trade setups across Mid-Cap, Small-Cap, Large-Cap universes & Broker recommendations.',
+    defaultView: 'dashboard'
+  },
+  'scanners': {
+    id: 'scanners',
+    title: 'Technical Scanners & Patterns',
+    eyebrow: 'QUANTITATIVE SCANNERS',
+    icon: TrendingUp,
+    description: 'Multi-strategy quantitative scanners, breakout setups, reversal pinbars & candlestick pattern viewer.',
+    defaultView: 'research:patterns'
+  },
+  'derivatives': {
+    id: 'derivatives',
+    title: 'Derivatives & F&O Hub',
+    eyebrow: 'OPTIONS ANALYTICS',
+    icon: Layers,
+    description: 'Interactive option chain analyzer, best option strategy evaluator & active F&O contract buildup.',
+    defaultView: 'option_chain_analyzer'
+  },
+  'master-data': {
+    id: 'master-data',
+    title: 'Master Data Admin',
+    eyebrow: 'SYSTEM CONFIG & REFERENCE',
+    icon: Settings2,
+    description: 'Manage master tickers, sector mappings, F&O lists, watchlists, users, aliases & exclusion rules.',
+    defaultView: 'master:tickers'
+  },
+  'raw-data': {
+    id: 'raw-data',
+    title: 'Raw Data Explorer',
+    eyebrow: 'POSTGRESQL TABLES',
+    icon: Database,
+    description: 'Inspect underlying PostgreSQL database tables, raw OHLCV price history, delivery stats & fundamentals.',
+    defaultView: 'ohlcv_daily'
+  }
+}
+
 const apps = {
   rawdata: {
-    title: 'Raw Data', eyebrow: 'RAW DATA EXPLORER',
+    title: 'Raw Data Explorer', eyebrow: 'RAW DATA EXPLORER',
     description: 'Inspect source market data, technical indicators, fundamentals and master reference tables.',
     database: 'bsa_db', accent: 'Source tables',
   },
   intelligence: {
-    title: 'Market Intelligence (NSE)', eyebrow: 'BSA MARKET INTELLIGENCE',
-    description: 'Explore generated calls, scanner outputs, sector analysis and delivery signals for NSE India.',
+    title: 'BSA Market Intelligence Suite', eyebrow: 'BSA MARKET INTELLIGENCE',
+    description: 'Explore generated calls, scanner outputs, sector analysis, F&O options and ticker reports.',
     database: 'bsa_db', accent: 'Analysis sources',
   },
 }
@@ -60,7 +113,7 @@ const format = (value, key = '') => {
   if (Array.isArray(value)) return value.map(cleanTicker).join(', ') || '—'
   if (typeof value === 'boolean') return value ? '✓ Yes' : '✗ No'
   if (typeof value === 'number') {
-    if (key.includes('market_cap')) return `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)} Cr`
+    if (key.includes('market_cap')) return `${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)} Cr`
     return key.includes('ratio') || key.includes('confidence') || key.includes('change') || key.includes('deviation')
       ? `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
       : value.toLocaleString('en-IN')
@@ -166,31 +219,58 @@ function ThemeSelector({ currentTheme, onSelectTheme }) {
 }
 
 // ─── Landing page ─────────────────────────────────────────────────────────────
-function Landing({ theme, setTheme, onSelectApp }) {
+function Landing({ theme, setTheme, onSelectApp, onSelectSubApp }) {
   return (
     <div className="landing">
-      <main className="landing-main">
+      <main className="landing-main" style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px' }}>
         <div className="landing-logo-wrap">
-          <img src="/BSA.png" alt="BSA Logo" className="landing-logo" />
+          <img src="/bsa.png" alt="BSA Logo" className="landing-logo" />
         </div>
         <p className="eyebrow portal-title-highlight">BSA MARKET INTELLIGENCE PORTAL</p>
-        <h1>Find best opputunities</h1>
-        <div className="app-cards">
-          {Object.entries(apps).filter(([key]) => key === 'intelligence' || key === 'us_intelligence').map(([key, item]) => (
-            <a
-              className={`app-card ${key}`}
-              href={`/${key}`}
-              key={key}
-              onClick={e => {
-                e.preventDefault()
-                if (onSelectApp) onSelectApp(key)
-              }}
-            >
-              <h2>{item.title}</h2>
-              <p>{item.description}</p>
-              <b>Launch <ArrowRight size={16} /></b>
-            </a>
-          ))}
+        <h1 style={{ marginBottom: 12 }}>Modular Market Intelligence Suite</h1>
+        <p style={{ color: '#94a3b8', fontSize: 16, maxWidth: 650, margin: '0 auto 36px auto', textAlign: 'center' }}>
+          Decomposed modular sub-applications for targeted trading setup discovery, option analytics, technical scanners, and master data management.
+        </p>
+
+        {/* Sub-App Grid Launcher */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, textAlign: 'left' }}>
+          {Object.entries(subApps).map(([key, item]) => {
+            const Icon = item.icon
+            return (
+              <div
+                key={key}
+                className="app-card"
+                onClick={() => {
+                  if (onSelectSubApp) onSelectSubApp(key)
+                }}
+                style={{
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: 12,
+                  padding: 24,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: 8, borderRadius: 8 }}>
+                      <Icon size={20} />
+                    </div>
+                    <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 800, letterSpacing: 1 }}>{item.eyebrow}</span>
+                  </div>
+                  <h2 style={{ fontSize: 18, margin: '0 0 8px 0', color: '#fff' }}>{item.title}</h2>
+                  <p style={{ color: '#94a3b8', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{item.description}</p>
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 700, fontSize: 13 }}>
+                  Launch Sub-App <ArrowRight size={16} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       </main>
       <footer className="landing-footer">
@@ -259,6 +339,12 @@ function App() {
   const [selectedFnoTicker, setSelectedFnoTicker] = useState('NIFTY')
   const [selectedProfileTicker, setSelectedProfileTicker] = useState('')
   const [expandedSection, setExpandedSection] = useState('Research Board')
+  const [searchCounter, setSearchCounter] = useState(0)
+
+  const triggerSearchDetail = () => {
+    setActive('research:search_detail')
+    setSearchCounter(c => c + 1)
+  }
 
   const [searchHistory, setSearchHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('bsa_search_history') || '[]') } catch (_) { return [] }
@@ -325,6 +411,15 @@ function App() {
     setActive('research:ticker_profile')
   }
 
+  // Navigate ticker clicks to the Lookup Ticker Master Data page
+  const handleLookupTickerSelect = (symbol) => {
+    if (!symbol) return
+    const s = cleanTicker(symbol).toUpperCase()
+    setSelectedProfileTicker(s)
+    setSearchCounter(c => c + 1)
+    setActive('research:search_detail')
+  }
+
 
   const load = async (tableName = active, search = query) => {
     setLoading(true)
@@ -340,21 +435,28 @@ function App() {
     }
   }
 
-  const refreshDashboard = async () => {
+  const refreshDashboard = () => {
     if (path === '' || path === '/') return
     setError('')
-    try {
-      const [c, o, d] = await Promise.all([
-        fetch(`${apiBase}/catalog`), fetch(`${apiBase}/overview`), fetch(`${apiBase}/database-info`),
-      ])
-      const cat = await c.json(), details = await d.json()
-      if (!c.ok) throw new Error(cat.detail)
-      if (!d.ok) throw new Error(details.detail)
-      setCatalog(cat); setOverview(await o.json()); setDbInfo(details)
-    } catch (e) { setError(e.message) }
+    fetch(`${apiBase}/catalog`)
+      .then(r => r.ok ? r.json() : [])
+      .then(cat => setCatalog(Array.isArray(cat) ? cat : []))
+      .catch(() => {})
+
+    fetch(`${apiBase}/overview`)
+      .then(r => r.ok ? r.json() : null)
+      .then(o => { if (o) setOverview(o) })
+      .catch(() => {})
+
+    fetch(`${apiBase}/database-info`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDbInfo(d) })
+      .catch(e => setError(e.message))
 
     if (dataset === 'intelligence') {
-      try { const s = await api.get('/api/master/sectors-summary'); setSectorSummary(s) } catch (_) {}
+      api.get('/api/master/sectors-summary')
+        .then(s => setSectorSummary(Array.isArray(s) ? s : []))
+        .catch(() => {})
     }
   }
 
@@ -393,16 +495,18 @@ function App() {
 
   useEffect(() => {
     if (path === '' || path === '/') return
-    if (active.startsWith('master:')) {
+    const isMaster = active.startsWith('master:') || active === 'fno_stock_master' || active === 'fno_index_master' || active === 'fno_master' || active === 'ticker_master'
+    const isSector = active.startsWith('sector:')
+    if (isMaster) {
       setExpandedSection('Master Data')
-    } else if (active.startsWith('sector:')) {
+    } else if (isSector) {
       setExpandedSection('By Sector')
-    } else if (active === 'research:search_detail') {
-      setExpandedSection('Calls')
+    } else if (current?.group) {
+      setExpandedSection(current.group)
     } else {
       setExpandedSection('Research Board')
     }
-  }, [active, path])
+  }, [active, path, current])
 
   const toggleSection = (groupName) => {
     setExpandedSection(prev => prev === groupName ? null : groupName)
@@ -411,8 +515,23 @@ function App() {
   const handleSectorScanChange = (t) => { setSectorScanTable(t); if (activeSector) loadSectorData(activeSector, t) }
   const handleMasterNav = (sub) => setActive(`master:${sub}`)
 
+  const [activeSubApp, setActiveSubApp] = useState('ticker-search')
+
+  const handleSelectSubApp = (subAppKey) => {
+    const sApp = subApps[subAppKey]
+    if (sApp) {
+      setActiveSubApp(subAppKey)
+      if (sApp.defaultView === 'research:search_detail') {
+        triggerSearchDetail()
+      } else {
+        setActive(sApp.defaultView)
+      }
+      navigateTo('intelligence')
+    }
+  }
+
   if (path === '' || path === '/') {
-    return <Landing theme={theme} setTheme={setTheme} onSelectApp={(appKey) => navigateTo(appKey)} />
+    return <Landing theme={theme} setTheme={setTheme} onSelectApp={(appKey) => navigateTo(appKey)} onSelectSubApp={handleSelectSubApp} />
   }
 
   return (
@@ -441,19 +560,15 @@ function App() {
             </div>
             {expandedSection === 'Research Board' && (
               <div className="nav-section-items">
-                <button className={`nav-item ${active === 'dashboard' ? 'selected' : ''}`} onClick={() => setActive('dashboard')}>
-                  <LayoutDashboard size={14} /> Top 15 All Full List
+                <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => triggerSearchDetail()}>
+                  <Search size={14} /> Lookup Ticker Master Data
                 </button>
-                <button className={`nav-item ${active === 'midcap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('midcap_dashboard')}>
-                  <TrendingUp size={14} /> Top 15 Mid-Cap Stocks
+                <button className={`nav-item ${active === 'research:market_cap_wise' ? 'selected' : ''}`} onClick={() => setActive('research:market_cap_wise')}>
+                  <TrendingUp size={14} /> Market Cap Wise Top 10
                 </button>
-                <button className={`nav-item ${active === 'smallcap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('smallcap_dashboard')}>
-                  <TrendingUp size={14} /> Top 15 Small-Cap Stocks
+                <button className={`nav-item ${active === 'research:sector_wise' ? 'selected' : ''}`} onClick={() => setActive('research:sector_wise')}>
+                  <PieChart size={14} /> Sector wise Top 10
                 </button>
-                <button className={`nav-item ${active === 'largecap_dashboard' ? 'selected' : ''}`} onClick={() => setActive('largecap_dashboard')}>
-                  <TrendingUp size={14} /> Top 15 Large-Cap Stocks
-                </button>
-
                 <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
                   <TrendingUp size={14} /> Charts & Visualizer
                 </button>
@@ -463,9 +578,23 @@ function App() {
                 <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
                   <Layers size={14} /> Indices Pattern Viewer
                 </button>
+                <button className={`nav-item ${active === 'research:stocks_respecting_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:stocks_respecting_patterns')}>
+                  <Target size={14} /> Stocks Respecting Chart Pattern
+                </button>
+                <button className={`nav-item ${active === 'research:sectorwise_followers' ? 'selected' : ''}`} onClick={() => setActive('research:sectorwise_followers')}>
+                  <Layers size={14} /> Sectorwise Followers
+                </button>
+                <button className={`nav-item ${active === 'research:retracement_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:retracement_patterns')}>
+                  <Activity size={14} /> Retracement & Speculator Behavior
+                </button>
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
                   <Activity size={14} /> Period Comparison
                 </button>
+                <button className={`nav-item ${active === 'research:watchlist_monitor' ? 'selected' : ''}`} onClick={() => setActive('research:watchlist_monitor')}>
+                  <Star size={14} /> Watchlist Monitor
+                </button>
+
+
 
               </div>
             )}
@@ -527,11 +656,6 @@ function App() {
                           {item.label}
                         </button>
                       ))}
-                      {(group === 'Calls' || group === 'CALLS') && (
-                        <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => setActive('research:search_detail')}>
-                          <Search size={14} /> Search Detail
-                        </button>
-                      )}
 
                     </div>
                   )}
@@ -558,6 +682,45 @@ function App() {
       </aside>
 
       <main>
+        {/* Universal Sub-App Top Switcher Bar */}
+        <div style={{ background: '#09111f', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, overflowX: 'auto' }}>
+          <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 800, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>APP SUITE:</span>
+          {Object.entries(subApps).map(([sKey, sApp]) => {
+            const Icon = sApp.icon
+            const isSel = activeSubApp === sKey
+            return (
+              <button
+                key={sKey}
+                onClick={() => {
+                  setActiveSubApp(sKey)
+                  if (sApp.defaultView === 'research:search_detail') {
+                    triggerSearchDetail()
+                  } else {
+                    setActive(sApp.defaultView)
+                  }
+                }}
+                style={{
+                  background: isSel ? 'linear-gradient(135deg, #38bdf8, #0284c7)' : 'rgba(255,255,255,0.05)',
+                  color: isSel ? '#0f172a' : '#cbd5e1',
+                  border: isSel ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  whiteSpace: 'nowrap',
+                  boxShadow: isSel ? '0 4px 12px rgba(56, 189, 248, 0.3)' : 'none'
+                }}
+              >
+                <Icon size={14} /> {sApp.title}
+              </button>
+            )
+          })}
+        </div>
+
         {!MASTER_PAGES.includes(active) && !active.startsWith('research:') && active !== 'charts_visualizations' && (
 
           <header>
@@ -617,7 +780,9 @@ function App() {
         ) : active === 'best_option_strategy' ? (
           <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:search_detail' ? (
-          <SearchDetailPage apiBase={apiBase} dataset={dataset} />
+          <ChartErrorBoundary>
+            <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} />
+          </ChartErrorBoundary>
         ) : active === 'research:ticker_profile' ? (
           <TickerResearchProfilePage apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker} onNavigate={(tab) => setActive(tab)} />
         ) : active === 'research:patterns' ? (
@@ -626,9 +791,25 @@ function App() {
           <IndicesPatternViewerPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:compare' ? (
           <ResearchBoardPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:sector_wise' ? (
+          <SectorWiseReportPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:market_cap_wise' ? (
+          <MarketCapWiseReportPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:stocks_respecting_patterns' ? (
+          <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:sectorwise_followers' ? (
+          <SectorwiseFollowersPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:retracement_patterns' ? (
+          <ChartErrorBoundary>
+            <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleProfileTickerSelect(t)} />
+          </ChartErrorBoundary>
+        ) : active === 'research:watchlist_monitor' ? (
+          <WatchlistMonitorPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : (
           <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleProfileTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}
+
+
 
 
       </main>
@@ -670,18 +851,18 @@ function OptionTradeNoteModal({ noteData, onClose }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
           <div style={{ background: 'rgba(255,255,255,0.04)', padding: 10, borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
             <span style={{ fontSize: 11, color: '#94a3b8' }}>Option Entry LTP</span>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>₹{noteData.ltp?.toFixed(2)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{noteData.ltp?.toFixed(2)}</div>
           </div>
 
           <div style={{ background: 'rgba(255,77,79,0.08)', padding: 10, borderRadius: 6, border: '1px solid rgba(255,77,79,0.25)' }}>
             <span style={{ fontSize: 11, color: '#ff4d4f' }}>Option Stop Loss (SL)</span>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#ff4d4f' }}>₹{noteData.option_sl?.toFixed(2)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#ff4d4f' }}>{noteData.option_sl?.toFixed(2)}</div>
           </div>
 
           <div style={{ background: 'rgba(82,196,26,0.08)', padding: 10, borderRadius: 6, border: '1px solid rgba(82,196,26,0.25)' }}>
             <span style={{ fontSize: 11, color: '#52c41a' }}>Option Target (T1 / T2)</span>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#52c41a' }}>
-              ₹{noteData.option_t1?.toFixed(2)} / ₹{noteData.option_t2?.toFixed(2)}
+              {noteData.option_t1?.toFixed(2)} / {noteData.option_t2?.toFixed(2)}
             </div>
           </div>
 
@@ -694,12 +875,12 @@ function OptionTradeNoteModal({ noteData, onClose }) {
         {/* Spot Stock Trigger & Support Targets */}
         <div style={{ background: 'rgba(15,23,42,0.8)', padding: 12, borderRadius: 6, border: '1px solid rgba(126,200,240,0.2)', marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#7ec8f0', marginBottom: 6, textTransform: 'uppercase' }}>
-            Underlying Stock Spot Reference (Spot Price: ₹{noteData.stock_spot?.toFixed(2)})
+            Underlying Stock Spot Reference (Spot Price: {noteData.stock_spot?.toFixed(2)})
           </div>
           <div style={{ display: 'flex', gap: 16, fontSize: 13, flexWrap: 'wrap', color: '#cbd5e1' }}>
-            <span>Stock Trigger: <b style={{ color: '#fff' }}>Above ₹{noteData.stock_spot?.toFixed(2)}</b></span>
-            <span>Stock SL: <b style={{ color: '#ff4d4f' }}>₹{noteData.stock_sl?.toFixed(2)}</b></span>
-            <span>Stock Target: <b style={{ color: '#52c41a' }}>₹{noteData.stock_target?.toFixed(2)}</b></span>
+            <span>Stock Trigger: <b style={{ color: '#fff' }}>Above {noteData.stock_spot?.toFixed(2)}</b></span>
+            <span>Stock SL: <b style={{ color: '#ff4d4f' }}>{noteData.stock_sl?.toFixed(2)}</b></span>
+            <span>Stock Target: <b style={{ color: '#52c41a' }}>{noteData.stock_target?.toFixed(2)}</b></span>
           </div>
         </div>
 
@@ -709,9 +890,9 @@ function OptionTradeNoteModal({ noteData, onClose }) {
             ⚡ PRIORITY DERIVATIVE METRIC: Delta Sensitivity (Δ = {noteData.delta?.toFixed(2)})
           </div>
           <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.6 }}>
-            • <b>Delta ($\Delta = {noteData.delta?.toFixed(2)}$)</b>: For every <b>₹1.00 move</b> in {noteData.instrument?.split(' ')[0]} spot stock, this contract premium gains <b>₹{Math.abs(noteData.delta || 0).toFixed(2)}</b>.<br />
-            • <b>Intraday Rupee Gain per Lot</b>: A +₹1.00 move in spot generates <b>₹{(Math.abs(noteData.delta || 0) * (noteData.lot_size || 500)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</b> profit per lot ({noteData.lot_size?.toLocaleString('en-IN')} shares).<br />
-            • <b>Target Movement Profit</b>: Reaching target ₹{noteData.stock_target?.toFixed(2)} generates <b>₹{(Math.abs(noteData.delta || 0) * Math.abs((noteData.stock_target || 0) - (noteData.stock_spot || 0)) * (noteData.lot_size || 500)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</b> gain per lot.
+            • <b>Delta ($\Delta = {noteData.delta?.toFixed(2)}$)</b>: For every <b>1.00 move</b> in {noteData.instrument?.split(' ')[0]} spot stock, this contract premium gains <b>{Math.abs(noteData.delta || 0).toFixed(2)}</b>.<br />
+            • <b>Intraday Gain per Lot</b>: A +1.00 move in spot generates <b>{(Math.abs(noteData.delta || 0) * (noteData.lot_size || 500)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</b> profit per lot ({noteData.lot_size?.toLocaleString('en-IN')} shares).<br />
+            • <b>Target Movement Profit</b>: Reaching target {noteData.stock_target?.toFixed(2)} generates <b>{(Math.abs(noteData.delta || 0) * Math.abs((noteData.stock_target || 0) - (noteData.stock_spot || 0)) * (noteData.lot_size || 500)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</b> gain per lot.
           </div>
         </div>
 
@@ -737,7 +918,7 @@ function OptionTradeNoteModal({ noteData, onClose }) {
             <div style={{ background: 'rgba(255,255,255,0.04)', padding: 8, borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: 10, color: '#94a3b8' }}>Capital Required / Lot</span>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#7ec8f0' }}>
-                ₹{noteData.capital_per_lot?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {noteData.capital_per_lot?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
             </div>
 
@@ -1121,7 +1302,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
                   return (
                     <tr key={i} className="data-row" style={rowStyle} onClick={handleRowClick}>
                       <td style={{ color: '#7ec8f0', fontWeight: 600 }}>{r.ce_delta?.toFixed(2)}</td>
-                      <td style={{ color: '#ff4d4f' }}>{r.ce_theta?.toFixed(2)} ₹/d</td>
+                      <td style={{ color: '#ff4d4f' }}>{r.ce_theta?.toFixed(2)} /d</td>
                       <td style={{ color: '#cbd5e1' }}>{r.ce_iv?.toFixed(1)}%</td>
                       <td>
                         <div style={{ fontSize: 11 }}>
@@ -1131,7 +1312,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <b style={{ color: '#52c41a', fontSize: 13 }}>₹{r.ce_ltp?.toFixed(2)}</b>
+                          <b style={{ color: '#52c41a', fontSize: 13 }}>{r.ce_ltp?.toFixed(2)}</b>
                           {isRecCall && (
                             <span style={{ background: '#52c41a', color: '#0f172a', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 900, letterSpacing: 0.5, cursor: 'pointer' }}>
                               BEST CALL 🛈
@@ -1152,7 +1333,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <b style={{ color: '#ff4d4f', fontSize: 13 }}>₹{r.pe_ltp?.toFixed(2)}</b>
+                          <b style={{ color: '#ff4d4f', fontSize: 13 }}>{r.pe_ltp?.toFixed(2)}</b>
                           {isRecPut && (
                             <span style={{ background: '#ff4d4f', color: '#fff', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 900, letterSpacing: 0.5, cursor: 'pointer' }}>
                               BEST PUT 🛈
@@ -1170,7 +1351,7 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
                         </div>
                       </td>
                       <td style={{ color: '#7ec8f0', fontWeight: 600 }}>{r.pe_delta?.toFixed(2)}</td>
-                      <td style={{ color: '#ff4d4f' }}>{r.pe_theta?.toFixed(2)} ₹/d</td>
+                      <td style={{ color: '#ff4d4f' }}>{r.pe_theta?.toFixed(2)} /d</td>
                       <td style={{ color: '#cbd5e1' }}>{r.pe_iv?.toFixed(1)}%</td>
                       <td>
                         <span className={`badge ${isWin ? 'strong-buy' : 'strong-sell'}`} style={{ fontSize: 11 }}>
@@ -1799,6 +1980,57 @@ function FnoActivePage({ data, loading, error }) {
   )
 }
 
+// ─── Trade Insight Cell Component ──────────────────────────────────────────────
+function TradeInsightCell({ ticker, insight }) {
+  const [showModal, setShowModal] = useState(false)
+  const str = String(insight || '—')
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        title="Click to view full Trade Insight & Technical Rationale"
+        style={{
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
+          color: '#38bdf8',
+          borderRadius: 6,
+          padding: '4px 10px',
+          cursor: 'pointer',
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          transition: 'all 0.15s ease'
+        }}
+      >
+        <FileText size={14} />
+        <span>Info</span>
+      </button>
+
+      {showModal && (
+        <Modal title={`Trade Insight & Technical Rationale: ${ticker}`} onClose={() => setShowModal(false)}>
+          <div style={{ padding: '8px 4px' }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+              <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                💡 Technical Analysis & Setup Rationale
+              </span>
+              <p style={{ color: '#f8fafc', fontSize: '0.98rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
+                {str}
+              </p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setShowModal(false)}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ apiBase, setActive }) {
   const [trades, setTrades] = useState([])
@@ -1852,16 +2084,6 @@ function Dashboard({ apiBase, setActive }) {
 
   return (
     <div className="top-trades-dashboard">
-      <header className="page-header" style={{ marginBottom: 20 }}>
-        <div>
-          <span className="eyebrow" style={{ color: '#52c41a' }}>HIGH-CONVICTION OPPORTUNITIES</span>
-          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 All Full List</h1>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
-            Algorithmically screened high-probability setups across Nifty momentum, institutional accumulation, and technical-fundamental confluence.
-          </p>
-        </div>
-      </header>
-
       <section className="panel data-panel">
         <div className="table-wrap">
           <table className="top-trades-table">
@@ -1943,27 +2165,27 @@ function Dashboard({ apiBase, setActive }) {
                       </button>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
-                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td>
-                    <span style={{ background: 'rgba(82, 196, 26, 0.15)', color: '#52c41a', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
-                      ₹{t.best_buy_zone}
+                    <span style={{ background: 'rgba(82, 196, 26, 0.15)', color: '#52c41a', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>
+                      {t.best_buy_zone}
                     </span>
                   </td>
                   <td>
-                    <span style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
-                      ₹{t.stop_loss.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    <span style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>
+                      {t.stop_loss.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </td>
                   <td>
                     <div>
-                      <b style={{ color: '#52c41a' }}>₹{t.target_price.toLocaleString('en-IN')}</b>
-                      {t.target_price2 && <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>(T2: ₹{t.target_price2.toLocaleString('en-IN')})</span>}
+                      <b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price.toLocaleString('en-IN')}</b>
+                      {t.target_price2 && <span style={{ fontSize: '0.92rem', color: '#94a3b8', marginLeft: 4 }}>(T2: {t.target_price2.toLocaleString('en-IN')})</span>}
                     </div>
                   </td>
-                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy">{t.setup_signal}</span></td>
-                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                  <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
                 </tr>
               ))}
             </tbody>
@@ -2029,16 +2251,6 @@ function MidCapDashboard({ apiBase, setActive }) {
 
   return (
     <div className="top-trades-dashboard">
-      <header className="page-header" style={{ marginBottom: 20 }}>
-        <div>
-          <span className="eyebrow" style={{ color: '#f59e0b' }}>MID-CAP OPPORTUNITIES</span>
-          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Mid-Cap Stocks</h1>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
-            Growth-oriented mid-cap momentum plays screened from the Nifty Midcap universe — high-probability setups with institutional accumulation and technical-fundamental confluence.
-          </p>
-        </div>
-      </header>
-
       <section className="panel data-panel">
         <div className="table-wrap">
           <table className="top-trades-table">
@@ -2120,26 +2332,26 @@ function MidCapDashboard({ apiBase, setActive }) {
                       </button>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
-                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td>
-                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>
                       {t.best_buy_zone}
                     </span>
                   </td>
                   <td>
-                    <span style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                    <span style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>
                       {t.stop_loss}
                     </span>
                   </td>
                   <td>
                     <div>
-                      <b style={{ color: '#52c41a' }}>{t.target_price}</b>
+                      <b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b>
                     </div>
                   </td>
-                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy">{t.setup_signal}</span></td>
-                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                  <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
                 </tr>
               ))}
             </tbody>
@@ -2188,15 +2400,6 @@ function SmallCapDashboard({ apiBase, setActive }) {
 
   return (
     <div className="top-trades-dashboard">
-      <header className="page-header" style={{ marginBottom: 20 }}>
-        <div>
-          <span className="eyebrow" style={{ color: '#a78bfa' }}>SMALL-CAP OPPORTUNITIES</span>
-          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Small-Cap Stocks</h1>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
-            High-growth small-cap momentum plays screened from the Nifty Smallcap 100 — asymmetric risk-reward setups with emerging institutional interest.
-          </p>
-        </div>
-      </header>
       <section className="panel data-panel">
         <div className="table-wrap">
           <table className="top-trades-table">
@@ -2238,14 +2441,14 @@ function SmallCapDashboard({ apiBase, setActive }) {
                       </button>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
-                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
-                  <td><span style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.best_buy_zone}</span></td>
-                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.stop_loss}</span></td>
-                  <td><b style={{ color: '#52c41a' }}>{t.target_price}</b></td>
-                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy">{t.setup_signal}</span></td>
-                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ fontMinimal: '1.25rem', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
+                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
+                  <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
+                  <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
                 </tr>
               ))}
             </tbody>
@@ -2294,15 +2497,6 @@ function LargeCapDashboard({ apiBase, setActive }) {
 
   return (
     <div className="top-trades-dashboard">
-      <header className="page-header" style={{ marginBottom: 20 }}>
-        <div>
-          <span className="eyebrow" style={{ color: '#22d3ee' }}>LARGE-CAP OPPORTUNITIES</span>
-          <h1 style={{ margin: '4px 0 6px 0', fontSize: 24 }}>Top 15 Large-Cap Stocks</h1>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: 13 }}>
-            Institutional-grade large-cap swing setups screened from the Nifty 50 / Nifty 100 — high-conviction opportunities with deep liquidity and fundamental backing.
-          </p>
-        </div>
-      </header>
       <section className="panel data-panel">
         <div className="table-wrap">
           <table className="top-trades-table">
@@ -2344,14 +2538,14 @@ function LargeCapDashboard({ apiBase, setActive }) {
                       </button>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: 12, color: '#cbd5e1' }}>{t.sector}</span></td>
-                  <td><b style={{ color: '#e2e8f0' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
-                  <td><span style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.best_buy_zone}</span></td>
-                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{t.stop_loss}</span></td>
-                  <td><b style={{ color: '#52c41a' }}>{t.target_price}</b></td>
-                  <td><span className="status-badge buy" style={{ fontSize: 11 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy">{t.setup_signal}</span></td>
-                  <td style={{ color: '#cbd5e1', fontSize: 12, maxWidth: 320, lineHeight: 1.4 }}>{t.insight}</td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td><span style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
+                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
+                  <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
+                  <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
                 </tr>
               ))}
             </tbody>
@@ -2608,6 +2802,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     // Keep id/run_time/uniqueid for transformation into "record_id"
     let cols = data.columns.filter(col => {
       if (col === 'id' || col === 'run_time' || col.toLowerCase() === 'uniqueid') return true
+      if (col === 'reasons') return false  // excluded globally — info available on Lookup page
       return !isInternalTimestamp(col)
     })
 

@@ -3,7 +3,7 @@ import { Edit2, Mail, Plus, Trash2, User } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
-  FormGroup, Input, Select, CountBadge
+  FormGroup, Input, Select, CountBadge, TruncatedCellText
 } from './ui.jsx'
 
 const PAGE_SIZE = 25
@@ -17,6 +17,8 @@ export default function UsersPage() {
   const [showForm, setShowForm]     = useState(false)
   const [editing, setEditing]       = useState(null)
   const [confirm, setConfirm]       = useState(null)
+  const [confirmBatch, setConfirmBatch] = useState(false)
+  const [selectedEmails, setSelectedEmails] = useState(new Set())
   const [saving, setSaving]         = useState(false)
   const [form, setForm]             = useState({ email: '', first_name: '', last_name: '', watchlist_id: '', is_subscribed: false })
   const { show, ToastContainer }    = useToast()
@@ -68,6 +70,25 @@ export default function UsersPage() {
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
+  const allPagedSelected = paged.length > 0 && paged.every(u => selectedEmails.has(u.email))
+
+  const toggleSelectAllPaged = () => {
+    const next = new Set(selectedEmails)
+    if (allPagedSelected) {
+      paged.forEach(u => next.delete(u.email))
+    } else {
+      paged.forEach(u => next.add(u.email))
+    }
+    setSelectedEmails(next)
+  }
+
+  const toggleSelect = email => {
+    const next = new Set(selectedEmails)
+    if (next.has(email)) next.delete(email)
+    else next.add(email)
+    setSelectedEmails(next)
+  }
+
   const openNew  = () => { setEditing(null); setForm({ email: '', first_name: '', last_name: '', watchlist_id: '', is_subscribed: false }); setShowForm(true) }
   const openEdit = u  => { setEditing(u); setForm({ email: u.email, first_name: u.first_name, last_name: u.last_name, watchlist_id: u.watchlist_id || '', is_subscribed: !!u.is_subscribed }); setShowForm(true) }
 
@@ -84,8 +105,27 @@ export default function UsersPage() {
   }
 
   const del = async email => {
-    try { await api.users.remove(email); show('User deleted'); load() }
-    catch (e) { show(e.message, 'error') }
+    try {
+      await api.users.remove(email)
+      show('User deleted')
+      setSelectedEmails(prev => {
+        const next = new Set(prev)
+        next.delete(email)
+        return next
+      })
+      load()
+    } catch (e) { show(e.message, 'error') }
+  }
+
+  const delBatch = async () => {
+    try {
+      const emails = Array.from(selectedEmails)
+      const res = await api.users.removeBatch(emails)
+      show(`Deleted ${res.deleted_count || emails.length} users successfully`)
+      setSelectedEmails(new Set())
+      setConfirmBatch(false)
+      load()
+    } catch (e) { show(e.message, 'error') }
   }
 
   return (
@@ -94,16 +134,41 @@ export default function UsersPage() {
       <SectionHeader
         title="Users"
         sub={`${filtered.length} user${filtered.length !== 1 ? 's' : ''}`}
-        actions={<button className="btn-primary" onClick={openNew}><Plus size={14}/> Add User</button>}
+        actions={
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {selectedEmails.size > 0 && (
+              <button className="btn-danger" onClick={() => setConfirmBatch(true)}>
+                <Trash2 size={14}/> Delete Selected ({selectedEmails.size})
+              </button>
+            )}
+            <button className="btn-primary" onClick={openNew}><Plus size={14}/> Add User</button>
+          </div>
+        }
       />
 
-      <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search by name or email…"/>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search by name or email…"/>
+        {selectedEmails.size > 0 && (
+          <span style={{ fontSize: 13, color: '#7ec8f0' }}>
+            {selectedEmails.size} user{selectedEmails.size > 1 ? 's' : ''} selected
+            <button className="btn-ghost sm" onClick={() => setSelectedEmails(new Set())} style={{ marginLeft: 8 }}>Deselect all</button>
+          </span>
+        )}
+      </div>
 
       <section className="panel data-panel">
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style={{ width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allPagedSelected}
+                    onChange={toggleSelectAllPaged}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 <th onClick={() => handleSort('email')} style={{cursor:'pointer'}}>Email {sortKey === 'email' && (sortAsc ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('first_name')} style={{cursor:'pointer'}}>First name {sortKey === 'first_name' && (sortAsc ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('last_name')} style={{cursor:'pointer'}}>Last name {sortKey === 'last_name' && (sortAsc ? '↑' : '↓')}</th>
@@ -113,22 +178,32 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6}><div className="state">Loading…</div></td></tr>}
+              {loading && <tr><td colSpan={7}><div className="state">Loading…</div></td></tr>}
               {!loading && paged.length === 0 && (
-                <tr><td colSpan={6}><div className="state">No users found.</div></td></tr>
+                <tr><td colSpan={7}><div className="state">No users found.</div></td></tr>
               )}
               {!loading && paged.map(u => (
-                <tr key={u.email} className="data-row">
+                <tr key={u.email} className={`data-row ${selectedEmails.has(u.email) ? 'selected-row' : ''}`}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedEmails.has(u.email)}
+                      onChange={() => toggleSelect(u.email)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td>
                     <span style={{display:'flex', alignItems:'center', gap:7}}>
                       <span style={{background:'#1a3150', borderRadius:'50%', width:28, height:28, display:'grid', placeItems:'center', flexShrink:0}}>
                         <User size={13} style={{color:'#5d8fcb'}}/>
                       </span>
-                      <span style={{fontFamily:"'DM Mono'", fontSize:12}}>{u.email}</span>
+                      <span style={{fontFamily:"'DM Mono'", fontSize:12}}>
+                        <TruncatedCellText text={u.email} title="User Email" maxLen={22} truncLen={18} />
+                      </span>
                     </span>
                   </td>
-                  <td>{u.first_name}</td>
-                  <td>{u.last_name}</td>
+                  <td><TruncatedCellText text={u.first_name} title="First Name" /></td>
+                  <td><TruncatedCellText text={u.last_name} title="Last Name" /></td>
                   <td>
                     {u.watchlist_name
                       ? <span className="badge neutral" style={{fontSize:11}}>{u.watchlist_name}</span>
@@ -220,6 +295,17 @@ export default function UsersPage() {
           message={`${confirm.first_name} ${confirm.last_name} (${confirm.email}) will be permanently removed.`}
           onConfirm={() => del(confirm.email)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {/* Batch delete confirm */}
+      {confirmBatch && (
+        <ConfirmDialog
+          title={`Delete ${selectedEmails.size} Users?`}
+          message={`Are you sure you want to permanently remove ${selectedEmails.size} selected users? This action cannot be undone.`}
+          confirmLabel={`Delete ${selectedEmails.size} Users`}
+          onConfirm={delBatch}
+          onClose={() => setConfirmBatch(false)}
         />
       )}
     </div>
