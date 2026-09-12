@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Edit2, Globe, Plus, Tag, Trash2, X, Star } from 'lucide-react'
+import { Edit2, Globe, Plus, Tag, Trash2, X, Star, Upload, Download, FileText, CheckCircle2 } from 'lucide-react'
 import * as api from './api.js'
 import RecommendationsModal from './RecommendationsModal.jsx'
 import {
@@ -8,7 +8,7 @@ import {
   FnoBadge, IndexChip, SectorChip, CountBadge, EmptyState, TruncatedCellText
 } from './ui.jsx'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 10
 
 export default function TickersPage({ dataset }) {
   const [rows, setRows]           = useState([])
@@ -30,6 +30,13 @@ export default function TickersPage({ dataset }) {
   const [selSectors, setSelSectors]   = useState([])
   const [saving, setSaving]       = useState(false)
   const [form, setForm]           = useState({ ticker: '', company_name: '', is_fno: false, index_memberships: [], exchange: 'NSE' })
+
+  // File Upload State
+  const [showImport, setShowImport] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+
   const { show, ToastContainer }  = useToast()
 
   const load = async () => {
@@ -151,6 +158,55 @@ export default function TickersPage({ dataset }) {
     } catch (e) { show(e.message, 'error') }
   }
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSelectedFile(file)
+    setImportResult(null)
+  }
+
+  const runImport = async () => {
+    if (!selectedFile) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const res = await api.tickers.uploadCSV(selectedFile, dataset)
+      setImportResult(res)
+      show(`Successfully processed ${selectedFile.name}`, 'success')
+      load()
+    } catch (e) {
+      show(e.message, 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const downloadCSV = () => {
+    if (!rows || rows.length === 0) return
+    const headers = ['ticker', 'company_name', 'is_fno', 'sector', 'index_memberships', 'exchange']
+    const csvLines = [headers.join(',')]
+    rows.forEach(r => {
+      const secStr = (r.sectors || []).map(s => s.name).join(';')
+      const idxStr = `"${(r.index_memberships || []).join(',')}"`
+      const line = [
+        `"${r.ticker || ''}"`,
+        `"${(r.company_name || '').replace(/"/g, '""')}"`,
+        r.is_fno ? 'true' : 'false',
+        `"${secStr}"`,
+        idxStr,
+        `"${r.exchange || 'NSE'}"`
+      ]
+      csvLines.push(line.join(','))
+    })
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ticker_master_${dataset || 'default'}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const SortTh = ({ k, children }) => (
     <th onClick={() => sort(k)} style={{cursor:'pointer', whiteSpace:'nowrap'}}>
       {children}{sortKey === k && (sortAsc ? ' ↑' : ' ↓')}
@@ -170,6 +226,15 @@ export default function TickersPage({ dataset }) {
                 <Trash2 size={14}/> Delete Selected ({selectedTickers.size})
               </button>
             )}
+            <button className="btn-secondary" onClick={downloadCSV} title="Download master ticker table as CSV">
+              <Download size={14}/> Download CSV
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => { setSelectedFile(null); setImportResult(null); setShowImport(true) }}
+            >
+              <Upload size={14}/> Upload CSV
+            </button>
             <button className="btn-primary" onClick={openNew}><Plus size={14}/> Add Ticker</button>
           </div>
         }
@@ -381,6 +446,98 @@ export default function TickersPage({ dataset }) {
           onConfirm={delBatch}
           onClose={() => setConfirmBatch(false)}
         />
+      )}
+
+      {/* Upload CSV modal */}
+      {showImport && (
+        <Modal
+          title="Upload Ticker Master CSV"
+          subtitle="Upload ticker_master.csv or text file containing ticker symbols and metadata"
+          onClose={() => setShowImport(false)}
+          size="sm"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <FormGroup label="Select CSV or TXT file" required hint="Supported: ticker_master.csv, tickers.csv or raw text list">
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileSelect}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  background: 'var(--panel-bg, #1e293b)',
+                  border: '1px solid var(--border-color, #334155)',
+                  borderRadius: 6,
+                  color: '#e2e8f0',
+                  cursor: 'pointer'
+                }}
+              />
+            </FormGroup>
+
+            {selectedFile && (
+              <div style={{
+                padding: 12,
+                background: 'rgba(126, 200, 240, 0.08)',
+                border: '1px solid rgba(126, 200, 240, 0.2)',
+                borderRadius: 6,
+                fontSize: 13
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: '#7ec8f0' }}>
+                  <FileText size={16}/> {selectedFile.name}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                  Size: {(selectedFile.size / 1024).toFixed(1)} KB · Ready to ingest into ticker_master
+                </div>
+              </div>
+            )}
+
+            {importResult && (
+              <div style={{
+                padding: 12,
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: 6,
+                fontSize: 13
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#4ade80', marginBottom: 6 }}>
+                  <CheckCircle2 size={16}/> Ingestion Complete
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, color: '#cbd5e1' }}>
+                  <div><strong>Total Entries:</strong> {importResult.total_records}</div>
+                  <div><strong>New Added:</strong> {importResult.new_tickers_count}</div>
+                  <div><strong>Existing Updated:</strong> {importResult.updated_tickers_count}</div>
+                </div>
+                {importResult.tickers && importResult.tickers.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#4ade80', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Parsed Tickers ({importResult.tickers.length}):
+                    </div>
+                    <div className="chip-wrap" style={{ maxHeight: 100, overflowY: 'auto' }}>
+                      {importResult.tickers.map(t => (
+                        <span key={t} className="ticker-chip" style={{ fontSize: 11 }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions" style={{ marginTop: 20 }}>
+            <button className="btn-ghost" onClick={() => setShowImport(false)}>
+              {importResult ? 'Close' : 'Cancel'}
+            </button>
+            <button
+              className="btn-primary"
+              onClick={runImport}
+              disabled={importing || !selectedFile}
+            >
+              {importing ? 'Processing…' : 'Upload & Populate Master Table'}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

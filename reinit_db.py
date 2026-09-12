@@ -57,23 +57,30 @@ def main():
 
     print("\n==================================================")
     # Step 2: Confirm Seeding
-    print("STEP 2: RUN DATABASE SEEDING (seeding.sql)")
+    print("STEP 2: INITIALIZE SCHEMA & SEED MASTER DATA")
     print("==================================================")
-    if confirm("Would you like to run 'seeding.sql' to initialize fresh tables, configurations, and master data? (yes/no): "):
+    if confirm("Would you like to initialize tables and seed full master data (2,570 tickers, About Company, sectors, indices, F&O lists)? (yes/no): "):
         try:
-            print("Applying seeding.sql (schema + master data seeds)...")
+            print("1/2. Creating database schema tables from seeding.sql...")
             target_dsn = f"postgresql://{user}:{password}@{host}:{port}/{target_db}"
             cmd = ["psql", "-d", target_db, "-h", host, "-U", user, "-f", "seeding.sql"]
             env = os.environ.copy()
             env["PGPASSWORD"] = password
             res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-            if res.returncode == 0:
-                print("[✓] Base schemas, system configurations, and master tickers/sectors initialized successfully.")
+            if res.returncode != 0:
+                print(f"[×] Schema initialization failed:\n{res.stderr}")
+                sys.exit(1)
+            
+            print("2/2. Seeding full master data from CSV datasets (_production.csv)...")
+            from engine.database.seeder import load_csv_files
+            seeded = load_csv_files("_production.csv", verbose=True)
+            if seeded:
+                print("[✓] Full master dataset (2,570 tickers, About Company, sectors, F&O lists) initialized successfully.")
             else:
-                print(f"[×] Database seeding failed:\n{res.stderr}")
+                print("[×] Master CSV data seeding encountered an error.")
                 sys.exit(1)
         except Exception as e:
-            print(f"[×] Failed to run seeding process: {e}")
+            print(f"[×] Failed to run master data initialization: {e}")
             sys.exit(1)
     else:
         print("Skipped seeding tables.")

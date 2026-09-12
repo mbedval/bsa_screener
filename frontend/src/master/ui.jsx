@@ -284,48 +284,9 @@ export function MultiPicker({ items, selected, onChange, labelKey = 'name', valu
   )
 }
 
-// ── Truncated Cell Text (Rule compliant: >20 chars -> 16 chars... + popup) ────
-export function TruncatedCellText({ text, title = 'Details', maxLen = 20, truncLen = 16 }) {
-  const [showPopup, setShowPopup] = useState(false)
+// ── Truncated Cell Text (Rule compliant: >20 chars -> 16 chars... plain text only) ────
+export function TruncatedCellText({ text, maxLen = 20, truncLen = 16 }) {
   if (!text || text.length <= maxLen) return <span>{text || '—'}</span>
-
-  const truncated = text.slice(0, truncLen) + '...'
-  return (
-    <span style={{ position: 'relative', display: 'inline-block' }}>
-      <span
-        style={{ cursor: 'pointer', borderBottom: '1px dotted #7ec8f0', color: '#d9eaff' }}
-        onClick={() => setShowPopup(p => !p)}
-        onMouseEnter={() => setShowPopup(true)}
-        onMouseLeave={() => setShowPopup(false)}
-      >
-        {truncated}
-      </span>
-      {showPopup && (
-        <div style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '0',
-          marginBottom: 6,
-          background: '#0d1d30',
-          border: '1px solid #284b75',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          borderRadius: 6,
-          padding: '8px 12px',
-          minWidth: 200,
-          maxWidth: 340,
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          fontSize: 12,
-          lineHeight: 1.4,
-          color: '#e2e8f0',
-          zIndex: 9999,
-          pointerEvents: 'none'
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#7ec8f0', marginBottom: 2, textTransform: 'uppercase' }}>{title}</div>
-          {text}
-        </div>
-      )}
-    </span>
-  )
+  return <span>{text.slice(0, truncLen) + '...'}</span>
 }
 

@@ -14,6 +14,7 @@ TABLE_MAPPINGS = {
     "system_config": "system_config",
     "ticker_mappings": "ticker_mappings",
     "sectors": "sectors",
+    "indices_master": "indices_master",
     "tickers": "ticker_master",
     "fno_stock": "fno_stock_master",
     "fno_index": "fno_index_master",
@@ -24,7 +25,10 @@ TABLE_MAPPINGS = {
     "alternative_names": "alternative_names",
     "excluded_tickers": "excluded_tickers",
     "recommendations": "broker_recommendations",
-    "ticker_sector": "ticker_sector"
+    "ticker_sector": "ticker_sector",
+    "opportunities_risk": "opportunities_risk",
+    "reference_pages": "reference_pages",
+    "screener_ticker_mappings": "screener_ticker_mappings"
 }
 
 SEQUENCE_TABLES = [
@@ -35,16 +39,20 @@ SEQUENCE_TABLES = [
     ("alternative_names", "alternative_names_id_seq"),
     ("excluded_tickers", "excluded_tickers_id_seq"),
     ("historical_calls", "historical_calls_id_seq"),
-    ("broker_recommendations", "broker_recommendations_id_seq")
+    ("broker_recommendations", "broker_recommendations_id_seq"),
+    ("reference_pages", "reference_pages_id_seq"),
+    ("screener_ticker_mappings", "screener_ticker_mappings_id_seq")
 ]
 
 TABLE_LOAD_ORDER = [
     "system_config",
     "ticker_mappings",
     "sectors",
+    "indices_master",
     "alternative_names",
     "excluded_tickers",
     "tickers",
+    "opportunities_risk",
     "fno_stock",
     "fno_index",
     "fno_tickers",
@@ -52,7 +60,9 @@ TABLE_LOAD_ORDER = [
     "watchlist_items",
     "users",
     "recommendations",
-    "ticker_sector"
+    "ticker_sector",
+    "reference_pages",
+    "screener_ticker_mappings"
 ]
 
 def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = True) -> bool:
@@ -127,7 +137,7 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                 conflict_target = "ON CONFLICT DO NOTHING"
                 if table_name == "ticker_master":
                     conflict_target = "ON CONFLICT (ticker) DO NOTHING"
-                elif table_name in ("fno_master", "fno_stock_master", "fno_index_master"):
+                elif table_name in ("fno_master", "fno_stock_master", "fno_index_master", "indices_master"):
                     conflict_target = "ON CONFLICT (symbol) DO NOTHING"
                 elif table_name == "sectors":
                     conflict_target = "ON CONFLICT (name) DO NOTHING"
@@ -160,6 +170,17 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                             formatted_row.append(True)
                         elif val_str.lower() == "false":
                             formatted_row.append(False)
+                        elif val_str.startswith("[") and val_str.endswith("]"):
+                            # Format Python list str like "['NSE']" to PostgreSQL array format "{NSE}"
+                            import ast
+                            try:
+                                parsed_list = ast.literal_eval(val_str)
+                                if isinstance(parsed_list, list):
+                                    formatted_row.append("{" + ",".join(str(x) for x in parsed_list) + "}")
+                                else:
+                                    formatted_row.append(val_str)
+                            except Exception:
+                                formatted_row.append(val_str)
                         elif val_str == "" and table_name == "system_config" and col_name == "value":
                             formatted_row.append("")
                         elif val_str == "":

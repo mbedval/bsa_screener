@@ -236,7 +236,7 @@ export default function ExcludedTickersPage({ onNavigate }) {
           title="Re-enable Stock (Remove Exclusion)?"
           message={`Are you sure you want to remove ticker "${confirm.ticker}" from the exclusion list? Data downloaders and pipelines will resume processing this stock.`}
           onConfirm={() => { del(confirm.id); setConfirm(null) }}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
         />
       )}
     </div>

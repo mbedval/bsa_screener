@@ -4,9 +4,9 @@ import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, PieChart, Plus,
   RefreshCw, Search, Settings2, Share2, Shield, TableProperties, Tag,
-  Download, Trash2, TrendingUp, User, Users, X, Star, Target
+  Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
-import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage } from './master/index.jsx'
+import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
 import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage } from './visualizer/index.jsx'
 
 
@@ -140,7 +140,7 @@ const signalTone = value => {
 }
 
 // Master page identifiers
-const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations', 'master:opportunities']
+const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations', 'master:opportunities', 'master:references', 'master:reference_pages', 'master:screener_mappings']
 
 const parseResp = async (r) => {
   const ct = r.headers.get('content-type') || ''
@@ -222,96 +222,75 @@ function ThemeSelector({ currentTheme, onSelectTheme }) {
 function Landing({ theme, setTheme, onSelectApp, onSelectSubApp }) {
   return (
     <div className="landing">
-      <main className="landing-main" style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px' }}>
-        <div className="landing-logo-wrap">
-          <img src="/bsa.png" alt="BSA Logo" className="landing-logo" />
+      <main className="landing-main" style={{ maxWidth: 1380, margin: '0 auto', padding: '16px 20px 20px 20px' }}>
+        <div className="landing-logo-wrap" style={{ marginBottom: 8 }}>
+          <img src="/bsa.png" alt="BSA Logo" className="landing-logo" style={{ height: 48, width: 'auto' }} />
         </div>
-        <p className="eyebrow portal-title-highlight">BSA MARKET INTELLIGENCE PORTAL</p>
-        <h1 style={{ marginBottom: 12 }}>Modular Market Intelligence Suite</h1>
-        <p style={{ color: '#94a3b8', fontSize: 16, maxWidth: 650, margin: '0 auto 36px auto', textAlign: 'center' }}>
+        <p className="eyebrow portal-title-highlight" style={{ fontSize: 13, letterSpacing: 1.5, marginBottom: 4 }}>BSA MARKET INTELLIGENCE PORTAL</p>
+        <h1 style={{ marginBottom: 6, fontSize: 20 }}>Modular Market Intelligence Suite</h1>
+        <p style={{ color: '#94a3b8', fontSize: 13, maxWidth: 680, margin: '0 auto 20px auto', textAlign: 'center', lineHeight: 1.4 }}>
           Decomposed modular sub-applications for targeted trading setup discovery, option analytics, technical scanners, and master data management.
         </p>
 
-        {/* Sub-App Grid Launcher */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, textAlign: 'left' }}>
+        {/* High-Density Compact Sub-App Grid Launcher */}
+        <div className="landing-card-grid">
           {Object.entries(subApps).map(([key, item]) => {
             const Icon = item.icon
             return (
               <div
                 key={key}
-                className="app-card"
+                className="app-card-compact"
                 onClick={() => {
                   if (onSelectSubApp) onSelectSubApp(key)
                 }}
-                style={{
-                  background: 'rgba(15, 23, 42, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: 12,
-                  padding: 24,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <div style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: 8, borderRadius: 8 }}>
-                      <Icon size={20} />
+                  <div className="app-card-header">
+                    <div className="app-card-icon-box">
+                      <Icon size={16} />
                     </div>
-                    <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 800, letterSpacing: 1 }}>{item.eyebrow}</span>
+                    <span className="app-card-eyebrow">{item.eyebrow}</span>
                   </div>
-                  <h2 style={{ fontSize: 18, margin: '0 0 8px 0', color: '#fff' }}>{item.title}</h2>
-                  <p style={{ color: '#94a3b8', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{item.description}</p>
+                  <h2 className="app-card-title">{item.title}</h2>
+                  <p className="app-card-desc">{item.description}</p>
                 </div>
-                <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontWeight: 700, fontSize: 13 }}>
-                  Launch Sub-App <ArrowRight size={16} />
+                <div className="app-card-action">
+                  Launch Sub-App <ArrowRight size={13} />
                 </div>
               </div>
             )
           })}
         </div>
       </main>
-      <footer className="landing-footer">
+      <footer className="landing-footer" style={{ padding: '12px 24px 10px' }}>
         <div className="footer-top">
-          <div className="brand" style={{ gap: 12 }}>
-            <img src="/BSA.png" alt="BSA Logo" style={{ height: 36, width: 'auto', borderRadius: 6 }} />
+          <div className="brand" style={{ gap: 10 }}>
+            <img src="/BSA.png" alt="BSA Logo" style={{ height: 28, width: 'auto', borderRadius: 4 }} />
             <div><b>BSA Data Portal</b><small>POSTGRESQL APPLICATIONS</small></div>
           </div>
           <ThemeSelector currentTheme={theme} onSelectTheme={setTheme} />
         </div>
 
-        <div className="footer-middle">
+        <div className="footer-middle" style={{ paddingTop: 8 }}>
           <div className="footer-info">
             <p className="footer-copy">© {new Date().getFullYear()} BSA Market Intelligence. All rights reserved.</p>
             <p className="footer-subtext">Institutional-grade stock market analytics, automated trading calls, and multi-factor technical scanners.</p>
           </div>
 
           <div className="footer-socials">
-            <a href="https://telegram.org" target="_blank" rel="noreferrer" title="Telegram" className="social-link">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            <a href="https://telegram.org" target="_blank" rel="noreferrer" title="Telegram" className="social-link" style={{ width: 28, height: 28 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </a>
-            <a href="https://twitter.com" target="_blank" rel="noreferrer" title="Twitter / X" className="social-link">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
+            <a href="https://twitter.com" target="_blank" rel="noreferrer" title="Twitter / X" className="social-link" style={{ width: 28, height: 28 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
             </a>
-            <a href="https://linkedin.com" target="_blank" rel="noreferrer" title="LinkedIn" className="social-link">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+            <a href="https://linkedin.com" target="_blank" rel="noreferrer" title="LinkedIn" className="social-link" style={{ width: 28, height: 28 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
             </a>
-            <a href="https://github.com" target="_blank" rel="noreferrer" title="GitHub" className="social-link">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+            <a href="https://github.com" target="_blank" rel="noreferrer" title="GitHub" className="social-link" style={{ width: 28, height: 28 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
             </a>
           </div>
-        </div>
-
-        <div className="footer-links">
-          <a href="#privacy">Privacy Policy</a>
-          <span>•</span>
-          <a href="#terms">Terms of Service</a>
-          <span>•</span>
-          <a href="#disclaimer">Market Disclaimer</a>
-          <span>•</span>
-          <a href="#support">Support & Documentation</a>
         </div>
       </footer>
     </div>
@@ -566,6 +545,9 @@ function App() {
                 <button className={`nav-item ${active === 'research:market_cap_wise' ? 'selected' : ''}`} onClick={() => setActive('research:market_cap_wise')}>
                   <TrendingUp size={14} /> Market Cap Wise Top 10
                 </button>
+                <button className={`nav-item ${active === 'research:penny_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:penny_stocks')}>
+                  <Zap size={14} /> Penny Stocks
+                </button>
                 <button className={`nav-item ${active === 'research:sector_wise' ? 'selected' : ''}`} onClick={() => setActive('research:sector_wise')}>
                   <PieChart size={14} /> Sector wise Top 10
                 </button>
@@ -627,13 +609,16 @@ function App() {
                         <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
                         <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker Master</button>
                         <button className={`nav-item ${active === 'master:opportunities' ? 'selected' : ''}`} onClick={() => setActive('master:opportunities')}><Shield /> About Company</button>
-                        <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> FNO Stock Master</button>
-                        <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> FNO Index Master</button>
+                        <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> Stock Derivatives</button>
+                        <button className={`nav-item ${active === 'master:indices' ? 'selected' : ''}`} onClick={() => setActive('master:indices')}><Layers /> Indices Master</button>
+                        <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> Indices Derivatives</button>
                         <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>
                         <button className={`nav-item ${active === 'master:recommendations' ? 'selected' : ''}`} onClick={() => setActive('master:recommendations')}><Star /> Recommendations</button>
                         <button className={`nav-item ${active === 'master:users' ? 'selected' : ''}`} onClick={() => setActive('master:users')}><Users /> Users</button>
                         <button className={`nav-item ${active === 'master:aliases' ? 'selected' : ''}`} onClick={() => setActive('master:aliases')}><GitCompare /> Alternative Names</button>
                         <button className={`nav-item ${active === 'master:excluded' ? 'selected' : ''}`} onClick={() => setActive('master:excluded')}><Ban /> Excluded Tickers</button>
+                        <button className={`nav-item ${active === 'master:references' ? 'selected' : ''}`} onClick={() => setActive('master:references')}><Globe /> Reference Pages</button>
+                        <button className={`nav-item ${active === 'master:screener_mappings' ? 'selected' : ''}`} onClick={() => setActive('master:screener_mappings')}><ArrowRight /> Screener Mappings</button>
                       </div>
                     )}
                   </section>
@@ -756,13 +741,13 @@ function App() {
 
 
         {active === 'dashboard' ? (
-          <Dashboard apiBase={apiBase} setActive={setActive} />
+          <Dashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'midcap_dashboard' ? (
-          <MidCapDashboard apiBase={apiBase} setActive={setActive} />
+          <MidCapDashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'smallcap_dashboard' ? (
-          <SmallCapDashboard apiBase={apiBase} setActive={setActive} />
+          <SmallCapDashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'largecap_dashboard' ? (
-          <LargeCapDashboard apiBase={apiBase} setActive={setActive} />
+          <LargeCapDashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'charts_visualizations' ? (
           <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />
         ) : active.startsWith('master:') ? (
@@ -796,6 +781,8 @@ function App() {
           <SectorWiseReportPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:market_cap_wise' ? (
           <MarketCapWiseReportPage apiBase={apiBase} dataset={dataset} />
+        ) : active === 'research:penny_stocks' ? (
+          <PennyStocksDashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:stocks_respecting_patterns' ? (
           <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:sectorwise_followers' ? (
@@ -2033,7 +2020,7 @@ function TradeInsightCell({ ticker, insight }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ apiBase, setActive }) {
+function Dashboard({ apiBase, setActive, onSelectTicker }) {
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2111,7 +2098,13 @@ function Dashboard({ apiBase, setActive }) {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div>
-                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <b
+                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                        >
+                          {t.ticker}
+                        </b>
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
                       </div>
                       <button
@@ -2186,7 +2179,7 @@ function Dashboard({ apiBase, setActive }) {
                   </td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
                   <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
+                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2200,7 +2193,7 @@ function Dashboard({ apiBase, setActive }) {
 }
 
 // ─── MidCap Dashboard ─────────────────────────────────────────────────────────
-function MidCapDashboard({ apiBase, setActive }) {
+function MidCapDashboard({ apiBase, setActive, onSelectTicker }) {
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2278,7 +2271,13 @@ function MidCapDashboard({ apiBase, setActive }) {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div>
-                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <b
+                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                        >
+                          {t.ticker}
+                        </b>
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
                       </div>
                       <button
@@ -2352,7 +2351,7 @@ function MidCapDashboard({ apiBase, setActive }) {
                   </td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
                   <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
+                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2366,7 +2365,7 @@ function MidCapDashboard({ apiBase, setActive }) {
 }
 
 // ─── SmallCap Dashboard ───────────────────────────────────────────────────────
-function SmallCapDashboard({ apiBase, setActive }) {
+function SmallCapDashboard({ apiBase, setActive, onSelectTicker }) {
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2427,7 +2426,13 @@ function SmallCapDashboard({ apiBase, setActive }) {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div>
-                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <b
+                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                        >
+                          {t.ticker}
+                        </b>
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
                       </div>
                       <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
@@ -2449,7 +2454,7 @@ function SmallCapDashboard({ apiBase, setActive }) {
                   <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
                   <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
+                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2463,7 +2468,7 @@ function SmallCapDashboard({ apiBase, setActive }) {
 }
 
 // ─── LargeCap Dashboard ───────────────────────────────────────────────────────
-function LargeCapDashboard({ apiBase, setActive }) {
+function LargeCapDashboard({ apiBase, setActive, onSelectTicker }) {
   const [trades, setTrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2524,7 +2529,13 @@ function LargeCapDashboard({ apiBase, setActive }) {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div>
-                        <b style={{ color: '#fff', fontSize: 14, fontFamily: "'DM Mono'" }}>{t.ticker}</b>
+                        <b
+                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                        >
+                          {t.ticker}
+                        </b>
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
                       </div>
                       <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
@@ -2546,7 +2557,140 @@ function LargeCapDashboard({ apiBase, setActive }) {
                   <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
                   <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><TradeInsightCell ticker={t.ticker} insight={t.insight} /></td>
+                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
+      {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
+    </div>
+  )
+}
+
+// ─── Penny Stocks (Micro/Small-Cap MF Backed) Dashboard ─────────────────────
+function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
+  const [trades, setTrades] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [sortKey, setSortKey] = useState('rank')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [detailTicker, setDetailTicker] = useState(null)
+  const [visualizerTicker, setVisualizerTicker] = useState(null)
+
+  useEffect(() => {
+    let isMounted = true
+    setLoading(true)
+    fetch(`${apiBase}/top-penny-trades`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        if (isMounted) {
+          setTrades(Array.isArray(d) ? d : [])
+          setLoading(false)
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          setError(err.message)
+          setLoading(false)
+        }
+      })
+    return () => { isMounted = false }
+  }, [apiBase])
+
+  const sortedTrades = useMemo(() => {
+    let list = [...trades]
+    if (!sortKey) return list
+    list.sort((a, b) => {
+      let valA = a[sortKey] ?? '', valB = b[sortKey] ?? ''
+      if (typeof valA === 'number' && typeof valB === 'number') return (valA - valB) * (sortAsc ? 1 : -1)
+      return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
+    })
+    return list
+  }, [trades, sortKey, sortAsc])
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(true) }
+  }
+
+  return (
+    <div className="top-trades-dashboard">
+      <section className="panel data-panel">
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(234, 179, 8, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, color: '#facc15', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ⚡ Penny Stocks & Institutional Micro-Cap Opportunities
+            </h3>
+            <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4 }}>
+              Showing Small-Cap &amp; Micro-Cap tickers backed by a minimum of 2 Mutual Funds holding &gt; 2% stake each.
+            </div>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, background: 'rgba(234,179,8,0.15)', color: '#facc15', padding: '4px 10px', borderRadius: 20 }}>
+            {sortedTrades.length} MicroCap Picks
+          </span>
+        </div>
+
+        <div className="table-wrapper">
+          <table className="top-trades-table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
+                <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
+                <th onClick={() => handleSort('fund_count')} style={{ cursor: 'pointer' }}>MFs &gt;2%</th>
+                <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
+                <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
+                <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
+                <th>Mutual Fund Holdings &amp; Technical Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={10}><div className="state">Scanning microcap &amp; smallcap holdings data for qualifying Mutual Fund picks…</div></td></tr>}
+              {error && <tr><td colSpan={10}><div className="state error">{error}</div></td></tr>}
+              {!loading && !error && sortedTrades.map(t => (
+                <tr key={t.ticker} className="data-row">
+                  <td style={{ fontWeight: 700, color: '#facc15' }}>#{t.rank}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div>
+                        <b
+                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                        >
+                          {t.ticker}
+                        </b>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                      </div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
+                        title={`View Interactive Detail Report for ${t.ticker}`}
+                        style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <FileText size={11} /><span>Detail</span>
+                      </button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setVisualizerTicker(t.ticker) }}
+                        title={`View Interactive Candlestick Chart for ${t.ticker}`}
+                        style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)', color: '#facc15', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
+                        <TrendingUp size={11} /><span>Chart</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
+                  <td>
+                    <span style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', padding: '3px 8px', borderRadius: 4, fontWeight: 800, fontFamily: "'DM Mono', monospace" }}>
+                      {t.fund_count} MFs
+                    </span>
+                  </td>
+                  <td><span style={{ background: 'rgba(234,179,8,0.15)', color: '#facc15', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
+                  <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
+                  <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>

@@ -1,5 +1,5 @@
-key,value
-telegram_bot_token,
-telegram_chat_id,
-gmail_user,
-gmail_app_password
+key,value,updated_at
+telegram_bot_token,,2026-09-11 07:33:07.681847
+telegram_chat_id,,2026-09-11 07:33:07.681847
+gmail_user,,2026-09-11 07:33:07.681847
+gmail_app_password,,2026-09-11 07:33:07.681847

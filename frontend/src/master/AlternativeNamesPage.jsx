@@ -216,7 +216,7 @@ export default function AlternativeNamesPage() {
           title="Delete Ticker Alias Mapping?"
           message={`Are you sure you want to remove the mapping for data ticker "${confirm.data_ticker}" -> "${confirm.current_ticker}"?`}
           onConfirm={() => { del(confirm.id); setConfirm(null) }}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
         />
       )}
     </div>

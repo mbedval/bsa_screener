@@ -1,19 +1,29 @@
-id,name,description
-1,Information Technology,IT Services Software Development and Digital Solutions
-2,Banking & Financials,Public/Private Sector Banks NBFCs and Asset Management
-3,Automobiles,Passenger Vehicles Commercial Vehicles and Auto Components
-4,Energy,Oil & Gas Exploration Refining Power Generation and Utilities
-5,Healthcare,Pharmaceuticals Biotechnology and Hospital Chains
-6,FMCG,Fast Moving Consumer Goods and Retail Products
-7,Metal & Mining,Ferrous Non-Ferrous Metals and Mining Operations
-8,Real Estate,Commercial and Residential Property Developers
-9,Telecommunications,Telecom Operators and Communication Infrastructure
-10,Capital Goods,Heavy Electrical Engineering and Industrial Equipment
-11,Media & Entertainment,Broadcasting Digital Media and Entertainment Services
-12,Consumer Durables,Home Appliances Electronics and Lifestyle Products
-13,Chemical,Specialty Chemicals Agrochemicals and Petrochemicals
-14,Defense,Defense Equipment Manufacturing and Aerospace Electronics
-15,Shipping & Logistics,Port Operators Logistics and Supply Chain Services
-16,Infrastructure,Construction Highways and Infrastructure Development
-17,Services,Commercial Services E-Commerce and Hospitality
-18,Miscellaneous,Diversified Conglomerates and Other Sectors
+id,name,description,created_at
+1,Information Technology,"IT Services, Software Development and Digital Solutions",2026-09-11 07:33:07.694186
+2,Banking & Financials,"Public/Private Sector Banks, NBFCs and Asset Management",2026-09-11 07:33:07.694186
+3,Automobiles,"Passenger Vehicles, Commercial Vehicles and Auto Components",2026-09-11 07:33:07.694186
+4,Energy,"Oil & Gas Exploration, Refining, Power Generation and Utilities",2026-09-11 07:33:07.694186
+5,Healthcare,"Pharmaceuticals, Biotechnology and Hospital Chains",2026-09-11 07:33:07.694186
+6,FMCG,Fast Moving Consumer Goods and Retail Products,2026-09-11 07:33:07.694186
+7,Metal & Mining,"Ferrous, Non-Ferrous Metals and Mining Operations",2026-09-11 07:33:07.694186
+8,Real Estate,Commercial and Residential Property Developers,2026-09-11 07:33:07.694186
+9,Telecommunications,Telecom Operators and Communication Infrastructure,2026-09-11 07:33:07.694186
+10,Capital Goods,"Heavy Electrical, Engineering and Industrial Equipment",2026-09-11 07:33:07.694186
+11,Media & Entertainment,"Broadcasting, Digital Media and Entertainment Services",2026-09-11 07:33:07.694186
+12,Consumer Durables,"Home Appliances, Electronics and Lifestyle Products",2026-09-11 07:33:07.694186
+13,Chemical,"Specialty Chemicals, Agrochemicals and Petrochemicals",2026-09-11 07:33:07.694186
+14,Defense,Defense Equipment Manufacturing and Aerospace Electronics,2026-09-11 07:33:07.694186
+15,Shipping & Logistics,"Port Operators, Logistics and Supply Chain Services",2026-09-11 07:33:07.694186
+16,Infrastructure,"Construction, Highways and Infrastructure Development",2026-09-11 07:33:07.694186
+17,Services,"Commercial Services, E-Commerce and Hospitality",2026-09-11 07:33:07.694186
+18,Miscellaneous,Diversified Conglomerates and Other Sectors,2026-09-11 07:33:07.694186
+19,Unknown,,2026-09-11 17:10:51.355724
+22,Basic Materials,,2026-09-11 17:10:51.355724
+25,Consumer Cyclical,,2026-09-11 17:10:51.355724
+26,Industrials,,2026-09-11 17:10:51.355724
+27,Utilities,,2026-09-11 17:10:51.355724
+28,Consumer Defensive,,2026-09-11 17:10:51.355724
+29,Technology,,2026-09-11 17:10:51.355724
+30,Financial Services,,2026-09-11 17:10:51.355724
+31,Communication Services,,2026-09-11 17:10:51.355724
+32,NIFTY,,2026-09-12 18:38:53.895552

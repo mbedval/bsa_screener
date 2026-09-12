@@ -82,6 +82,27 @@ class TickerUpdate(BaseModel):
     exchange: Optional[str] = None
 
 
+class IndexIn(BaseModel):
+    symbol: str
+    name: str
+    exchange: str = "NSE"
+    category: str = "BENCHMARK"
+    is_fno: bool = True
+    lot_size: int = 25
+    benchmark_price: Optional[float] = None
+    is_active: bool = True
+
+
+class IndexUpdate(BaseModel):
+    name: Optional[str] = None
+    exchange: Optional[str] = None
+    category: Optional[str] = None
+    is_fno: Optional[bool] = None
+    lot_size: Optional[int] = None
+    benchmark_price: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
 class WatchlistIn(BaseModel):
     name: str
     description: Optional[str] = None
@@ -148,6 +169,22 @@ class BatchDeleteWatchlists(BaseModel):
 
 class BatchDeleteUsers(BaseModel):
     emails: list[str]
+
+
+class ScreenerTickerMappingIn(BaseModel):
+    yfinance_ticker: str
+    screener_ticker: str
+    screener_company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ScreenerTickerMappingUpdate(BaseModel):
+    yfinance_ticker: Optional[str] = None
+    screener_ticker: Optional[str] = None
+    screener_company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    notes: Optional[str] = None
 
 
 
@@ -345,8 +382,514 @@ def import_watchlist_sector_file(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Indices Master
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/indices")
+def list_indices(
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    is_fno: Optional[bool] = None,
+    dataset: Optional[str] = None,
+) -> list[dict]:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        query = "SELECT symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at FROM indices_master"
+        where_clauses, params = [], []
+        if search:
+            where_clauses.append("(symbol ILIKE %s OR name ILIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%"])
+        if category:
+            where_clauses.append("category ILIKE %s")
+            params.append(category)
+        if is_fno is not None:
+            where_clauses.append("is_fno = %s")
+            params.append(is_fno)
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+        query += " ORDER BY symbol"
+        cur.execute(query, params)
+        return [dict(r) for r in cur.fetchall()]
+
+
+@router.post("/indices", status_code=201)
+def create_index(body: IndexIn, dataset: Optional[str] = None) -> dict:
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                """
+                INSERT INTO indices_master (symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                RETURNING *
+                """,
+                (
+                    body.symbol.upper().strip(),
+                    body.name.strip(),
+                    body.exchange,
+                    body.category.upper().strip(),
+                    body.is_fno,
+                    body.lot_size,
+                    body.benchmark_price,
+                    body.is_active,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return dict(row)
+        except Exception as exc:
+            conn.rollback()
+            if "unique" in str(exc).lower() or "primary key" in str(exc).lower():
+                raise _conflict(f"Index '{body.symbol}' already exists.")
+            raise HTTPException(500, str(exc))
+
+
+@router.put("/indices/{symbol}")
+def update_index(symbol: str, body: IndexUpdate, dataset: Optional[str] = None) -> dict:
+    updates, params = [], []
+    if body.name is not None:
+        updates.append("name = %s"); params.append(body.name)
+    if body.exchange is not None:
+        updates.append("exchange = %s"); params.append(body.exchange)
+    if body.category is not None:
+        updates.append("category = %s"); params.append(body.category)
+    if body.is_fno is not None:
+        updates.append("is_fno = %s"); params.append(body.is_fno)
+    if body.lot_size is not None:
+        updates.append("lot_size = %s"); params.append(body.lot_size)
+    if body.benchmark_price is not None:
+        updates.append("benchmark_price = %s"); params.append(body.benchmark_price)
+    if body.is_active is not None:
+        updates.append("is_active = %s"); params.append(body.is_active)
+
+    if not updates:
+        raise HTTPException(400, "No fields to update.")
+
+    updates.append("updated_at = NOW()")
+    params.append(symbol.upper().strip())
+
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute(
+            f"UPDATE indices_master SET {', '.join(updates)} WHERE symbol = %s RETURNING *",
+            params,
+        )
+        row = cur.fetchone()
+        if not row:
+            raise _not_found("Index", symbol)
+        conn.commit()
+        return dict(row)
+
+
+@router.delete("/indices/{symbol}", status_code=204)
+def delete_index(symbol: str, dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM indices_master WHERE symbol = %s RETURNING symbol", (symbol.upper().strip(),))
+        row = cur.fetchone()
+        if not row:
+            raise _not_found("Index", symbol)
+        conn.commit()
+
+
+@router.post("/indices/upload-csv")
+@router.post("/indices/import-file")
+def import_indices_master_file(
+    file: UploadFile = File(...),
+    dataset: Optional[str] = Form(None),
+) -> dict:
+    """Imports indices master CSV/txt file into indices_master table."""
+    import csv, io
+
+    filename = file.filename or "indices_master.csv"
+    raw_content = file.file.read().decode("utf-8-sig", errors="ignore")
+
+    records = []
+    lines = raw_content.splitlines()
+    non_empty_lines = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    if not non_empty_lines:
+        raise HTTPException(400, "The uploaded file is empty.")
+
+    first_line_parts = [p.strip().lower().replace('"', '').replace("'", "") for p in next(csv.reader([non_empty_lines[0]]))]
+    has_header = "symbol" in first_line_parts or "name" in first_line_parts or "index" in first_line_parts
+
+    if has_header:
+        reader = csv.DictReader(io.StringIO(raw_content))
+        for row in reader:
+            if not row:
+                continue
+            sym = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("symbol", "index", "ticker"):
+                    sym = str(v).strip().upper() if v else None
+                    break
+            if not sym:
+                continue
+
+            name_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("name", "index_name", "title"):
+                    name_val = str(v).strip() if v else None
+                    break
+
+            exch_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() == "exchange":
+                    exch_val = str(v).strip() if v else None
+                    break
+
+            cat_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() == "category":
+                    cat_val = str(v).strip().upper() if v else None
+                    break
+
+            is_fno_val = True
+            for k, v in row.items():
+                if k and k.strip().lower() in ("is_fno", "fno"):
+                    is_fno_val = str(v).strip().lower() in ("true", "1", "t", "yes")
+                    break
+
+            lot_val = 25
+            for k, v in row.items():
+                if k and k.strip().lower() in ("lot_size", "lot"):
+                    try: lot_val = int(v)
+                    except Exception: pass
+                    break
+
+            bm_price = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("benchmark_price", "price", "cmp"):
+                    try: bm_price = float(v)
+                    except Exception: pass
+                    break
+
+            records.append({
+                "symbol": sym,
+                "name": name_val or f"{sym} Index",
+                "exchange": exch_val or "NSE",
+                "category": cat_val or "BENCHMARK",
+                "is_fno": is_fno_val,
+                "lot_size": lot_val,
+                "benchmark_price": bm_price,
+                "is_active": True
+            })
+    else:
+        raw_tokens = re.split(r"[\n\r,;\t]+", raw_content)
+        for token in raw_tokens:
+            tok = token.strip().upper()
+            if tok and not tok.startswith("#"):
+                if not any(r["symbol"] == tok for r in records):
+                    records.append({
+                        "symbol": tok,
+                        "name": f"{tok} Index",
+                        "exchange": "NSE",
+                        "category": "BENCHMARK",
+                        "is_fno": True,
+                        "lot_size": 25,
+                        "benchmark_price": None,
+                        "is_active": True
+                    })
+
+    if not records:
+        raise HTTPException(400, "No valid index entries found in the uploaded file.")
+
+    new_indices = []
+    updated_indices = []
+
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        for rec in records:
+            s = rec["symbol"]
+            n = rec["name"]
+            e = rec["exchange"]
+            c = rec["category"]
+            f = rec["is_fno"]
+            l = rec["lot_size"]
+            bp = rec["benchmark_price"]
+            act = rec["is_active"]
+
+            cur.execute("SELECT symbol FROM indices_master WHERE symbol = %s", (s,))
+            exists = cur.fetchone()
+            if not exists:
+                cur.execute(
+                    """
+                    INSERT INTO indices_master (symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (s, n, e, c, f, l, bp, act),
+                )
+                new_indices.append(s)
+            else:
+                cur.execute(
+                    """
+                    UPDATE indices_master
+                    SET name = COALESCE(NULLIF(%s, ''), name),
+                        exchange = COALESCE(NULLIF(%s, ''), exchange),
+                        category = COALESCE(NULLIF(%s, ''), category),
+                        is_fno = %s,
+                        lot_size = COALESCE(%s, lot_size),
+                        benchmark_price = COALESCE(%s, benchmark_price),
+                        is_active = %s,
+                        updated_at = NOW()
+                    WHERE symbol = %s
+                    """,
+                    (n, e, c, f, l, bp, act, s),
+                )
+                updated_indices.append(s)
+        conn.commit()
+
+    return {
+        "status": "success",
+        "filename": filename,
+        "total_records": len(records),
+        "new_indices_count": len(new_indices),
+        "updated_indices_count": len(updated_indices),
+        "indices": [r["symbol"] for r in records],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Tickers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_index_memberships(raw_val: Any) -> list[str]:
+    if not raw_val:
+        return []
+    if isinstance(raw_val, list):
+        return [str(x).strip() for x in raw_val if str(x).strip()]
+    val_str = str(raw_val).strip()
+    if not val_str:
+        return []
+    if val_str.startswith("{") and val_str.endswith("}"):
+        inner = val_str[1:-1]
+        return [x.strip(' "\'') for x in inner.split(",") if x.strip(' "\'')]
+    if val_str.startswith("[") and val_str.endswith("]"):
+        try:
+            import json
+            parsed = json.loads(val_str)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            pass
+    sep = "|" if "|" in val_str else ","
+    return [x.strip() for x in val_str.split(sep) if x.strip()]
+
+
+@router.post("/tickers/upload-csv")
+@router.post("/tickers/import-file")
+def import_ticker_master_file(
+    file: UploadFile = File(...),
+    dataset: Optional[str] = Form(None),
+) -> dict:
+    """Imports ticker master CSV/txt file into ticker_master table.
+    
+    Supports:
+    1. Standard CSV with header columns (ticker, company_name, is_fno, sector, index_memberships, exchange).
+    2. Plain list of ticker symbols line-by-line or comma-separated.
+    """
+    import csv, io
+
+    filename = file.filename or "ticker_master.csv"
+    raw_content = file.file.read().decode("utf-8-sig", errors="ignore")
+
+    records = []
+    # Check if CSV has recognizable header
+    lines = raw_content.splitlines()
+    non_empty_lines = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith("//")]
+    if not non_empty_lines:
+        raise HTTPException(400, "The uploaded file is empty.")
+
+    first_line_parts = [p.strip().lower().replace('"', '').replace("'", "") for p in next(csv.reader([non_empty_lines[0]]))]
+    has_header = "ticker" in first_line_parts or "symbol" in first_line_parts
+
+    if has_header:
+        reader = csv.DictReader(io.StringIO(raw_content))
+        for row in reader:
+            if not row:
+                continue
+            # Find ticker column
+            sym = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("ticker", "symbol"):
+                    sym = str(v).strip().upper() if v else None
+                    break
+            if not sym:
+                continue
+
+            sym = re.sub(r"\.(NS|BO)$", "", sym)
+            comp = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("company_name", "company", "name"):
+                    comp = str(v).strip() if v else None
+                    break
+            
+            is_fno_val = False
+            for k, v in row.items():
+                if k and k.strip().lower() in ("is_fno", "fno"):
+                    val = str(v).strip().lower()
+                    is_fno_val = val in ("true", "1", "t", "yes")
+                    break
+
+            sec_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() == "sector":
+                    sec_val = str(v).strip() if v else None
+                    break
+
+            idx_val = []
+            for k, v in row.items():
+                if k and k.strip().lower() in ("index_memberships", "indices", "indexes"):
+                    idx_val = _parse_index_memberships(v)
+                    break
+
+            exch_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() == "exchange":
+                    exch_val = str(v).strip() if v else None
+                    break
+
+            about_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("about_company", "about company", "about"):
+                    about_val = str(v).strip() if v else None
+                    break
+
+            prod_serv_val = None
+            for k, v in row.items():
+                if k and k.strip().lower() in ("product and service it do", "products & services", "product_services", "services"):
+                    prod_serv_val = str(v).strip() if v else None
+                    break
+
+            records.append({
+                "ticker": sym,
+                "company_name": comp or sym,
+                "is_fno": is_fno_val,
+                "sector": sec_val,
+                "index_memberships": idx_val,
+                "exchange": exch_val,
+                "about_company": about_val,
+                "product_services": prod_serv_val
+            })
+    else:
+        # Fallback raw token list parsing
+        raw_tokens = re.split(r"[\n\r,;\t]+", raw_content)
+        for token in raw_tokens:
+            tok = token.strip().upper()
+            if tok and not tok.startswith("#") and not tok.startswith("//"):
+                clean_tok = re.sub(r"\.(NS|BO)$", "", tok)
+                if not any(r["ticker"] == clean_tok for r in records):
+                    records.append({
+                        "ticker": clean_tok,
+                        "company_name": clean_tok,
+                        "is_fno": False,
+                        "sector": None,
+                        "index_memberships": [],
+                        "exchange": None,
+                        "about_company": None,
+                        "product_services": None
+                    })
+
+    if not records:
+        raise HTTPException(400, "No valid ticker entries found in the uploaded file.")
+
+    default_exchange = "NASDAQ" if dataset == "us_intelligence" else "NSE"
+    new_tickers = []
+    updated_tickers = []
+
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        for rec in records:
+            t = rec["ticker"]
+            c_name = rec["company_name"]
+            fno = rec["is_fno"]
+            sec = rec["sector"]
+            idx = rec["index_memberships"]
+            exch = rec["exchange"] or default_exchange
+            about_c = rec.get("about_company")
+            prod_s = rec.get("product_services")
+
+            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s", (t,))
+            exists = cur.fetchone()
+            if not exists:
+                cur.execute(
+                    """
+                    INSERT INTO ticker_master (ticker, company_name, is_fno, sector, index_memberships, exchange, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (t, c_name, fno, sec, idx, exch),
+                )
+                new_tickers.append(t)
+            else:
+                cur.execute(
+                    """
+                    UPDATE ticker_master
+                    SET company_name = COALESCE(NULLIF(%s, ''), company_name),
+                        is_fno = %s,
+                        sector = COALESCE(%s, sector),
+                        index_memberships = CASE WHEN array_length(%s::text[], 1) > 0 THEN %s ELSE index_memberships END,
+                        exchange = COALESCE(NULLIF(%s, ''), exchange),
+                        updated_at = NOW()
+                    WHERE ticker = %s
+                    """,
+                    (c_name, fno, sec, idx, idx, exch, t),
+                )
+                updated_tickers.append(t)
+
+            # Upsert About Company + Product and services into opportunities_risk table
+            if about_c or prod_s:
+                full_about_text = f"{about_c or ''}\n\nProducts & Services: {prod_s or ''}".strip() if prod_s else (about_c or '')
+                cur.execute(
+                    """
+                    INSERT INTO opportunities_risk (ticker, about_company, updated_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        about_company = EXCLUDED.about_company,
+                        updated_at = NOW()
+                    """,
+                    (t, full_about_text),
+                )
+
+            if sec:
+                cur.execute("SELECT id FROM sectors WHERE LOWER(name) = LOWER(%s)", (sec,))
+                s_row = cur.fetchone()
+                if s_row:
+                    s_id = s_row["id"]
+                else:
+                    cur.execute(
+                        "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING id",
+                        (sec, f"Imported from {filename}"),
+                    )
+                    s_id = cur.fetchone()["id"]
+
+                cur.execute(
+                    "INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s) ON CONFLICT (ticker, sector_id) DO NOTHING",
+                    (t, s_id),
+                )
+
+            if fno:
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
+                        VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
+                        ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                        """,
+                        (t, c_name),
+                    )
+                except Exception:
+                    pass
+
+        conn.commit()
+
+    return {
+        "status": "success",
+        "filename": filename,
+        "total_records": len(records),
+        "new_tickers_count": len(new_tickers),
+        "updated_tickers_count": len(updated_tickers),
+        "new_tickers": new_tickers,
+        "updated_tickers": updated_tickers,
+        "tickers": [r["ticker"] for r in records],
+    }
+
+
+
 
 @router.get("/tickers")
 def list_tickers(
@@ -1007,3 +1550,203 @@ def send_user_newsletter(email: str):
         raise HTTPException(500, "Failed to deliver newsletter email via SMTP server.")
         
     return {"status": "success", "detail": f"Sent {len(pdf_paths)} reports to {email}"}
+
+
+# ── Reference Pages CRUD ──────────────────────────────────────────────────────
+
+class ReferencePageCreate(BaseModel):
+    title: str
+    url: str
+    category: Optional[str] = "General"
+    description: Optional[str] = None
+
+class ReferencePageUpdate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+
+@router.get("/reference-pages")
+def get_reference_pages(dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, title, url, category, description, created_at::text FROM reference_pages ORDER BY id DESC")
+        return cur.fetchall()
+
+@router.post("/reference-pages", status_code=201)
+def create_reference_page(data: ReferencePageCreate, dataset: Optional[str] = None):
+    if not data.title.strip() or not data.url.strip():
+        raise HTTPException(400, "Title and URL are required.")
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO reference_pages (title, url, category, description) VALUES (%s, %s, %s, %s) RETURNING id, title, url, category, description, created_at::text",
+            (data.title.strip(), data.url.strip(), data.category.strip() if data.category else "General", data.description)
+        )
+        conn.commit()
+        return cur.fetchone()
+
+@router.put("/reference-pages/{ref_id}")
+def update_reference_page(ref_id: int, data: ReferencePageUpdate, dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM reference_pages WHERE id = %s", (ref_id,))
+        if not cur.fetchone():
+            raise _not_found("Reference Page", ref_id)
+        
+        updates = []
+        params = []
+        if data.title is not None:
+            updates.append("title = %s"); params.append(data.title.strip())
+        if data.url is not None:
+            updates.append("url = %s"); params.append(data.url.strip())
+        if data.category is not None:
+            updates.append("category = %s"); params.append(data.category.strip())
+        if data.description is not None:
+            updates.append("description = %s"); params.append(data.description)
+        
+        if updates:
+            params.append(ref_id)
+            cur.execute(f"UPDATE reference_pages SET {', '.join(updates)} WHERE id = %s", params)
+            conn.commit()
+        
+        cur.execute("SELECT id, title, url, category, description, created_at::text FROM reference_pages WHERE id = %s", (ref_id,))
+        return cur.fetchone()
+
+@router.delete("/reference-pages/{ref_id}")
+def delete_reference_page(ref_id: int, dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM reference_pages WHERE id = %s", (ref_id,))
+        if not cur.fetchone():
+            raise _not_found("Reference Page", ref_id)
+        cur.execute("DELETE FROM reference_pages WHERE id = %s", (ref_id,))
+        conn.commit()
+        return {"status": "deleted", "id": ref_id}
+
+
+# ── Screener Ticker Mappings (YFinance ↔ Screener.in) ────────────────────────
+
+def _ensure_screener_ticker_mappings_table():
+    """Auto-create screener_ticker_mappings table if it doesn't exist."""
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS screener_ticker_mappings (
+                id                  SERIAL PRIMARY KEY,
+                yfinance_ticker     TEXT UNIQUE NOT NULL,
+                screener_ticker     TEXT NOT NULL,
+                screener_company_id INTEGER DEFAULT NULL,
+                company_name        TEXT,
+                notes               TEXT,
+                last_updated        TEXT
+            )
+        """)
+        # Add screener_company_id column if upgrading from old schema
+        try:
+            cur.execute("ALTER TABLE screener_ticker_mappings ADD COLUMN IF NOT EXISTS screener_company_id INTEGER DEFAULT NULL")
+        except Exception:
+            pass
+        conn.commit()
+
+try:
+    _ensure_screener_ticker_mappings_table()
+except Exception:
+    pass  # Tolerate startup failures — table creation retried on first API call
+
+
+@router.get("/screener-ticker-mappings")
+def list_screener_ticker_mappings(search: Optional[str] = None) -> list[dict]:
+    _ensure_screener_ticker_mappings_table()
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        query = "SELECT * FROM screener_ticker_mappings"
+        params = []
+        if search:
+            query += " WHERE yfinance_ticker ILIKE %s OR screener_ticker ILIKE %s OR company_name ILIKE %s OR notes ILIKE %s"
+            term = f"%{search}%"
+            params = [term, term, term, term]
+        query += " ORDER BY id DESC"
+        cur.execute(query, params)
+        return cur.fetchall()
+
+
+@router.post("/screener-ticker-mappings", status_code=201)
+def create_screener_ticker_mapping(body: ScreenerTickerMappingIn) -> dict:
+    _ensure_screener_ticker_mappings_table()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                """
+                INSERT INTO screener_ticker_mappings (yfinance_ticker, screener_ticker, screener_company_id, company_name, notes, last_updated)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    body.yfinance_ticker.strip().upper(),
+                    body.screener_ticker.strip().upper(),
+                    body.screener_company_id,
+                    body.company_name,
+                    body.notes,
+                    now,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return row
+        except Exception as exc:
+            conn.rollback()
+            if "unique" in str(exc).lower():
+                raise _conflict(f"A Screener mapping for yfinance ticker '{body.yfinance_ticker.upper()}' already exists.")
+            raise HTTPException(500, str(exc))
+
+
+@router.put("/screener-ticker-mappings/{mapping_id}")
+def update_screener_ticker_mapping(mapping_id: int, body: ScreenerTickerMappingUpdate) -> dict:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    updates, params = [], []
+    if body.yfinance_ticker is not None:
+        updates.append("yfinance_ticker = %s"); params.append(body.yfinance_ticker.strip().upper())
+    if body.screener_ticker is not None:
+        updates.append("screener_ticker = %s"); params.append(body.screener_ticker.strip().upper())
+    if body.screener_company_id is not None:
+        updates.append("screener_company_id = %s"); params.append(body.screener_company_id)
+    if body.company_name is not None:
+        updates.append("company_name = %s"); params.append(body.company_name)
+    if body.notes is not None:
+        updates.append("notes = %s"); params.append(body.notes)
+    updates.append("last_updated = %s"); params.append(now)
+
+    if len(updates) == 1:
+        raise HTTPException(400, "No fields to update.")
+    params.append(mapping_id)
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                f"UPDATE screener_ticker_mappings SET {', '.join(updates)} WHERE id = %s RETURNING *",
+                params,
+            )
+            row = cur.fetchone()
+            if not row:
+                raise _not_found("Screener Ticker Mapping", mapping_id)
+            conn.commit()
+            return row
+        except HTTPException:
+            raise
+        except Exception as exc:
+            conn.rollback()
+            if "unique" in str(exc).lower():
+                raise _conflict("A Screener mapping for this yfinance ticker already exists.")
+            raise HTTPException(500, str(exc))
+
+
+@router.delete("/screener-ticker-mappings/{mapping_id}", status_code=204)
+def delete_screener_ticker_mapping(mapping_id: int) -> None:
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM screener_ticker_mappings WHERE id = %s RETURNING id", (mapping_id,))
+        if not cur.fetchone():
+            raise _not_found("Screener Ticker Mapping", mapping_id)
+        conn.commit()
+
+
+@router.get("/recommendations")
+def list_master_recommendations() -> list[dict]:
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM broker_recommendations ORDER BY id DESC LIMIT 500")
+        return cur.fetchall()
+

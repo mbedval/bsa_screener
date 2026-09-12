@@ -1,7 +1,7 @@
-symbol,underlying_name,instrument_type,serial_number,is_active,entry_date
-NIFTY,Nifty 50 Index,INDEX,1,true,2026-09-05
-BANKNIFTY,Nifty Bank Index,INDEX,2,true,2026-09-05
-FINNIFTY,Nifty Financial Services Index,INDEX,3,true,2026-09-05
-MIDCPNIFTY,Nifty Midcap Select Index,INDEX,4,true,2026-09-05
-NIFTYNXT50,Nifty Next 50 Index,INDEX,5,true,2026-09-05
-BANKEX,BSE Bankex Index,INDEX,6,true,2026-09-05
+id,symbol,underlying_name,instrument_type,is_active,entry_date,created_at
+1,NIFTY,Nifty 50 Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30
+2,BANKNIFTY,Nifty Bank Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30
+3,FINNIFTY,Nifty Financial Services Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30
+4,MIDCPNIFTY,Nifty Midcap Select Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30
+5,NIFTYNXT50,Nifty Next 50 Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30
+6,BANKEX,BSE Bankex Index,INDEX,True,2026-09-11,2026-09-11 07:33:11.72031+05:30

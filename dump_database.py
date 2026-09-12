@@ -21,7 +21,7 @@ database = os.getenv("POSTGRES_DB", "bsa_db")
 dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
 output_file = "bsa_db_backup.sql"
 
-# MASTER METADATA TABLES ONLY (Rule 1.1)
+# MASTER METADATA TABLES ONLY (Rule 1.1 & Phase 0 Baseline)
 ALLOWED_MASTER_TABLES = {
     "system_config",
     "ticker_mappings",
@@ -35,7 +35,12 @@ ALLOWED_MASTER_TABLES = {
     "excluded_tickers",
     "fno_stock_master",
     "fno_index_master",
-    "fno_master"
+    "fno_master",
+    "opportunities_risk",
+    "indices_master",
+    "reference_pages",
+    "screener_ticker_mappings",
+    "broker_recommendations",
 }
 
 print(f"Connecting to database {database} on {host}...")

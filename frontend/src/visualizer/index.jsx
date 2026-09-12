@@ -2185,25 +2185,13 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 14 }}>
                 🏢 About Company (Products & Services Overview)
               </b>
-              {oppRisk && oppRisk.about_company ? (
+              {(oppRisk && oppRisk.about_company) || (master && master.about_company) ? (
                 <div style={{ color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
-                  {oppRisk.about_company}
+                  {(oppRisk && oppRisk.about_company) || master.about_company}
                 </div>
               ) : (
                 <div style={{ color: '#64748b', fontStyle: 'italic', fontWeight: 600 }}>
                   Not Recorded in the System
-                </div>
-              )}
-
-              {/* Additional Information / Note Banner */}
-              {oppRisk && oppRisk.additional_note && (
-                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed rgba(56, 189, 248, 0.25)' }}>
-                  <b style={{ color: '#facc15', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>
-                    📌 Additional Information:
-                  </b>
-                  <div style={{ color: '#cbd5e1', fontSize: 12, fontStyle: 'italic', lineHeight: 1.5 }}>
-                    {oppRisk.additional_note}
-                  </div>
                 </div>
               )}
             </div>
@@ -2819,85 +2807,6 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* 7. Strategic Growth Opportunities & Business Risk Assessment Card */}
-          <div style={{ ...cardStyle, background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(9, 13, 22, 0.95))', border: '1px solid rgba(56, 189, 248, 0.35)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10, flexWrap: 'wrap', gap: 10 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  🛡️ Strategic Opportunities & Business Risk Profile
-                </h3>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-                  Qualitative & fundamental growth catalysts vs business risks for {data.ticker}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {oppRisk?.is_multibagger && (
-                  <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#facc15', border: '1px solid #f59e0b', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    🌟 POTENTIAL MULTIBAGGER
-                  </span>
-                )}
-                <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>
-                  {oppRisk ? 'Analysis Active' : 'Pending Review'}
-                </span>
-              </div>
-            </div>
-
-            {!oppRisk || (!oppRisk.about_company && !oppRisk.opportunities && !oppRisk.risk) ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#64748b', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-                No custom About Company & Risk analysis logged for {data.ticker} yet.
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
-                  Navigate to <b style={{ color: '#38bdf8' }}>Master Data Admin → About Company</b> to add company overview, growth catalysts, risk factors, and secondary sector mappings.
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* About Company Box (Products & Services Overview) */}
-                {oppRisk.about_company && (
-                  <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 10, padding: 16 }}>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: 14, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      🏢 About Company (Products & Services Overview)
-                    </h4>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                      {oppRisk.about_company}
-                    </div>
-                  </div>
-                )}
-
-                {/* Positives vs Negatives 2-Column Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-                  
-                  {/* Bullish / Positives High Lighter Box */}
-                  <div style={{ background: 'rgba(34, 197, 94, 0.06)', border: '1px solid rgba(34, 197, 94, 0.25)', borderRadius: 10, padding: 16 }}>
-                    <h4 style={{ margin: '0 0 10px 0', fontSize: 14, fontWeight: 800, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      🚀 Growth Opportunities (Positives)
-                    </h4>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                      {oppRisk.opportunities || 'No explicit positive growth opportunities entered.'}
-                    </div>
-                  </div>
-
-                  {/* Bearish / Negatives High Lighter Box */}
-                  <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 10, padding: 16 }}>
-                    <h4 style={{ margin: '0 0 10px 0', fontSize: 14, fontWeight: 800, color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      ⚠️ Business Risks & Threats (Negatives)
-                    </h4>
-                    <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                      {oppRisk.risk || 'No explicit business risks entered.'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Additional Note Banner if present */}
-                {oppRisk.additional_note && (
-                  <div style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1' }}>
-                    <b style={{ color: '#38bdf8', display: 'block', marginBottom: 4 }}>💡 Additional Analyst Note:</b>
-                    {oppRisk.additional_note}
-                  </div>
-                )}
               </div>
             )}
           </div>

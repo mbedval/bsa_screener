@@ -279,6 +279,63 @@ CREATE TABLE IF NOT EXISTS fno_active (
     last_updated TEXT
 );
 
+CREATE TABLE IF NOT EXISTS opportunities_risk (
+    ticker          TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    about_company   TEXT,
+    opportunities   TEXT,
+    risk            TEXT,
+    is_multibagger  BOOLEAN DEFAULT FALSE,
+    additional_note TEXT,
+    created_at      TIMESTAMP DEFAULT now(),
+    updated_at      TIMESTAMP DEFAULT now(),
+    product_services TEXT,
+    sectors         TEXT[] DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS indices_master (
+    symbol          TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    exchange        TEXT DEFAULT 'NSE',
+    category        TEXT DEFAULT 'BENCHMARK',
+    is_fno          BOOLEAN DEFAULT TRUE,
+    lot_size        INTEGER DEFAULT 25,
+    benchmark_price DOUBLE PRECISION,
+    is_active       BOOLEAN DEFAULT TRUE,
+    updated_at      TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS broker_recommendations (
+    id              SERIAL PRIMARY KEY,
+    ticker          TEXT NOT NULL,
+    rec_date        TEXT,
+    recommender     TEXT NOT NULL,
+    cmp             DOUBLE PRECISION,
+    stop_loss       DOUBLE PRECISION,
+    target          DOUBLE PRECISION,
+    time_period     TEXT,
+    description     TEXT,
+    created_at      TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS reference_pages (
+    id              SERIAL PRIMARY KEY,
+    title           TEXT NOT NULL,
+    url             TEXT NOT NULL,
+    category        TEXT DEFAULT 'General',
+    description     TEXT,
+    created_at      TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS screener_ticker_mappings (
+    id                  SERIAL PRIMARY KEY,
+    yfinance_ticker     TEXT UNIQUE NOT NULL,
+    screener_ticker     TEXT NOT NULL,
+    screener_company_id INTEGER DEFAULT NULL,
+    company_name        TEXT,
+    notes               TEXT,
+    last_updated        TEXT
+);
+
 -- Indexes for Optimization
 CREATE INDEX IF NOT EXISTS idx_ticker_sector_sector_id ON ticker_sector(sector_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items(watchlist_id);

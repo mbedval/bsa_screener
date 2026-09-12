@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from urllib.parse import unquote
 from fastapi import FastAPI, HTTPException, Query
 try:
     import yfinance as yf
@@ -165,6 +166,9 @@ def get_columns_for_virtual_table(table_name: str) -> list[str]:
 
 
 def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: str | None, ticker: str | None, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+    if table_name.startswith("master:"):
+        table_name = table_name.split("master:", 1)[1]
+
     if table_name in ANALYSIS_REPORT_TABLE_NAMES and not is_analysis_executed(dsn):
         cols = get_columns_for_virtual_table(table_name)
         return {
@@ -295,6 +299,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
         return evaluate_best_option_strategies(dsn, ticker or "NIFTY")
 
     # 1. Alias tables
+    if table_name in ("indices", "indices_master"):
+        return table_data_for(dsn, "fno_index_master", limit, offset, search, ticker)
     if table_name == "price_history":
         return table_data_for(dsn, "ohlcv_daily", limit, offset, search, ticker)
     if table_name == "raw_fundamentals":
@@ -1483,6 +1489,86 @@ def top_largecap_trades_for(dsn: str) -> list[dict[str, Any]]:
     return results
 
 
+def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
+    """Synthesizes Penny Stocks / Micro-Cap & Small-Cap Institutional Picks — tickers belonging to Smallcap or Microcap segment with holdings by >= 2 Mutual Funds holding > 2% stake each."""
+    results = []
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                WITH qualifying_mf AS (
+                    SELECT ticker, 
+                           COUNT(fund_name) AS fund_count,
+                           ARRAY_AGG(fund_name || ' (' || holding_pct || '%)') AS mf_details
+                    FROM mf_holdings
+                    WHERE holding_pct > 2.0
+                    GROUP BY ticker
+                    HAVING COUNT(fund_name) >= 2
+                )
+                SELECT 
+                    a.ticker,
+                    COALESCE(t.company_name, a.ticker) AS stock_name,
+                    COALESCE(t.sector, 'General') AS sector,
+                    a.close AS current_price,
+                    a.hybrid_score,
+                    a.technical_score,
+                    a.fundamental_score,
+                    a.overall_signal AS setup_signal,
+                    a.confidence,
+                    a.reasons,
+                    q.fund_count,
+                    q.mf_details
+                FROM qualifying_mf q
+                JOIN ticker_master t ON q.ticker = t.ticker
+                LEFT JOIN analysis_summaries a ON q.ticker = a.ticker
+                WHERE NOT (
+                    EXISTS (
+                        SELECT 1 FROM unnest(t.index_memberships) AS m
+                        WHERE m ILIKE '%NIFTY50%' OR m ILIKE '%NIFTY_50%' OR m ILIKE '%LARGECAP%' OR m ILIKE '%LARGE_CAP%'
+                    )
+                )
+                ORDER BY a.hybrid_score DESC NULLS LAST, q.fund_count DESC
+                LIMIT 50
+            """)
+            rows = cur.fetchall()
+
+            for idx, r in enumerate(rows, 1):
+                price = float(r["current_price"] or 10.0)
+                buy_low = round(price * 0.985, 2)
+                buy_high = round(price * 1.008, 2)
+                stop_loss = round(price * 0.95, 2)
+                target1 = round(price * 1.10, 2)
+                target2 = round(price * 1.20, 2)
+                risk = price - stop_loss
+                reward = target1 - price
+                rr_ratio = round(reward / risk, 2) if risk > 0 else 2.20
+
+                mf_summary = f"{r['fund_count']} MFs holding >2% (" + ", ".join(r["mf_details"][:2]) + ")"
+                reasons_str = r["reasons"] or ""
+                reasons_list = [rs.strip() for rs in reasons_str.split(";") if rs.strip()]
+                insight = f"Institutional Backing: {mf_summary}. " + (" ".join(reasons_list[:2]) if reasons_list else f"Strong institutional accumulation in small/microcap segment.")
+
+                results.append({
+                    "rank": idx,
+                    "ticker": r["ticker"],
+                    "stock_name": r["stock_name"],
+                    "sector": r["sector"],
+                    "current_price": round(price, 2),
+                    "best_buy_zone": f"{buy_low:,.2f} – {buy_high:,.2f}",
+                    "stop_loss": f"{stop_loss:,.2f}",
+                    "target_price": f"{target1:,.2f} (T2: {target2:,.2f})",
+                    "risk_reward": f"1 : {rr_ratio:.2f}",
+                    "setup_signal": r["setup_signal"] or "MF ACCUMULATION",
+                    "score": round(float(r["hybrid_score"] or 0.8) * 100, 1),
+                    "fund_count": r["fund_count"],
+                    "mf_details": r["mf_details"],
+                    "insight": insight,
+                })
+    except Exception as e:
+        logger.error(f"Error synthesizing penny stock trades: {e}")
+
+    return results
+
+
 LOT_SIZE_MAP = {
     "NIFTY": 25, "BANKNIFTY": 15, "FINNIFTY": 25, "MIDCPNIFTY": 50,
     "HDFCBANK": 550, "RELIANCE": 250, "INFY": 400, "TATAMOTORS": 1425,
@@ -2052,6 +2138,11 @@ def top_largecap_trades(dataset: str) -> list[dict[str, Any]]:
     return top_largecap_trades_for(get_dsn(dataset))
 
 
+@app.get("/api/{dataset}/top-penny-trades")
+def top_penny_trades(dataset: str) -> list[dict[str, Any]]:
+    return top_penny_trades_for(get_dsn(dataset))
+
+
 @app.get("/api/intelligence/option-chain")
 def intelligence_option_chain(ticker: str = Query("NIFTY")) -> dict[str, Any]:
     return generate_ticker_option_chain(settings.bsa_postgres_dsn, ticker)
@@ -2082,8 +2173,8 @@ def overview(dataset: str) -> dict[str, Any]:
     return overview_for(get_dsn(dataset))
 
 
-@app.get("/api/{dataset}/tables/{table_name}")
-@app.get("/api/{dataset}/table/{table_name}")
+@app.get("/api/{dataset}/tables/{table_name:path}")
+@app.get("/api/{dataset}/table/{table_name:path}")
 def table_data(
     dataset: str,
     table_name: str,
@@ -2094,9 +2185,10 @@ def table_data(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> dict[str, Any]:
-    lim = int(limit.default) if hasattr(limit, "default") else int(limit)
-    off = int(offset.default) if hasattr(offset, "default") else int(offset)
-    return table_data_for(get_dsn(dataset), table_name, lim, off, search, ticker, start_date, end_date)
+    clean_table_name = unquote(table_name)
+    if ":" in clean_table_name:
+        clean_table_name = clean_table_name.split(":", 1)[1]
+    return table_data_for(get_dsn(dataset), clean_table_name, limit, offset, search, ticker, start_date, end_date)
 
 
 
@@ -2474,7 +2566,7 @@ def get_patterns_catalog(
                     WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.sector = 'Market Index'
-                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
                       )
                     GROUP BY p.pattern_code, p.timeframe
                 """, (days,))
@@ -2486,7 +2578,7 @@ def get_patterns_catalog(
                     WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.is_fno = true 
-                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
                           OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
                       )
                     GROUP BY p.pattern_code, p.timeframe
@@ -2569,7 +2661,7 @@ def get_pattern_occurrences(
                       AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.sector = 'Market Index'
-                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
                       )
                     ORDER BY p.detected_date DESC, p.strength_score DESC
                     LIMIT %s
@@ -2600,7 +2692,7 @@ def get_pattern_occurrences(
                       AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.is_fno = true 
-                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'QQQ', 'SPY', 'IWM', 'DIA', 'IXIC', 'GSPC', 'DJI')
+                          OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
                           OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
                       )
                     ORDER BY p.detected_date DESC, p.strength_score DESC
@@ -2884,7 +2976,7 @@ def get_sector_wise_top10(dataset: str = "intelligence"):
                             ORDER BY COALESCE(a.hybrid_score, 0) DESC, COALESCE(o.volume, 0) DESC
                         ) AS rnk
                     FROM analysis_summaries a
-                    LEFT JOIN ticker_master tm ON a.ticker = tm.ticker
+                    JOIN ticker_master tm ON a.ticker = tm.ticker
                     LEFT JOIN ticker_sector ts ON ts.ticker = a.ticker
                     LEFT JOIN sectors s ON s.id = ts.sector_id
                     LEFT JOIN LATERAL (
@@ -2968,7 +3060,7 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
                             ORDER BY COALESCE(a.hybrid_score, 0) DESC, COALESCE(o.volume, 0) DESC
                         ) AS rnk
                     FROM analysis_summaries a
-                    LEFT JOIN ticker_master tm ON a.ticker = tm.ticker
+                    JOIN ticker_master tm ON a.ticker = tm.ticker
                     LEFT JOIN LATERAL (
                         SELECT s.name 
                         FROM ticker_sector ts
@@ -3630,28 +3722,30 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             # Fetch Mutual Fund holdings
             mf_holdings = []
             try:
-                cur.execute("""
-                    SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
-                    FROM mf_holdings
-                    WHERE ticker = %s
-                    ORDER BY rank ASC, holding_pct DESC
-                """, (actual_ticker,))
-                mf_rows = cur.fetchall()
-                mf_holdings = [dict(r) for r in mf_rows]
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
+                        FROM mf_holdings
+                        WHERE ticker = %s
+                        ORDER BY rank ASC, holding_pct DESC
+                    """, (actual_ticker,))
+                    mf_rows = cur.fetchall()
+                    mf_holdings = [dict(r) for r in mf_rows]
             except Exception as e:
                 logger.error(f"Error querying mf_holdings for {actual_ticker}: {e}")
 
             # Fetch Opportunities & Risk record
             opportunities_risk = None
             try:
-                cur.execute("""
-                    SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at
-                    FROM opportunities_risk
-                    WHERE ticker = %s
-                """, (actual_ticker,))
-                opp_row = cur.fetchone()
-                if opp_row:
-                    opportunities_risk = dict(opp_row)
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at
+                        FROM opportunities_risk
+                        WHERE ticker = %s
+                    """, (actual_ticker,))
+                    opp_row = cur.fetchone()
+                    if opp_row:
+                        opportunities_risk = dict(opp_row)
             except Exception as e:
                 logger.error(f"Error querying opportunities_risk for {actual_ticker}: {e}")
 
@@ -4026,7 +4120,6 @@ def get_watchlist_monitor(
         logger.error(f"Error fetching watchlist monitor data: {e}")
         raise HTTPException(500, f"Error fetching watchlist monitor: {e}")
 
-
 class OpportunitiesRiskIn(BaseModel):
     ticker: str
     about_company: Optional[str] = None
@@ -4050,7 +4143,6 @@ def get_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
             """, (actual_ticker,))
             row = cur.fetchone()
 
-            # Get sector mappings
             cur.execute("""
                 SELECT sector_id FROM ticker_sector WHERE ticker = %s
             """, (actual_ticker,))
@@ -4077,7 +4169,7 @@ def list_opportunities_risk(dataset: str = 'intelligence'):
     try:
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
             cur.execute("""
-                SELECT o.ticker, o.about_company, o.opportunities, o.risk, o.is_multibagger, o.additional_note, o.updated_at,
+                SELECT o.ticker, o.about_company, o.product_services, o.sectors, o.opportunities, o.risk, o.is_multibagger, o.additional_note, o.updated_at,
                        tm.company_name
                 FROM opportunities_risk o
                 LEFT JOIN ticker_master tm ON o.ticker = tm.ticker
@@ -4102,7 +4194,6 @@ def save_opportunities_risk(body: OpportunitiesRiskIn, dataset: str = 'intellige
     try:
         actual_ticker = body.ticker.upper().replace(".NS", "").replace(".BO", "").strip()
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
-            # 1. Upsert opportunities_risk table
             cur.execute("""
                 INSERT INTO opportunities_risk (ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, NOW())
@@ -4115,7 +4206,6 @@ def save_opportunities_risk(body: OpportunitiesRiskIn, dataset: str = 'intellige
                     updated_at = NOW()
             """, (actual_ticker, body.about_company, body.opportunities, body.risk, body.is_multibagger or False, body.additional_note))
 
-            # 2. Update multi-sector mappings in ticker_sector
             if body.sector_ids is not None:
                 cur.execute("DELETE FROM ticker_sector WHERE ticker = %s", (actual_ticker,))
                 for s_id in body.sector_ids:
@@ -4140,6 +4230,12 @@ def delete_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
     except Exception as e:
         logger.error(f"Error deleting opportunities_risk for {ticker}: {e}")
         raise HTTPException(500, str(e))
+
+
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+
 
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"

@@ -1,104 +1,77 @@
-import React, { useEffect, useState, useMemo } from 'react'
-import { Shield, Save, Search, AlertCircle, CheckCircle2, TrendingUp, AlertTriangle, Star } from 'lucide-react'
-import { useToast, SectionHeader, SearchBar, Pagination, TruncatedCellText, MultiPicker } from './ui.jsx'
+import React, { useEffect, useState } from 'react'
+import { Plus, Search, Tag, TrendingUp, ShieldAlert, CheckCircle2, Star, Edit3, Trash2, Download } from 'lucide-react'
 import * as api from './api.js'
-
-const PAGE_SIZE = 25
+import { useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar, TruncatedCellText } from './ui.jsx'
 
 export default function OpportunitiesRiskPage() {
   const [tickers, setTickers] = useState([])
   const [sectors, setSectors] = useState([])
-  const [oppRiskList, setOppRiskList] = useState([])
+  const [savedRecords, setSavedRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [newSectorName, setNewSectorName] = useState('')
-  const [creatingSector, setCreatingSector] = useState(false)
-
+  
   // Selection & Form State
   const [selectedTicker, setSelectedTicker] = useState('')
-  const [tickerQuery, setTickerQuery] = useState('')
+  const [selectedSectors, setSelectedSectors] = useState([])
   const [form, setForm] = useState({
     about_company: '',
     opportunities: '',
     risk: '',
     is_multibagger: false,
-    additional_note: '',
-    sector_ids: []
+    additional_note: ''
   })
-
+  
+  // Create Sector Modal State
+  const [showCreateSector, setShowCreateSector] = useState(false)
+  const [newSectorName, setNewSectorName] = useState('')
+  
+  // UI Table Search & Pagination State
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+  
   const { show, ToastContainer } = useToast()
 
-  // Inline creation of new sector master entry
-  const handleCreateSector = async () => {
-    const name = newSectorName.trim()
-    if (!name) return
-
-    // Check if sector already exists in local list
-    const existing = sectors.find(s => s.name.toLowerCase() === name.toLowerCase())
-    if (existing) {
-      if (!form.sector_ids.includes(existing.id)) {
-        setForm(prev => ({ ...prev, sector_ids: [...prev.sector_ids, existing.id] }))
-      }
-      setNewSectorName('')
-      show(`Sector '${existing.name}' selected.`, 'info')
-      return
-    }
-
-    setCreatingSector(true)
-    try {
-      const created = await api.sectors.create({ name, description: 'Added via Opportunities & Risk manager' })
-      show(`Created & added new sector '${name}' to Sector Master`, 'success')
-      
-      // Update local sector list and auto-select new sector ID
-      setSectors(prev => [...prev, created])
-      setForm(prev => ({ ...prev, sector_ids: [...prev.sector_ids, created.id] }))
-      setNewSectorName('')
-    } catch (e) {
-      show('Failed to create sector: ' + e.message, 'error')
-    } finally {
-      setCreatingSector(false)
-    }
-  }
-
-  // Load initial data
   const loadData = async () => {
     setLoading(true)
     try {
-      const [tList, sList, oppRes] = await Promise.all([
-        api.tickers.list({}),
-        api.sectors.list(),
-        fetch('/api/opportunities-risk').then(r => r.ok ? r.json() : [])
+      const [tList, sList] = await Promise.all([
+        api.tickers.list(),
+        api.sectors.list()
       ])
       setTickers(tList || [])
       setSectors(sList || [])
-      setOppRiskList(oppRes || [])
+      
+      // Fetch saved opportunities_risk list from backend
+      const res = await fetch('/api/opportunities-risk')
+      if (res.ok) {
+        const data = await res.json()
+        setSavedRecords(data || [])
+      }
     } catch (e) {
-      show('Failed to load data: ' + e.message, 'error')
+      show(e.message, 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+  }, [])
 
-  // Filtered ticker list for selector query box
-  const filteredTickers = useMemo(() => {
-    const q = tickerQuery.trim().toLowerCase()
-    if (!q) return tickers
-    return tickers.filter(t => (t.ticker || '').toLowerCase().includes(q) || (t.company_name || '').toLowerCase().includes(q))
-  }, [tickers, tickerQuery])
-
-  // When a ticker is selected, load its existing Opp & Risk record + secondary sectors
-  const handleSelectTicker = async (symbol) => {
+  const handleTickerSelect = async (symbol) => {
+    setSelectedTicker(symbol)
     if (!symbol) {
-      setSelectedTicker('')
-      setForm({ about_company: '', opportunities: '', risk: '', is_multibagger: false, additional_note: '', sector_ids: [] })
+      setForm({
+        about_company: '',
+        opportunities: '',
+        risk: '',
+        is_multibagger: false,
+        additional_note: ''
+      })
+      setSelectedSectors([])
       return
     }
 
-    setSelectedTicker(symbol)
     try {
       const res = await fetch(`/api/opportunities-risk/${encodeURIComponent(symbol)}`)
       if (res.ok) {
@@ -107,23 +80,22 @@ export default function OpportunitiesRiskPage() {
           about_company: data.about_company || '',
           opportunities: data.opportunities || '',
           risk: data.risk || '',
-          is_multibagger: Boolean(data.is_multibagger),
-          additional_note: data.additional_note || '',
-          sector_ids: data.sector_ids || []
+          is_multibagger: !!data.is_multibagger,
+          additional_note: data.additional_note || ''
         })
+        setSelectedSectors(data.sector_ids || [])
       }
     } catch (e) {
-      show(`Error loading records for ${symbol}: ${e.message}`, 'error')
+      show('Failed to fetch ticker opportunities details', 'error')
     }
   }
 
-  // Save Opportunities & Risk record
   const handleSave = async () => {
     if (!selectedTicker) {
-      return show('Please select a ticker symbol first', 'error')
+      show('Please select a ticker first.', 'error')
+      return
     }
 
-    setSaving(true)
     try {
       const payload = {
         ticker: selectedTicker,
@@ -132,7 +104,7 @@ export default function OpportunitiesRiskPage() {
         risk: form.risk,
         is_multibagger: form.is_multibagger,
         additional_note: form.additional_note,
-        sector_ids: form.sector_ids
+        sector_ids: selectedSectors
       }
 
       const res = await fetch('/api/opportunities-risk', {
@@ -142,248 +114,292 @@ export default function OpportunitiesRiskPage() {
       })
 
       if (!res.ok) throw new Error('Failed to save record')
-      show(`Saved Opportunities & Risk analysis for ${selectedTicker}`, 'success')
-      
-      // Reset form allowing to add new and clear selections
-      setSelectedTicker('')
-      setTickerQuery('')
-      setNewSectorName('')
-      setForm({
-        about_company: '',
-        opportunities: '',
-        risk: '',
-        is_multibagger: false,
-        additional_note: '',
-        sector_ids: []
-      })
 
+      show(`Saved Opportunities & Risk analysis for ${selectedTicker}`, 'success')
       loadData()
     } catch (e) {
       show(e.message, 'error')
-    } finally {
-      setSaving(false)
     }
   }
 
-  // Filter existing records for table
-  const filteredRecords = useMemo(() => {
-    if (!search) return oppRiskList
+  const handleCreateSector = async () => {
+    if (!newSectorName.trim()) return
+    try {
+      const created = await api.sectors.create({ name: newSectorName.trim(), description: 'Created from Opportunities & Risk page' })
+      show(`Sector '${created.name}' created`, 'success')
+      setNewSectorName('')
+      setShowCreateSector(false)
+      const sList = await api.sectors.list()
+      setSectors(sList || [])
+      if (created.id && !selectedSectors.includes(created.id)) {
+        setSelectedSectors(prev => [...prev, created.id])
+      }
+    } catch (e) {
+      show(e.message, 'error')
+    }
+  }
+
+  const handleDelete = async (symbol) => {
+    try {
+      const res = await fetch(`/api/opportunities-risk/${encodeURIComponent(symbol)}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete record')
+      show(`Deleted record for ${symbol}`, 'success')
+      if (selectedTicker === symbol) {
+        setSelectedTicker('')
+        setForm({ about_company: '', opportunities: '', risk: '', is_multibagger: false, additional_note: '' })
+        setSelectedSectors([])
+      }
+      loadData()
+    } catch (e) {
+      show(e.message, 'error')
+    }
+  }
+
+  const toggleSector = (id) => {
+    setSelectedSectors(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const filteredRecords = savedRecords.filter(r => {
+    if (!search) return true
     const q = search.toLowerCase()
-    return oppRiskList.filter(r =>
-      r.ticker.toLowerCase().includes(q) ||
-      (r.company_name || '').toLowerCase().includes(q) ||
-      (r.about_company || '').toLowerCase().includes(q) ||
-      (r.opportunities || '').toLowerCase().includes(q) ||
-      (r.risk || '').toLowerCase().includes(q)
-    )
-  }, [oppRiskList, search])
+    return (r.ticker || '').toLowerCase().includes(q) ||
+           (r.company_name || '').toLowerCase().includes(q) ||
+           (r.about_company || '').toLowerCase().includes(q) ||
+           (r.opportunities || '').toLowerCase().includes(q) ||
+           (r.risk || '').toLowerCase().includes(q)
+  })
 
-  const pagedRecords = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filteredRecords.slice(start, start + PAGE_SIZE)
-  }, [filteredRecords, page])
+  const pagedRecords = filteredRecords.slice((page - 1) * pageSize, page * pageSize)
 
-  const selectedTickerMeta = useMemo(() => {
-    return tickers.find(t => t.ticker === selectedTicker) || {}
-  }, [tickers, selectedTicker])
+  const downloadCSV = () => {
+    if (!savedRecords || savedRecords.length === 0) return
+    const headers = ['ticker', 'company_name', 'about_company', 'product_and_service', 'sectors', 'opportunities', 'risk', 'is_multibagger', 'additional_note']
+    const csvLines = [headers.join(',')]
+    savedRecords.forEach(r => {
+      const line = [
+        `"${r.ticker || ''}"`,
+        `"${(r.company_name || '').replace(/"/g, '""')}"`,
+        `"${(r.about_company || '').replace(/"/g, '""')}"`,
+        `"${(r.product_services || '').replace(/"/g, '""')}"`,
+        `"${(r.sectors || '').replace(/"/g, '""')}"`,
+        `"${(r.opportunities || '').replace(/"/g, '""')}"`,
+        `"${(r.risk || '').replace(/"/g, '""')}"`,
+        r.is_multibagger ? 'YES' : 'NO',
+        `"${(r.additional_note || '').replace(/"/g, '""')}"`
+      ]
+      csvLines.push(line.join(','))
+    })
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'oppurtunityandrisk.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
-    <div className="master-page">
+    <div className="master-page" style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       {ToastContainer}
+
       <SectionHeader
-        title="About Company Manager & Business Sector Mapping"
-        sub="Maintain company products/services profiles, map secondary business sectors, evaluate key growth catalysts, risks, and multibagger potential."
+        title="About Company Management"
+        sub="Map qualitative growth catalysts, business risks, and multi-sector categories to tickers"
+        actions={
+          <button className="btn-secondary" onClick={downloadCSV} title="Download opportunities and risk dataset as CSV">
+            <Download size={14}/> Download CSV
+          </button>
+        }
       />
 
-      {/* Editor & Configuration Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, marginBottom: 24 }}>
         
-        {/* Left Column: Ticker & Multi-Sector Selector */}
-        <div className="panel" style={{ background: '#0d1527', border: '1px solid #1e3250', borderRadius: 10, padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px 0', fontSize: 15, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 8 }}>
-            🎯 1. Select Ticker & Secondary Sectors
+        {/* Left Column: Ticker & Sector Selector Card */}
+        <div className="panel" style={{ padding: 20, background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 12 }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+            🎯 1. Select Ticker Symbol
           </h3>
 
-          {/* Ticker Selector Query Box */}
-          <div className="form-group" style={{ marginBottom: 14 }}>
-            <label style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 700 }}>Search & Choose Ticker <span className="req">*</span></label>
-            <input
-              type="text"
-              className="form-input"
-              style={{ marginBottom: 6, fontSize: 13 }}
-              placeholder="Type symbol or company name (e.g. RELIANCE)..."
-              value={tickerQuery}
-              onChange={e => setTickerQuery(e.target.value)}
-            />
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 700 }}>
+              SEARCH / CHOOSE TICKER:
+            </label>
             <select
-              className="form-input"
-              style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8' }}
               value={selectedTicker}
-              onChange={e => handleSelectTicker(e.target.value)}
+              onChange={e => handleTickerSelect(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, fontSize: 14, fontFamily: "'DM Mono', monospace" }}
             >
-              <option value="">-- Choose Ticker ({filteredTickers.length} available) --</option>
-              {filteredTickers.map(t => (
-                <option key={t.ticker} value={t.ticker}>{t.ticker} — {t.company_name}</option>
+              <option value="">-- Select a Master Ticker --</option>
+              {tickers.map(t => (
+                <option key={t.ticker} value={t.ticker}>
+                  {t.ticker} - {t.company_name}
+                </option>
               ))}
             </select>
           </div>
 
-          {selectedTicker && (
-            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '10px 12px', borderRadius: 6, marginBottom: 16, fontSize: 12, color: '#cbd5e1' }}>
-              <b style={{ color: '#38bdf8' }}>Selected: {selectedTicker}</b> — {selectedTickerMeta.company_name || selectedTicker}
-              <div style={{ color: '#94a3b8', marginTop: 2 }}>Primary Sector: {selectedTickerMeta.sector || 'Unassigned'}</div>
-            </div>
-          )}
-
-          {/* Multi-Sector Picker */}
-          <div className="form-group">
-            <label style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 700, marginBottom: 6, display: 'block' }}>
-              Assign Secondary Business Sectors ({form.sector_ids.length} selected)
-            </label>
-            <div style={{ background: '#07101e', border: '1px solid #1e3250', borderRadius: 8, padding: 8, overflow: 'hidden' }}>
-              <MultiPicker
-                items={sectors.map(s => ({ id: s.id, name: s.name }))}
-                selected={form.sector_ids}
-                onChange={ids => setForm(prev => ({ ...prev, sector_ids: ids }))}
-                labelKey="name"
-                valueKey="id"
-                listStyle={{ maxHeight: '85px', overflowY: 'auto' }}
-              />
-            </div>
-            {/* Inline New Sector Creation Field */}
-            <div style={{ marginTop: 10, display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="text"
-                className="form-input"
-                style={{ fontSize: 12, padding: '6px 10px', flex: 1 }}
-                placeholder="Create new sector if not in list..."
-                value={newSectorName}
-                onChange={e => setNewSectorName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateSector() } }}
-              />
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Tag size={14}/> MAP SECTORS ({selectedSectors.length}):
+              </label>
               <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={creatingSector || !newSectorName.trim()}
-                onClick={handleCreateSector}
-                style={{ padding: '6px 12px', fontSize: 12, background: '#1e293b', border: '1px solid #38bdf8', color: '#38bdf8', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                onClick={() => setShowCreateSector(true)}
+                style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
               >
-                {creatingSector ? 'Adding...' : '+ Add Sector'}
+                <Plus size={12}/> New Sector
               </button>
+            </div>
+
+            <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 4 }}>
+              {sectors.map(s => {
+                const isSelected = selectedSectors.includes(s.id)
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => toggleSector(s.id)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justify: 'space-between',
+                      background: isSelected ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.02)',
+                      border: isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.06)',
+                      color: isSelected ? '#38bdf8' : '#cbd5e1'
+                    }}
+                  >
+                    <span>{s.name}</span>
+                    {isSelected && <CheckCircle2 size={14} style={{ color: '#38bdf8' }} />}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
 
-        {/* Right Column: 4 Edit Fields (Opportunities, Risk, isMultiBagger, Additional Note) */}
-        <div className="panel" style={{ background: '#0d1527', border: '1px solid #1e3250', borderRadius: 10, padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: 15, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 8 }}>
-              📝 2. Opportunities & Risk Edit Fields
+        {/* Right Column: Edit Fields Card */}
+        <div className="panel" style={{ padding: 20, background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+              📝 2. Opportunities & Risk Edit Fields {selectedTicker && <span style={{ color: '#38bdf8', fontFamily: "'DM Mono'" }}>({selectedTicker})</span>}
             </h3>
+            <button
+              onClick={handleSave}
+              disabled={!selectedTicker}
+              style={{
+                background: selectedTicker ? 'linear-gradient(135deg, #38bdf8, #0284c7)' : 'rgba(255,255,255,0.1)',
+                color: selectedTicker ? '#0f172a' : '#64748b',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 20px',
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: selectedTicker ? 'pointer' : 'not-allowed'
+              }}
+            >
+              Save Record
+            </button>
+          </div>
 
-            {/* Field 1: About Company (Products & Services) */}
-            <div className="form-group" style={{ marginBottom: 14 }}>
-              <label style={{ color: '#38bdf8', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Shield size={14}/> 1) About Company (Products & Services Overview)
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Field 1: About Company */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#38bdf8', fontWeight: 700, marginBottom: 4 }}>
+                🏢 1) About Company (Products & Services Overview)
               </label>
               <textarea
-                className="form-input"
-                rows={2}
-                style={{ fontSize: 13, background: '#07101e', borderColor: 'rgba(56, 189, 248, 0.3)', color: '#f8fafc' }}
-                placeholder="Describe key products, services, target industries, and business operations..."
+                rows={3}
                 value={form.about_company}
                 onChange={e => setForm(prev => ({ ...prev, about_company: e.target.value }))}
+                placeholder="Enter detailed company profile, product portfolio, and key operating segments..."
+                style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.4)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, fontSize: 13, resize: 'vertical' }}
               />
             </div>
 
-            {/* Field 2: Opportunities */}
-            <div className="form-group" style={{ marginBottom: 14 }}>
-              <label style={{ color: '#4ade80', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <TrendingUp size={14}/> 2) Growth Opportunities (Company Positives)
+            {/* Field 2: Growth Opportunities */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#4ade80', fontWeight: 700, marginBottom: 4 }}>
+                🚀 2) Growth Opportunities (Company Positives)
               </label>
               <textarea
-                className="form-input"
-                rows={2}
-                style={{ fontSize: 13, background: '#07101e', borderColor: 'rgba(34, 197, 94, 0.3)', color: '#f8fafc' }}
-                placeholder="List major growth catalysts, market expansion, product launches..."
+                rows={3}
                 value={form.opportunities}
                 onChange={e => setForm(prev => ({ ...prev, opportunities: e.target.value }))}
+                placeholder="Enter growth catalysts, industry tailwinds, margin expansion, capacity additions..."
+                style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.4)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, fontSize: 13, resize: 'vertical' }}
               />
             </div>
 
-            {/* Field 3: Risk */}
-            <div className="form-group" style={{ marginBottom: 14 }}>
-              <label style={{ color: '#f87171', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <AlertTriangle size={14}/> 3) Business Risks (Company Negatives)
+            {/* Field 3: Business Risk */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#f87171', fontWeight: 700, marginBottom: 4 }}>
+                ⚠️ 3) Business Risks & Threats (Company Negatives)
               </label>
               <textarea
-                className="form-input"
-                rows={2}
-                style={{ fontSize: 13, background: '#07101e', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f8fafc' }}
-                placeholder="List regulatory threats, margin pressures, competition risks..."
+                rows={3}
                 value={form.risk}
                 onChange={e => setForm(prev => ({ ...prev, risk: e.target.value }))}
+                placeholder="Enter key threats, raw material volatility, debt levels, regulatory risks..."
+                style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.4)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, fontSize: 13, resize: 'vertical' }}
               />
             </div>
 
-            {/* Field 4 & 5: Multibagger Flag & Additional Note */}
-            <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 14, marginBottom: 14 }}>
-              <div className="form-group">
-                <label style={{ color: '#fbbf24', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <Star size={14}/> 4) Multibagger Flag
+            {/* Field 4: Additional Analyst Note & Multibagger Checkbox */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 12, alignItems: 'center' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#facc15', fontWeight: 700, marginBottom: 4 }}>
+                  💡 4) Additional Analyst Note
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '10px 12px', borderRadius: 6, cursor: 'pointer' }}>
+                <input
+                  type="text"
+                  value={form.additional_note}
+                  onChange={e => setForm(prev => ({ ...prev, additional_note: e.target.value }))}
+                  placeholder="Key takeaway or summary note..."
+                  style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.4)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, fontSize: 13 }}
+                />
+              </div>
+
+              <div style={{ paddingTop: 18 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#facc15', fontWeight: 700 }}>
                   <input
                     type="checkbox"
                     checked={form.is_multibagger}
                     onChange={e => setForm(prev => ({ ...prev, is_multibagger: e.target.checked }))}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#facc15' }}>Is Multibagger</span>
+                  🌟 Potential Multibagger
                 </label>
               </div>
-
-              <div className="form-group">
-                <label style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 700 }}>5) Additional Note</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ fontSize: 13, background: '#07101e' }}
-                  placeholder="e.g. High conviction 3-year holding recommendation"
-                  value={form.additional_note}
-                  onChange={e => setForm(prev => ({ ...prev, additional_note: e.target.value }))}
-                />
-              </div>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-            <button className="btn-primary" onClick={handleSave} disabled={saving || !selectedTicker} style={{ padding: '10px 24px', fontSize: 14 }}>
-              <Save size={16}/> {saving ? 'Saving...' : 'Save Record & Mappings'}
-            </button>
           </div>
         </div>
       </div>
 
       {/* Summary Table of Saved Opportunities & Risk Records */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search saved records by ticker, risk, or opportunity..."/>
-        <span style={{ fontSize: 13, color: '#94a3b8' }}>
-          Total records: <b style={{ color: '#38bdf8' }}>{filteredRecords.length}</b>
-        </span>
-      </div>
+      <section className="panel data-panel" style={{ padding: 20, background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: '#f8fafc' }}>
+            📋 Saved Opportunities & Risk Records ({savedRecords.length})
+          </h3>
+          <div style={{ width: 300 }}>
+            <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search saved records..." />
+          </div>
+        </div>
 
-      <section className="panel data-panel">
         <div className="table-wrap">
-          <table>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr>
-                <th style={{ width: 120 }}>Ticker</th>
-                <th style={{ width: 130 }}>Multibagger</th>
-                <th>About Company</th>
-                <th>Growth Opportunities</th>
-                <th>Business Risks</th>
-                <th>Additional Note</th>
-                <th style={{ width: 80, textAlign: 'center' }}>Actions</th>
+              <tr style={{ background: 'rgba(0,0,0,0.4)', color: '#94a3b8', fontSize: 11, textTransform: 'uppercase' }}>
+                <th style={{ padding: '10px 12px' }}>Ticker</th>
+                <th style={{ padding: '10px 12px' }}>Company Name</th>
+                <th style={{ padding: '10px 12px' }}>About Company</th>
+                <th style={{ padding: '10px 12px' }}>Growth Opportunities</th>
+                <th style={{ padding: '10px 12px' }}>Business Risk</th>
+                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Multibagger</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -392,46 +408,54 @@ export default function OpportunitiesRiskPage() {
                 <tr><td colSpan={7}><div className="state">No opportunities & risk records saved yet.</div></td></tr>
               )}
               {!loading && pagedRecords.map(r => (
-                <tr key={r.ticker} className="data-row">
-                  <td>
-                    <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'", cursor: 'pointer' }} onClick={() => handleSelectTicker(r.ticker)}>
-                      {r.ticker}
-                    </b>
-                    <span style={{ display: 'block', fontSize: 11, color: '#64748b' }}>{r.company_name}</span>
+                <tr key={r.ticker} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#38bdf8', fontFamily: "'DM Mono'" }}>{r.ticker}</td>
+                  <td style={{ padding: '10px 12px', color: '#f8fafc' }}>{r.company_name || '—'}</td>
+                  <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>
+                    <TruncatedCellText text={r.about_company} />
                   </td>
-                  <td>
-                    {r.is_multibagger ? (
-                      <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#facc15', border: '1px solid #f59e0b', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4 }}>
-                        🌟 MULTIBAGGER
-                      </span>
-                    ) : (
-                      <span style={{ color: '#64748b', fontSize: 11 }}>Standard</span>
-                    )}
+                  <td style={{ padding: '10px 12px', color: '#4ade80' }}>
+                    <TruncatedCellText text={r.opportunities} />
                   </td>
-                  <td style={{ color: '#38bdf8', fontSize: 12 }}>
-                    <TruncatedCellText text={r.about_company} title="About Company Overview" maxLen={25} truncLen={20} />
+                  <td style={{ padding: '10px 12px', color: '#f87171' }}>
+                    <TruncatedCellText text={r.risk} />
                   </td>
-                  <td style={{ color: '#4ade80', fontSize: 12 }}>
-                    <TruncatedCellText text={r.opportunities} title="Growth Opportunities" maxLen={25} truncLen={20} />
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    {r.is_multibagger ? <span style={{ color: '#facc15', fontSize: 14 }}>⭐ YES</span> : <span style={{ color: '#64748b' }}>No</span>}
                   </td>
-                  <td style={{ color: '#f87171', fontSize: 12 }}>
-                    <TruncatedCellText text={r.risk} title="Business Risks" maxLen={25} truncLen={20} />
-                  </td>
-                  <td style={{ color: '#cbd5e1', fontSize: 12 }}>
-                    <TruncatedCellText text={r.additional_note} title="Additional Note" maxLen={20} truncLen={16} />
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button className="icon-btn sm" title="Edit record" onClick={() => handleSelectTicker(r.ticker)}>
-                      ✏️ Edit
-                    </button>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="icon-btn sm" title="Edit" onClick={() => handleTickerSelect(r.ticker)}><Edit3 size={13}/></button>
+                      <button className="icon-btn sm danger" title="Delete" onClick={() => handleDelete(r.ticker)}><Trash2 size={13}/></button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <Pagination total={filteredRecords.length} page={page} pageSize={PAGE_SIZE} onChange={setPage}/>
+        <Pagination total={filteredRecords.length} page={page} pageSize={pageSize} onChange={setPage} />
       </section>
+
+      {/* Modal for creating a new Sector */}
+      {showCreateSector && (
+        <Modal title="Create New Sector" onClose={() => setShowCreateSector(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '10px 0' }}>
+            <label style={{ fontSize: 13, color: '#cbd5e1', fontWeight: 600 }}>Sector Name:</label>
+            <input
+              type="text"
+              value={newSectorName}
+              onChange={e => setNewSectorName(e.target.value)}
+              placeholder="e.g. Artificial Intelligence & Robotics"
+              style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, fontSize: 14 }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+              <button className="btn-secondary" onClick={() => setShowCreateSector(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleCreateSector}>Create Sector</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

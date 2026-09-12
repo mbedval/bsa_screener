@@ -56,3 +56,43 @@ To maintain strict data integrity, zero contamination, and explicit control flow
 - **Rule**: Clicking on any ticker symbol in list/report/monitor pages (e.g., Watchlist Monitor, Sectorwise Followers, Retracement Pattern, Sector-wise Board) MUST navigate to the **Lookup Ticker Master Data** page (`research:search_detail`), NOT a separate or alternative ticker profile page.
 - **Implementation**: Use `handleLookupTickerSelect(ticker)` in `main.jsx`, which sets `selectedProfileTicker`, increments `searchCounter`, and sets `active = 'research:search_detail'`.
 - **Prohibition**: Do NOT route ticker clicks from report/monitor pages to `research:ticker_profile` or any other page unless explicitly requested by the user.
+
+### Rule 3.2: Master Data Table CSV Upload & Download Requirement
+- **Rule**: Whenever any master data table page (e.g., Ticker Master, Sectors, Indices Master) includes a feature/button to upload CSV files, it MUST also provide a corresponding **Download CSV** feature and button on the page.
+- **Behavior**: Clicking **Download CSV** generates and downloads a `.csv` file containing the table's records formatted with standard column headers for easy data export and backups.
+
+---
+
+## 4. Blank Page / React Crash Debugging Protocol
+
+### Rule 4.1: MANDATORY First-Pass Checklist for Any Blank Page or React Error #130
+When ANY page in this app renders a blank/white screen or the browser console shows:
+- `Minified React error #130` ("Objects are not valid as a React child")
+- `Uncaught Error: Objects are not valid as a React child`
+- Any React crash that blanks the whole page on navigation
+
+**IMMEDIATELY apply this checklist in order — do NOT guess or make ad-hoc fixes:**
+
+#### Step 1 — Check `useToast` / `ToastContainer` usage (Most Common Root Cause)
+- `useToast()` in `frontend/src/master/ui.jsx` returns `ToastContainer` as a **pre-rendered JSX element object** (NOT a React component function).
+- **WRONG** (causes React Error #130): `<ToastContainer />`  ← React tries to call the object as a function
+- **CORRECT**: `{ToastContainer}`  ← renders the pre-existing element directly
+- **Fix**: In the broken page component, find `<ToastContainer />` and replace with `{ToastContainer}`.
+- **Verify pattern**: All working pages (SectorsPage, TickersPage, WatchlistsPage, etc.) use `{ToastContainer}`. Any new or recently added page that deviates is the likely culprit.
+
+#### Step 2 — Check Component vs. Value Confusion
+- Look for any hook that returns a **JSX element or plain object** (not a function) that is then used as a JSX tag (`<SomeName />`).
+- Pattern: `const { X } = useSomeHook()` where `X` is already a rendered element → must be used as `{X}`, not `<X />`.
+
+#### Step 3 — Check Imports
+- Ensure the page file is properly exported from `frontend/src/master/index.jsx`.
+- Ensure the page is imported correctly in `frontend/src/main.jsx`.
+- Ensure `MASTER_PAGES` array in `main.jsx` includes the new page's active key (e.g. `'master:reference_pages'`).
+- Ensure the sidebar nav button `setActive(...)` and `MasterSubmodule` `switch/case` in `index.jsx` both match.
+
+#### Step 4 — Check Backend API
+- Run: `python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/api/master/<route>').read())"` to confirm the API endpoint exists and returns valid JSON.
+- If endpoint is missing, add the route to `backend/app/master.py` and ensure the DB table exists.
+
+### Rule 4.2: Root Cause Documentation
+After fixing a blank page bug, always state **which step** in the checklist caught the issue so the pattern can be refined further over time.

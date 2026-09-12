@@ -23,12 +23,72 @@ DEFAULT_HEADERS = {
 }
 
 
+_screener_ticker_cache: dict = {}
+_screener_cache_loaded: bool = False
+
+
+def _load_screener_ticker_mappings() -> dict:
+    """Load yfinance_ticker → {screener_ticker, screener_company_id} mappings from DB into module-level cache."""
+    global _screener_ticker_cache, _screener_cache_loaded
+    if _screener_cache_loaded:
+        return _screener_ticker_cache
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT yfinance_ticker, screener_ticker, screener_company_id FROM screener_ticker_mappings"
+                )
+                rows = cur.fetchall()
+                _screener_ticker_cache = {
+                    r[0].upper(): {
+                        'screener_ticker': r[1].upper(),
+                        'screener_company_id': r[2]  # may be None
+                    }
+                    for r in rows
+                }
+                _screener_cache_loaded = True
+                logger.info(f"Loaded {len(_screener_ticker_cache)} screener ticker mappings from DB.")
+    except Exception as err:
+        logger.warning(f"Could not load screener ticker mappings from DB: {err}")
+    return _screener_ticker_cache
+
+
+def reload_screener_ticker_mappings():
+    """Force reload the screener ticker mapping cache from DB (call after UI updates)."""
+    global _screener_cache_loaded
+    _screener_cache_loaded = False
+    return _load_screener_ticker_mappings()
+
+
 def resolve_screener_company_id(ticker: str) -> Optional[int]:
     """
     Search Screener.in for ticker and return internal company ID integer.
+
+    Fallback logic:
+      1. Check screener_ticker_mappings table:
+         a. If screener_company_id is set → use it directly (no search needed).
+         b. If only screener_ticker is set → use it as the search query.
+      2. Search screener.in API with the (possibly overridden) ticker name.
+      3. Match by exact company URL pattern, then fall back to first result.
     """
-    cleaned = ticker.replace(".NS", "").replace(".BO", "").strip()
-    search_url = f"https://www.screener.in/api/company/search/?q={cleaned}"
+    cleaned = ticker.replace(".NS", "").replace(".BO", "").strip().upper()
+
+    # Step 1: Check DB mapping for this ticker
+    mappings = _load_screener_ticker_mappings()
+    mapping = mappings.get(cleaned)
+    if mapping:
+        # Direct company ID override — skip search entirely
+        if mapping.get('screener_company_id'):
+            direct_id = mapping['screener_company_id']
+            logger.info(f"Screener direct ID override: {cleaned} → company_id={direct_id}")
+            return direct_id
+        search_name = mapping['screener_ticker']
+        if search_name != cleaned:
+            logger.info(f"Screener ticker mapping: {cleaned} → {search_name}")
+    else:
+        search_name = cleaned
+
+    search_url = f"https://www.screener.in/api/company/search/?q={search_name}"
     try:
         res = requests.get(search_url, headers=DEFAULT_HEADERS, timeout=10)
         if res.status_code == 200:
@@ -36,7 +96,7 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
             for item in results:
                 # Match exact ticker in url e.g. /company/HDFCBANK/
                 url = item.get("url", "")
-                if f"/company/{cleaned}/" in url or item.get("name", "").upper() == cleaned:
+                if f"/company/{search_name}/" in url or item.get("name", "").upper() == search_name:
                     return item.get("id")
             # If no exact URL match, pick first result if available
             if results and isinstance(results, list):

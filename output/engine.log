@@ -7758,3 +7758,111 @@ LINE 2:         CREATE TABLE IF NOT EXISTS historical_calls (
 2026-09-10 11:26:13,342 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
 2026-09-10 11:26:13,368 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
 2026-09-10 11:26:13,369 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-11 07:33:11,738 [INFO] bsa_orchestrator: Starting analysis process. Total: 3, Completed: 3, Pending: 0
+2026-09-11 07:33:11,739 [INFO] bsa_orchestrator: All tickers already analyzed!
+2026-09-11 07:36:34,695 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-11 07:36:34,695 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-11 07:36:34,757 [INFO] bsa_cli: All 3 items for Phase 1 (Download Spot) are already completed. Use --fresh or --force to re-download.
+2026-09-11 07:36:34,758 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-11 07:36:34,763 [INFO] bsa_cli: All 11 items for Phase 2 (Download F&O) are already completed. Use --fresh to re-download.
+2026-09-11 07:36:34,763 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-11 07:36:34,767 [INFO] bsa_cli: All 3 items for Phase 3 (Analyze All) are already completed. Use --fresh to re-analyze.
+2026-09-11 07:36:34,767 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-11 07:36:34,767 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-11 07:36:34,807 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-11 07:36:34,808 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-11 07:36:41,366 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-11 07:36:41,366 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-11 07:36:41,426 [INFO] bsa_cli: Clearing checkpoint for Phase 1 (Download Spot) and starting fresh...
+2026-09-11 07:36:45,691 [ERROR] bsa_orchestrator: Error orchestrating analysis for WIPRO: duplicate key value violates unique constraint "historical_calls_pkey"
+DETAIL:  Key (id)=(1) already exists.
+
+2026-09-11 07:36:46,765 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-11 07:36:46,767 [INFO] bsa_cli: Clearing checkpoint for Phase 2 (Download F&O) and starting fresh...
+2026-09-11 07:36:49,721 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-11 07:36:49,722 [INFO] bsa_cli: Clearing checkpoint for Phase 3 (Analyze All) and starting fresh...
+2026-09-11 07:36:49,727 [INFO] bsa_orchestrator: Starting analysis process. Total: 3, Completed: 0, Pending: 3
+2026-09-11 07:36:49,768 [ERROR] bsa_orchestrator: Error orchestrating analysis for WIPRO: duplicate key value violates unique constraint "historical_calls_pkey"
+DETAIL:  Key (id)=(2) already exists.
+
+2026-09-11 07:36:49,769 [INFO] bsa_orchestrator: Analysis process completed. Total: 3, Succeeded: 2, Failed: 1, Time Taken: 0.04s
+2026-09-11 07:36:50,170 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-11 07:36:50,170 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-11 07:36:50,186 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-11 07:36:50,186 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-11 17:08:01,360 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-11 17:08:01,361 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-11 17:08:03,662 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1 (Download Spot)...
+2026-09-11 17:45:39,385 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-11 18:23:47,199 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-11 19:06:59,408 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 2 (Download F&O)...
+2026-09-11 19:07:04,744 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-11 19:07:05,798 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 3 (Analyze All)...
+2026-09-11 19:07:05,811 [INFO] bsa_orchestrator: Starting analysis process. Total: 2570, Completed: 0, Pending: 2570
+2026-09-11 19:07:22,720 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-11 19:07:42,885 [WARNING] bsa_orchestrator: No price data available for YATHARTH, skipping analysis.
+2026-09-11 19:07:42,887 [WARNING] bsa_orchestrator: No price data available for YUKEN, skipping analysis.
+2026-09-11 19:07:44,002 [WARNING] bsa_orchestrator: No price data available for YESBANK, skipping analysis.
+2026-09-11 19:07:48,907 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2566, Failed: 4, Time Taken: 43.10s
+2026-09-11 19:08:14,359 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-11 19:08:14,359 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-11 19:08:14,377 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-11 19:08:14,377 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-11 19:09:29,964 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:09:30,723 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:09:30,723 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:09:30,745 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:11:23,112 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:11:23,854 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:11:23,855 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:11:23,877 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:11:38,844 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:11:39,587 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:11:39,587 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:11:39,609 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:11:54,169 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:11:54,930 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:11:54,931 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:11:54,952 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:12:09,300 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:12:10,180 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:12:10,180 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:12:10,226 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:12:26,712 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:12:27,613 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=False, saved=4 funds.
+2026-09-11 19:12:27,614 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:12:27,691 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:12:45,781 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 19:12:46,595 [INFO] bsa_cli: Mutual Fund download for RELIANCE: ok=True, saved=4 funds.
+2026-09-11 19:12:46,595 [INFO] bsa_cli: Running on-demand pipeline for ticker: RELIANCE
+2026-09-11 19:12:46,631 [INFO] bsa_cli: Analysis completed and upserted for RELIANCE
+2026-09-11 19:13:34,658 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 20:28:25,062 [INFO] bsa_cli: [✓] Mutual Fund holdings download completed!
+2026-09-11 23:42:47,565 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:42:47,811 [INFO] bsa_cli: Mutual Fund download for EICHERMOT: ok=False, saved=0 funds.
+2026-09-11 23:42:47,811 [INFO] bsa_cli: Running on-demand pipeline for ticker: EICHERMOT
+2026-09-11 23:42:47,837 [INFO] bsa_cli: Analysis completed and upserted for EICHERMOT
+2026-09-11 23:45:01,474 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:45:01,628 [INFO] bsa_cli: Mutual Fund download for EICHER-MOTORS: ok=False, saved=0 funds.
+2026-09-11 23:45:01,628 [INFO] bsa_cli: Running on-demand pipeline for ticker: EICHER-MOTORS
+2026-09-11 23:45:06,324 [ERROR] bsa_cli: Data download failed for EICHER-MOTORS
+2026-09-11 23:45:47,655 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:45:47,807 [INFO] bsa_cli: Mutual Fund download for EICHERMOT: ok=False, saved=0 funds.
+2026-09-11 23:45:47,807 [INFO] bsa_cli: Running on-demand pipeline for ticker: EICHERMOT
+2026-09-11 23:45:47,830 [INFO] bsa_cli: Analysis completed and upserted for EICHERMOT
+2026-09-11 23:54:39,528 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:54:40,312 [INFO] bsa_cli: Mutual Fund download for EICHERMOT: ok=True, saved=15 funds.
+2026-09-11 23:54:40,313 [INFO] bsa_cli: Running on-demand pipeline for ticker: EICHERMOT
+2026-09-11 23:54:40,335 [INFO] bsa_cli: Analysis completed and upserted for EICHERMOT
+2026-09-11 23:55:59,157 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:55:59,332 [INFO] bsa_cli: Mutual Fund download for KLBRENG-B: ok=False, saved=0 funds.
+2026-09-11 23:55:59,333 [INFO] bsa_cli: Running on-demand pipeline for ticker: KLBRENG-B
+2026-09-11 23:55:59,356 [INFO] bsa_cli: Analysis completed and upserted for KLBRENG-B
+2026-09-11 23:57:57,427 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-11 23:57:57,583 [INFO] bsa_cli: Mutual Fund download for NAM-INDIA: ok=False, saved=0 funds.
+2026-09-11 23:57:57,583 [INFO] bsa_cli: Running on-demand pipeline for ticker: NAM-INDIA
+2026-09-11 23:57:57,606 [INFO] bsa_cli: Analysis completed and upserted for NAM-INDIA
+2026-09-12 00:04:38,455 [INFO] bsa_cli: Triggered downloading Mutual Fund holdings from Screener.in...
+2026-09-12 00:04:39,140 [INFO] bsa_cli: Mutual Fund download for NAM-INDIA: ok=True, saved=9 funds.
+2026-09-12 00:04:39,141 [INFO] bsa_cli: Running on-demand pipeline for ticker: NAM-INDIA
+2026-09-12 00:04:39,218 [INFO] bsa_cli: Analysis completed and upserted for NAM-INDIA

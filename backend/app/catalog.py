@@ -4,8 +4,8 @@ FIXED_TABLES = {
     "historical_calls": {"label": "Historical calls", "group": "Calls"},
     "intraday_call": {"label": "Intraday calls", "group": "Calls"},
     "call_efficiency": {"label": "Call efficiency", "group": "Calls"},
-    "fno_stock_master": {"label": "FNO Stock Master", "group": "Master Data"},
-    "fno_index_master": {"label": "FNO Index Master", "group": "Master Data"},
+    "fno_stock_master": {"label": "Stock Derivatives", "group": "Master Data"},
+    "fno_index_master": {"label": "Indices Derivatives", "group": "Master Data"},
     "fno_active": {"label": "FNO Active", "group": "Derivative"},
     "option_chain_analyzer": {"label": "Option Chain & Greeks", "group": "Derivative"},
     "best_option_strategy": {"label": "Best Option Strategy", "group": "Derivative"},
@@ -42,6 +42,7 @@ RAW_DATA_TABLES = {
 MASTER_TABLES = {
     "sectors",
     "ticker_master",
+    "indices_master",
     "ticker_sector",
     "watchlist",
     "watchlist_items",

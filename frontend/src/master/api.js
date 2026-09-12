@@ -49,6 +49,36 @@ export const sectors = {
   },
 }
 
+// ── Indices Master ────────────────────────────────────────────────────────────
+export const indices = {
+  list: (params = {}, dataset) => {
+    const q = new URLSearchParams()
+    if (params.search)   q.set('search',   params.search)
+    if (params.category) q.set('category', params.category)
+    if (params.is_fno !== undefined) q.set('is_fno', params.is_fno)
+    if (dataset)         q.set('dataset',  dataset)
+    const qs = q.toString()
+    return _req('GET', `${BASE}/indices${qs ? '?' + qs : ''}`)
+  },
+  create: (data, dataset) => _req('POST', `${BASE}/indices${dataset ? '?dataset=' + dataset : ''}`, data),
+  update: (symbol, data, dataset) => _req('PUT', `${BASE}/indices/${symbol}${dataset ? '?dataset=' + dataset : ''}`, data),
+  remove: (symbol, dataset) => _req('DELETE', `${BASE}/indices/${symbol}${dataset ? '?dataset=' + dataset : ''}`),
+  uploadCSV: async (file, dataset) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const url = `${BASE}/indices/upload-csv${dataset ? '?dataset=' + dataset : ''}`
+    const r = await fetch(url, { method: 'POST', body: fd })
+    const ct = r.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const text = await r.text()
+      throw new Error(r.ok ? 'Invalid response format received from server.' : `HTTP ${r.status}: ${text.slice(0, 100)}`)
+    }
+    const json = await r.json()
+    if (!r.ok) throw new Error(json.detail || r.statusText)
+    return json
+  },
+}
+
 // ── Tickers ───────────────────────────────────────────────────────────────────
 export const tickers = {
   list: (params = {}, dataset) => {
@@ -67,6 +97,23 @@ export const tickers = {
   remove: (ticker, dataset) => _req('DELETE', `${BASE}/tickers/${ticker}${dataset ? '?dataset=' + dataset : ''}`),
   removeBatch: (tickers, dataset) => _req('POST', `${BASE}/tickers/batch-delete${dataset ? '?dataset=' + dataset : ''}`, { tickers }),
   setSectors: (ticker, ids, dataset) => _req('POST', `${BASE}/tickers/${ticker}/sectors${dataset ? '?dataset=' + dataset : ''}`, { sector_ids: ids }),
+  uploadCSV: async (file, dataset) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const url = `${BASE}/tickers/upload-csv${dataset ? '?dataset=' + dataset : ''}`
+    const r = await fetch(url, {
+      method: 'POST',
+      body: fd,
+    })
+    const ct = r.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const text = await r.text()
+      throw new Error(r.ok ? 'Invalid response format received from server.' : `HTTP ${r.status}: ${text.slice(0, 100)}`)
+    }
+    const json = await r.json()
+    if (!r.ok) throw new Error(json.detail || r.statusText)
+    return json
+  },
 }
 
 // ── Watchlists ────────────────────────────────────────────────────────────────
@@ -111,3 +158,20 @@ export const excludedTickers = {
   remove: (id)        => _req('DELETE', `${BASE}/excluded-tickers/${id}`),
   activeList: ()      => _req('GET',    `${BASE}/excluded-tickers/active-list`),
 }
+
+// ── Reference Pages ──────────────────────────────────────────────────────────
+export const referencePages = {
+  list: (dataset)     => _req('GET',    `${BASE}/reference-pages${dataset ? '?dataset=' + dataset : ''}`),
+  create: (data, dataset) => _req('POST', `${BASE}/reference-pages${dataset ? '?dataset=' + dataset : ''}`, data),
+  update: (id, data, dataset) => _req('PUT', `${BASE}/reference-pages/${id}${dataset ? '?dataset=' + dataset : ''}`, data),
+  remove: (id, dataset) => _req('DELETE', `${BASE}/reference-pages/${id}${dataset ? '?dataset=' + dataset : ''}`),
+}
+
+// ── Screener Ticker Mappings (YFinance ↔ Screener.in) ────────────────────────
+export const screenerTickerMappings = {
+  list: (search)      => _req('GET',    `${BASE}/screener-ticker-mappings${search ? '?search=' + encodeURIComponent(search) : ''}`),
+  create: (data)      => _req('POST',   `${BASE}/screener-ticker-mappings`,             data),
+  update: (id, data)  => _req('PUT',    `${BASE}/screener-ticker-mappings/${id}`,       data),
+  remove: (id)        => _req('DELETE', `${BASE}/screener-ticker-mappings/${id}`),
+}
+

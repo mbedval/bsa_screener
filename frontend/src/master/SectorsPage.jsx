@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit2, Tag, Plus, Trash2, ChevronDown, ChevronRight, Globe, Upload, FileText, CheckCircle2 } from 'lucide-react'
+import { Edit2, Tag, Plus, Trash2, ChevronDown, ChevronRight, Globe, Upload, Download, FileText, CheckCircle2 } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, DataTable, Pagination,
@@ -39,6 +39,33 @@ export default function SectorsPage({ dataset }) {
   }
 
   useEffect(() => { load() }, [dataset])
+
+  const downloadCSV = () => {
+    if (!rows || rows.length === 0) {
+      show('No sectors available to download', 'error')
+      return
+    }
+    const headers = ['id', 'name', 'description', 'ticker_count']
+    const csvLines = [headers.join(',')]
+    rows.forEach(r => {
+      const row = [
+        r.id ?? '',
+        `"${(r.name || '').replace(/"/g, '""')}"`,
+        `"${(r.description || '').replace(/"/g, '""')}"`,
+        r.ticker_count ?? 0
+      ]
+      csvLines.push(row.join(','))
+    })
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `sectors_master_${dataset || 'default'}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    show('Sectors master CSV downloaded', 'success')
+  }
 
   const [sortKey, setSortKey] = useState('')
   const [sortAsc, setSortAsc] = useState(true)
@@ -154,6 +181,13 @@ export default function SectorsPage({ dataset }) {
           style={{ whiteSpace: 'nowrap' }}
         >
           <Upload size={14}/> Import Watchlist File
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={downloadCSV}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          <Download size={14}/> Download CSV
         </button>
       </SearchBar>
 

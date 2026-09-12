@@ -1,4 +1,4 @@
 id,ticker,reason,added_by,status,last_error,created_at
-1,ABAN,Download error: Stock suspended / delisted from exchange,SYSTEM_AUTO,EXCLUDED,yfinance download error 404: No data found for ABAN.NS,2026-01-01
+1,ABAN,Download error: Stock suspended / delisted from exchange,SYSTEM_AUTO,EXCLUDED,yfinance download error 404: No data found for ABAN.NS,2026-09-11 07:33:07.690509+05:30
 2,DEWAN,Delisted stock insolvency proceedings,SYSTEM_AUTO,EXCLUDED,yfinance download error 404: Symbol not found,2026-01-01
 3,SREINFRA,Trading halted / insolvency status,MANUAL,EXCLUDED,Manual exclusion: insolvency resolution,2026-01-01
