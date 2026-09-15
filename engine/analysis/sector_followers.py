@@ -29,11 +29,17 @@ def ensure_table_exists(conn):
         """)
         # Ensure columns exist if table was already created
         cur.execute("""
-            ALTER TABLE sector_lead_follow_groups 
-            ADD COLUMN IF NOT EXISTS technical_score DOUBLE PRECISION DEFAULT 0.0;
-            ALTER TABLE sector_lead_follow_groups 
-            ADD COLUMN IF NOT EXISTS fundamental_score DOUBLE PRECISION DEFAULT 0.0;
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'sector_lead_follow_groups' AND column_name = 'technical_score';
         """)
+        if not cur.fetchone():
+            cur.execute("""
+                ALTER TABLE sector_lead_follow_groups 
+                ADD COLUMN IF NOT EXISTS technical_score DOUBLE PRECISION DEFAULT 0.0;
+                ALTER TABLE sector_lead_follow_groups 
+                ADD COLUMN IF NOT EXISTS fundamental_score DOUBLE PRECISION DEFAULT 0.0;
+            """)
         conn.commit()
 
 def generate_sector_followers_analysis(conn=None) -> bool:

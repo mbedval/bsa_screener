@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS indicators_daily (
 CREATE TABLE IF NOT EXISTS fundamentals (
     ticker              TEXT NOT NULL,
     fetched_date        TEXT NOT NULL,
+    market_cap          DOUBLE PRECISION,
     current_pe          DOUBLE PRECISION,
     avg_pe              DOUBLE PRECISION,
     last_pat            DOUBLE PRECISION,

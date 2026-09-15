@@ -10,6 +10,7 @@ Persists detected patterns to PostgreSQL `chart_patterns` table for both NSE Ind
 
 import logging
 import json
+import contextlib
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional
 import pandas as pd
@@ -302,66 +303,67 @@ def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> in
     and persist into `chart_patterns` PostgreSQL table.
     """
     clean_t = ticker.strip().upper()
-    target_dsn = dsn or os.getenv("POSTGRES_DSN") or "postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db"
-
     try:
-        conn = psycopg2.connect(target_dsn)
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT trade_date, open, high, low, close, volume
-                FROM ohlcv_daily
-                WHERE ticker = %s AND close > 0
-                ORDER BY trade_date ASC
-            """, (clean_t,))
-            rows = cur.fetchall()
+        if dsn:
+            conn_ctx = contextlib.nullcontext(psycopg2.connect(dsn))
+        else:
+            conn_ctx = get_db_connection()
 
-            if not rows or len(rows) < 5:
-                conn.close()
-                return 0
-
-            df_daily = pd.DataFrame(rows)
-            df_weekly = resample_to_weekly(df_daily)
-
-            daily_patterns = detect_candlestick_patterns(df_daily, timeframe="DAILY")
-            weekly_patterns = detect_candlestick_patterns(df_weekly, timeframe="WEEKLY")
-
-            all_detected = []
-            for p in daily_patterns:
-                p["timeframe"] = "DAILY"
-                all_detected.append(p)
-
-            for p in weekly_patterns:
-                p["timeframe"] = "WEEKLY"
-                all_detected.append(p)
-
-            stored_count = 0
-            for p in all_detected:
-                meta = PATTERN_MAP.get(p["code"], {"name": p["code"], "category": "NEUTRAL"})
+        with conn_ctx as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    INSERT INTO chart_patterns (
-                        ticker, pattern_code, pattern_name, category, timeframe,
-                        detected_date, start_date, end_date, high_price, low_price, close_price,
-                        strength_score, details, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (ticker, pattern_code, timeframe, detected_date) DO UPDATE SET
-                        start_date = EXCLUDED.start_date,
-                        end_date = EXCLUDED.end_date,
-                        high_price = EXCLUDED.high_price,
-                        low_price = EXCLUDED.low_price,
-                        close_price = EXCLUDED.close_price,
-                        strength_score = EXCLUDED.strength_score,
-                        details = EXCLUDED.details,
-                        created_at = NOW()
-                """, (
-                    clean_t, p["code"], meta["name"], meta["category"], p["timeframe"],
-                    p["detected_date"], p["start_date"], p["end_date"],
-                    float(p["high"]), float(p["low"]), float(p["close"]),
-                    float(p["score"]), json.dumps(p["details"])
-                ))
-                stored_count += 1
-            conn.commit()
+                    SELECT trade_date, open, high, low, close, volume
+                    FROM ohlcv_daily
+                    WHERE ticker = %s AND close > 0
+                    ORDER BY trade_date ASC
+                """, (clean_t,))
+                rows = cur.fetchall()
 
-        conn.close()
+                if not rows or len(rows) < 5:
+                    return 0
+
+                df_daily = pd.DataFrame(rows)
+                df_weekly = resample_to_weekly(df_daily)
+
+                daily_patterns = detect_candlestick_patterns(df_daily, timeframe="DAILY")
+                weekly_patterns = detect_candlestick_patterns(df_weekly, timeframe="WEEKLY")
+
+                all_detected = []
+                for p in daily_patterns:
+                    p["timeframe"] = "DAILY"
+                    all_detected.append(p)
+
+                for p in weekly_patterns:
+                    p["timeframe"] = "WEEKLY"
+                    all_detected.append(p)
+
+                stored_count = 0
+                for p in all_detected:
+                    meta = PATTERN_MAP.get(p["code"], {"name": p["code"], "category": "NEUTRAL"})
+                    cur.execute("""
+                        INSERT INTO chart_patterns (
+                            ticker, pattern_code, pattern_name, category, timeframe,
+                            detected_date, start_date, end_date, high_price, low_price, close_price,
+                            strength_score, details, created_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (ticker, pattern_code, timeframe, detected_date) DO UPDATE SET
+                            start_date = EXCLUDED.start_date,
+                            end_date = EXCLUDED.end_date,
+                            high_price = EXCLUDED.high_price,
+                            low_price = EXCLUDED.low_price,
+                            close_price = EXCLUDED.close_price,
+                            strength_score = EXCLUDED.strength_score,
+                            details = EXCLUDED.details,
+                            created_at = NOW()
+                    """, (
+                        clean_t, p["code"], meta["name"], meta["category"], p["timeframe"],
+                        p["detected_date"], p["start_date"], p["end_date"],
+                        float(p["high"]), float(p["low"]), float(p["close"]),
+                        float(p["score"]), json.dumps(p["details"])
+                    ))
+                    stored_count += 1
+                conn.commit()
+
         return stored_count
     except Exception as e:
         logger.error(f"Error scanning patterns for {clean_t}: {e}")
@@ -370,19 +372,20 @@ def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> in
 
 def scan_all_database_patterns(dsn: Optional[str] = None) -> int:
     """Scan all active tickers in ticker_master and update chart_patterns table."""
-    target_dsn = dsn or os.getenv("POSTGRES_DSN") or "postgresql://jmbxdbuser:jmbxdbpassword@127.0.0.1:5432/bsa_db"
-
     try:
-        conn = psycopg2.connect(target_dsn)
-        with conn:
+        if dsn:
+            conn_ctx = contextlib.nullcontext(psycopg2.connect(dsn))
+        else:
+            conn_ctx = get_db_connection()
+
+        with conn_ctx as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker")
                 tickers = [r[0] for r in cur.fetchall()]
-        conn.close()
 
         total_patterns = 0
         for t in tickers:
-            total_patterns += scan_and_store_ticker_patterns(t, target_dsn)
+            total_patterns += scan_and_store_ticker_patterns(t, dsn)
         return total_patterns
     except Exception as e:
         logger.error(f"Error scanning all database patterns: {e}")

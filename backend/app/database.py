@@ -7,5 +7,5 @@ from app.config import settings
 def get_connection(dsn: str = None):
     if dsn is None:
         dsn = settings.bsa_postgres_dsn
-    with connect(dsn, row_factory=dict_row, connect_timeout=3) as connection:
+    with connect(dsn, row_factory=dict_row, connect_timeout=3, autocommit=True) as connection:
         yield connection

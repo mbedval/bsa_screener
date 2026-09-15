@@ -166,36 +166,50 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
     """
     Insert/Upsert parsed mutual fund holdings into `mf_holdings` PostgreSQL table.
     """
-    if not holdings:
-        return True
-
     now_str = datetime.now().isoformat()
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Ensure table exists
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS mf_holdings (
+                        id SERIAL PRIMARY KEY,
+                        ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                        fund_name TEXT NOT NULL,
+                        holding_pct DOUBLE PRECISION DEFAULT 0.0,
+                        shares_held BIGINT DEFAULT 0,
+                        rank INTEGER DEFAULT 0,
+                        disclosure_date TEXT,
+                        downloaded_at TEXT,
+                        UNIQUE (ticker, fund_name)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
+                """)
+
                 # Delete old holdings for clean refresh
                 cur.execute("DELETE FROM mf_holdings WHERE ticker = %s;", (ticker,))
-                
-                query = """
-                    INSERT INTO mf_holdings (ticker, fund_name, holding_pct, shares_held, rank, disclosure_date, downloaded_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (ticker, fund_name) 
-                    DO UPDATE SET 
-                        holding_pct = EXCLUDED.holding_pct,
-                        rank = EXCLUDED.rank,
-                        disclosure_date = EXCLUDED.disclosure_date,
-                        downloaded_at = EXCLUDED.downloaded_at;
-                """
-                for h in holdings:
-                    cur.execute(query, (
-                        ticker,
-                        h["fund_name"],
-                        h["holding_pct"],
-                        0,  # shares_held default
-                        h["rank"],
-                        h["disclosure_date"],
-                        now_str
-                    ))
+
+                if holdings:
+                    query = """
+                        INSERT INTO mf_holdings (ticker, fund_name, holding_pct, shares_held, rank, disclosure_date, downloaded_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (ticker, fund_name) 
+                        DO UPDATE SET 
+                            holding_pct = EXCLUDED.holding_pct,
+                            rank = EXCLUDED.rank,
+                            disclosure_date = EXCLUDED.disclosure_date,
+                            downloaded_at = EXCLUDED.downloaded_at;
+                    """
+                    for h in holdings:
+                        cur.execute(query, (
+                            ticker,
+                            h["fund_name"],
+                            h["holding_pct"],
+                            0,  # shares_held default
+                            h["rank"],
+                            h["disclosure_date"],
+                            now_str
+                        ))
                 conn.commit()
         return True
     except Exception as err:

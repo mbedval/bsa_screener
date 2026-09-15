@@ -25,7 +25,7 @@ const groupIcon = {
 const subApps = {
   'ticker-search': {
     id: 'ticker-search',
-    title: 'Lookup Ticker Master Data',
+    title: 'Quick Ticker Report',
     eyebrow: 'SEARCH & REPORTS',
     icon: Search,
     description: 'Lookup ticker master data, PDF-aligned technical analysis reports, volume spikes & financial metrics.',
@@ -476,14 +476,17 @@ function App() {
     if (path === '' || path === '/') return
     const isMaster = active.startsWith('master:') || active === 'fno_stock_master' || active === 'fno_index_master' || active === 'fno_master' || active === 'ticker_master'
     const isSector = active.startsWith('sector:')
+    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor'].includes(active)
     if (isMaster) {
       setExpandedSection('Master Data')
     } else if (isSector) {
       setExpandedSection('By Sector')
+    } else if (isReport) {
+      setExpandedSection('Reports')
     } else if (current?.group) {
       setExpandedSection(current.group)
     } else {
-      setExpandedSection('Research Board')
+      setExpandedSection('Research Tools')
     }
   }, [active, path, current])
 
@@ -531,26 +534,17 @@ function App() {
           >
             <Home /> Home
           </a>
-          <section className={`nav-section ${expandedSection === 'Research Board' ? 'expanded' : 'collapsed'}`}>
-            <div className="nav-label" onClick={() => toggleSection('Research Board')} role="button" tabIndex={0}>
+          <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => triggerSearchDetail()}>
+            <Search size={14} /> Quick Ticker Report
+          </button>
+          <section className={`nav-section ${expandedSection === 'Research Tools' ? 'expanded' : 'collapsed'}`}>
+            <div className="nav-label" onClick={() => toggleSection('Research Tools')} role="button" tabIndex={0}>
               <BarChart3 />
-              <span style={{ flex: 1 }}>Research Board</span>
-              {expandedSection === 'Research Board' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+              <span style={{ flex: 1 }}>Research Tools</span>
+              {expandedSection === 'Research Tools' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
             </div>
-            {expandedSection === 'Research Board' && (
+            {expandedSection === 'Research Tools' && (
               <div className="nav-section-items">
-                <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => triggerSearchDetail()}>
-                  <Search size={14} /> Lookup Ticker Master Data
-                </button>
-                <button className={`nav-item ${active === 'research:market_cap_wise' ? 'selected' : ''}`} onClick={() => setActive('research:market_cap_wise')}>
-                  <TrendingUp size={14} /> Market Cap Wise Top 10
-                </button>
-                <button className={`nav-item ${active === 'research:penny_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:penny_stocks')}>
-                  <Zap size={14} /> Penny Stocks
-                </button>
-                <button className={`nav-item ${active === 'research:sector_wise' ? 'selected' : ''}`} onClick={() => setActive('research:sector_wise')}>
-                  <PieChart size={14} /> Sector wise Top 10
-                </button>
                 <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
                   <TrendingUp size={14} /> Charts & Visualizer
                 </button>
@@ -560,24 +554,42 @@ function App() {
                 <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
                   <Layers size={14} /> Indices Pattern Viewer
                 </button>
-                <button className={`nav-item ${active === 'research:stocks_respecting_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:stocks_respecting_patterns')}>
-                  <Target size={14} /> Stocks Respecting Chart Pattern
-                </button>
-                <button className={`nav-item ${active === 'research:sectorwise_followers' ? 'selected' : ''}`} onClick={() => setActive('research:sectorwise_followers')}>
-                  <Layers size={14} /> Sectorwise Followers
-                </button>
                 <button className={`nav-item ${active === 'research:retracement_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:retracement_patterns')}>
                   <Activity size={14} /> Retracement & Speculator Behavior
                 </button>
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
                   <Activity size={14} /> Period Comparison
                 </button>
+              </div>
+            )}
+          </section>
+
+          <section className={`nav-section ${expandedSection === 'Reports' ? 'expanded' : 'collapsed'}`}>
+            <div className="nav-label" onClick={() => toggleSection('Reports')} role="button" tabIndex={0}>
+              <FileText size={14} />
+              <span style={{ flex: 1 }}>Reports</span>
+              {expandedSection === 'Reports' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+            </div>
+            {expandedSection === 'Reports' && (
+              <div className="nav-section-items">
+                <button className={`nav-item ${active === 'research:market_cap_wise' ? 'selected' : ''}`} onClick={() => setActive('research:market_cap_wise')}>
+                  <TrendingUp size={14} /> Top 10- by Market Cap
+                </button>
+                <button className={`nav-item ${active === 'research:sector_wise' ? 'selected' : ''}`} onClick={() => setActive('research:sector_wise')}>
+                  <PieChart size={14} /> Top 10- by Sector
+                </button>
+                <button className={`nav-item ${active === 'research:penny_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:penny_stocks')}>
+                  <Zap size={14} /> Penny Stocks
+                </button>
+                <button className={`nav-item ${active === 'research:stocks_respecting_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:stocks_respecting_patterns')}>
+                  <Target size={14} /> Pattern Respecting Stocks
+                </button>
+                <button className={`nav-item ${active === 'research:sectorwise_followers' ? 'selected' : ''}`} onClick={() => setActive('research:sectorwise_followers')}>
+                  <Layers size={14} /> Sectorwise Followers
+                </button>
                 <button className={`nav-item ${active === 'research:watchlist_monitor' ? 'selected' : ''}`} onClick={() => setActive('research:watchlist_monitor')}>
                   <Star size={14} /> Watchlist Monitor
                 </button>
-
-
-
               </div>
             )}
           </section>
@@ -2079,14 +2091,14 @@ function Dashboard({ apiBase, setActive, onSelectTicker }) {
               <tr>
                 <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
                 <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th>Detail / Chart</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
                 <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
                 <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
                 <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
-                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
-                <th>Trade Insight & Technical Rationale</th>
               </tr>
             </thead>
             <tbody>
@@ -2096,17 +2108,19 @@ function Dashboard({ apiBase, setActive, onSelectTicker }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#7ec8f0' }}>#{t.rank}</td>
                   <td>
+                    <div>
+                      <b
+                        onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                        style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                        title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                      >
+                        {t.ticker}
+                      </b>
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    </div>
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div>
-                        <b
-                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
-                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
-                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
-                        >
-                          {t.ticker}
-                        </b>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
-                      </div>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2159,6 +2173,7 @@ function Dashboard({ apiBase, setActive, onSelectTicker }) {
                       </button>
                     </div>
                   </td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
                   <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
                   <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td>
@@ -2178,8 +2193,6 @@ function Dashboard({ apiBase, setActive, onSelectTicker }) {
                     </div>
                   </td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2252,14 +2265,14 @@ function MidCapDashboard({ apiBase, setActive, onSelectTicker }) {
               <tr>
                 <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
                 <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th>Detail / Chart</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
                 <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
                 <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
                 <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
-                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
-                <th>Trade Insight &amp; Technical Rationale</th>
               </tr>
             </thead>
             <tbody>
@@ -2269,17 +2282,19 @@ function MidCapDashboard({ apiBase, setActive, onSelectTicker }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#fbbf24' }}>#{t.rank}</td>
                   <td>
+                    <div>
+                      <b
+                        onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                        style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                        title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                      >
+                        {t.ticker}
+                      </b>
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    </div>
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div>
-                        <b
-                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
-                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
-                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
-                        >
-                          {t.ticker}
-                        </b>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
-                      </div>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2332,6 +2347,7 @@ function MidCapDashboard({ apiBase, setActive, onSelectTicker }) {
                       </button>
                     </div>
                   </td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
                   <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
                   <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td>
@@ -2350,8 +2366,6 @@ function MidCapDashboard({ apiBase, setActive, onSelectTicker }) {
                     </div>
                   </td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2407,14 +2421,14 @@ function SmallCapDashboard({ apiBase, setActive, onSelectTicker }) {
               <tr>
                 <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
                 <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th>Detail / Chart</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
                 <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
                 <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
                 <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
-                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
-                <th>Trade Insight &amp; Technical Rationale</th>
               </tr>
             </thead>
             <tbody>
@@ -2424,17 +2438,19 @@ function SmallCapDashboard({ apiBase, setActive, onSelectTicker }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#a78bfa' }}>#{t.rank}</td>
                   <td>
+                    <div>
+                      <b
+                        onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                        style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                        title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                      >
+                        {t.ticker}
+                      </b>
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    </div>
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div>
-                        <b
-                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
-                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
-                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
-                        >
-                          {t.ticker}
-                        </b>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
-                      </div>
                       <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
                         title={`View Interactive Detail Report for ${t.ticker}`}
                         style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
@@ -2447,14 +2463,13 @@ function SmallCapDashboard({ apiBase, setActive, onSelectTicker }) {
                       </button>
                     </div>
                   </td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
                   <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
                   <td><b style={{ fontMinimal: '1.25rem', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td><span style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
                   <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
                   <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2510,14 +2525,14 @@ function LargeCapDashboard({ apiBase, setActive, onSelectTicker }) {
               <tr>
                 <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
                 <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th>Detail / Chart</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
                 <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
                 <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
                 <th onClick={() => handleSort('risk_reward')} style={{ cursor: 'pointer' }}>Risk : Reward</th>
-                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
-                <th>Trade Insight &amp; Technical Rationale</th>
               </tr>
             </thead>
             <tbody>
@@ -2527,17 +2542,19 @@ function LargeCapDashboard({ apiBase, setActive, onSelectTicker }) {
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#22d3ee' }}>#{t.rank}</td>
                   <td>
+                    <div>
+                      <b
+                        onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                        style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                        title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                      >
+                        {t.ticker}
+                      </b>
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    </div>
+                  </td>
+                  <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div>
-                        <b
-                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
-                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
-                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
-                        >
-                          {t.ticker}
-                        </b>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
-                      </div>
                       <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
                         title={`View Interactive Detail Report for ${t.ticker}`}
                         style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
@@ -2550,14 +2567,13 @@ function LargeCapDashboard({ apiBase, setActive, onSelectTicker }) {
                       </button>
                     </div>
                   </td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
                   <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
                   <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td><span style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
                   <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
                   <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
                   <td><span className="status-badge buy" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '1.05rem', fontWeight: 700 }}>{t.risk_reward}</span></td>
-                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -2580,6 +2596,11 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
   const [detailTicker, setDetailTicker] = useState(null)
   const [visualizerTicker, setVisualizerTicker] = useState(null)
 
+  // Filter state & pagination state
+  const [capFilter, setCapFilter] = useState('ALL')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
   useEffect(() => {
     let isMounted = true
     setLoading(true)
@@ -2600,26 +2621,70 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
     return () => { isMounted = false }
   }, [apiBase])
 
-  const sortedTrades = useMemo(() => {
+  // Truncate cell text > 20 chars per user rule
+  const renderTruncated = (text) => {
+    if (!text) return '—'
+    const str = String(text)
+    if (str.length > 20) return str.slice(0, 16) + '...'
+    return str
+  }
+
+  const filteredTrades = useMemo(() => {
     let list = [...trades]
-    if (!sortKey) return list
-    list.sort((a, b) => {
-      let valA = a[sortKey] ?? '', valB = b[sortKey] ?? ''
-      if (typeof valA === 'number' && typeof valB === 'number') return (valA - valB) * (sortAsc ? 1 : -1)
-      return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
-    })
+    if (capFilter !== 'ALL') {
+      const target = capFilter.toUpperCase().trim()
+      list = list.filter(t => {
+        const c = (t.market_cap_category || '').toUpperCase().trim()
+        if (target.includes('NANO')) return c.includes('NANO')
+        if (target.includes('MICRO')) return c.includes('MICRO')
+        if (target.includes('SMALL')) return c.includes('SMALL')
+        if (target.includes('SME')) return c.includes('SME')
+        return c === target
+      })
+    }
+    if (sortKey) {
+      list.sort((a, b) => {
+        let valA = a[sortKey] ?? '', valB = b[sortKey] ?? ''
+        if (typeof valA === 'number' && typeof valB === 'number') return (valA - valB) * (sortAsc ? 1 : -1)
+        return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * (sortAsc ? 1 : -1)
+      })
+    }
     return list
-  }, [trades, sortKey, sortAsc])
+  }, [trades, capFilter, sortKey, sortAsc])
+
+  // Reset page when filter or page size changes
+  useEffect(() => {
+    setPage(1)
+  }, [capFilter, pageSize])
+
+  const paginatedTrades = useMemo(() => {
+    if (pageSize === 'ALL') return filteredTrades
+    const sz = Number(pageSize) || 10
+    const start = (page - 1) * sz
+    return filteredTrades.slice(start, start + sz)
+  }, [filteredTrades, page, pageSize])
+
+  const totalPages = pageSize === 'ALL' ? 1 : Math.ceil(filteredTrades.length / (Number(pageSize) || 10)) || 1
 
   const handleSort = (key) => {
     if (sortKey === key) setSortAsc(!sortAsc)
     else { setSortKey(key); setSortAsc(true) }
   }
 
+  const countForCap = (cat) => trades.filter(t => {
+    const c = (t.market_cap_category || '').toUpperCase().trim()
+    const target = cat.toUpperCase().trim()
+    if (target.includes('NANO')) return c.includes('NANO')
+    if (target.includes('MICRO')) return c.includes('MICRO')
+    if (target.includes('SMALL')) return c.includes('SMALL')
+    if (target.includes('SME')) return c.includes('SME')
+    return c === target
+  }).length
+
   return (
     <div className="top-trades-dashboard">
       <section className="panel data-panel">
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(234, 179, 8, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(234, 179, 8, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 18, color: '#facc15', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
               ⚡ Penny Stocks & Institutional Micro-Cap Opportunities
@@ -2628,9 +2693,55 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
               Showing Small-Cap &amp; Micro-Cap tickers backed by a minimum of 2 Mutual Funds holding &gt; 2% stake each.
             </div>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, background: 'rgba(234,179,8,0.15)', color: '#facc15', padding: '4px 10px', borderRadius: 20 }}>
-            {sortedTrades.length} MicroCap Picks
-          </span>
+
+          {/* Interactive Market Cap Filter Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5 }}>FILTER CAP:</span>
+            <button
+              onClick={() => setCapFilter('ALL')}
+              style={{
+                background: capFilter === 'ALL' ? '#38bdf8' : 'rgba(255,255,255,0.05)',
+                color: capFilter === 'ALL' ? '#0f172a' : '#cbd5e1',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer'
+              }}
+            >
+              All Caps ({trades.length})
+            </button>
+            <button
+              onClick={() => setCapFilter('Nano Cap')}
+              style={{
+                background: capFilter === 'Nano Cap' ? '#a855f7' : 'rgba(168, 85, 247, 0.12)',
+                color: capFilter === 'Nano Cap' ? '#ffffff' : '#c084fc',
+                border: '1px solid rgba(168, 85, 247, 0.4)',
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer'
+              }}
+            >
+              🟣 Nano Cap ({countForCap('Nano Cap')})
+            </button>
+            <button
+              onClick={() => setCapFilter('Micro Cap')}
+              style={{
+                background: capFilter === 'Micro Cap' ? '#ec4899' : 'rgba(236, 72, 153, 0.12)',
+                color: capFilter === 'Micro Cap' ? '#ffffff' : '#f472b6',
+                border: '1px solid rgba(236, 72, 153, 0.4)',
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer'
+              }}
+            >
+              🟢 Micro Cap ({countForCap('Micro Cap')})
+            </button>
+            <button
+              onClick={() => setCapFilter('Small Cap')}
+              style={{
+                background: capFilter === 'Small Cap' ? '#f97316' : 'rgba(249, 115, 22, 0.12)',
+                color: capFilter === 'Small Cap' ? '#ffffff' : '#fb923c',
+                border: '1px solid rgba(249, 115, 22, 0.4)',
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer'
+              }}
+            >
+              🔵 Small Cap ({countForCap('Small Cap')})
+            </button>
+          </div>
         </div>
 
         <div className="table-wrapper">
@@ -2638,35 +2749,78 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
             <thead>
               <tr>
                 <th onClick={() => handleSort('rank')} style={{ cursor: 'pointer', width: 60 }}>Rank</th>
-                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company</th>
+                <th onClick={() => handleSort('ticker')} style={{ cursor: 'pointer' }}>Ticker / Company / Market Cap</th>
+                <th>Detail / Chart</th>
+                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
                 <th onClick={() => handleSort('sector')} style={{ cursor: 'pointer' }}>Sector</th>
                 <th onClick={() => handleSort('current_price')} style={{ cursor: 'pointer' }}>CMP</th>
                 <th onClick={() => handleSort('fund_count')} style={{ cursor: 'pointer' }}>MFs &gt;2%</th>
                 <th onClick={() => handleSort('best_buy_zone')} style={{ cursor: 'pointer' }}>Best Buy Zone</th>
                 <th onClick={() => handleSort('stop_loss')} style={{ cursor: 'pointer' }}>Stop Loss (SL)</th>
                 <th onClick={() => handleSort('target_price')} style={{ cursor: 'pointer' }}>Target (T1 / T2)</th>
-                <th onClick={() => handleSort('setup_signal')} style={{ cursor: 'pointer' }}>Setup Signal</th>
-                <th>Mutual Fund Holdings &amp; Technical Rationale</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={10}><div className="state">Scanning microcap &amp; smallcap holdings data for qualifying Mutual Fund picks…</div></td></tr>}
+              {loading && <tr><td colSpan={10}><div className="state" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><RefreshCw size={16} className="spin" style={{ color: '#facc15' }} /> Loading microcap &amp; smallcap institutional picks…</div></td></tr>}
               {error && <tr><td colSpan={10}><div className="state error">{error}</div></td></tr>}
-              {!loading && !error && sortedTrades.map(t => (
+              {!loading && !error && paginatedTrades.length === 0 && (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8', fontSize: 14 }}>
+                    No tickers matching the selected Market Cap filter ({capFilter}).
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && paginatedTrades.map(t => (
                 <tr key={t.ticker} className="data-row">
                   <td style={{ fontWeight: 700, color: '#facc15' }}>#{t.rank}</td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div>
-                        <b
-                          onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
-                          style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
-                          title={`Click to lookup ${t.ticker} in Ticker Master Data`}
-                        >
-                          {t.ticker}
-                        </b>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.stock_name}</div>
+                    <div>
+                      <b
+                        onClick={(e) => { e.stopPropagation(); if (onSelectTicker) onSelectTicker(t.ticker) }}
+                        style={{ color: '#38bdf8', fontSize: 14, fontFamily: "'DM Mono'", cursor: 'pointer', textDecoration: 'underline' }}
+                        title={`Click to lookup ${t.ticker} in Ticker Master Data`}
+                      >
+                        {t.ticker}
+                      </b>
+                      <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        <span>{renderTruncated(t.stock_name)}</span>
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          background: String(t.market_cap_category).toUpperCase().includes('NANO')
+                            ? 'rgba(168, 85, 247, 0.18)'
+                            : String(t.market_cap_category).toUpperCase().includes('MICRO')
+                            ? 'rgba(236, 72, 153, 0.18)'
+                            : String(t.market_cap_category).toUpperCase().includes('SMALL')
+                            ? 'rgba(249, 115, 22, 0.18)'
+                            : 'rgba(6, 182, 212, 0.18)',
+                          color: String(t.market_cap_category).toUpperCase().includes('NANO')
+                            ? '#c084fc'
+                            : String(t.market_cap_category).toUpperCase().includes('MICRO')
+                            ? '#ec4899'
+                            : String(t.market_cap_category).toUpperCase().includes('SMALL')
+                            ? '#f97316'
+                            : '#22d3ee',
+                          border: `1px solid ${
+                            String(t.market_cap_category).toUpperCase().includes('NANO')
+                              ? 'rgba(168, 85, 247, 0.4)'
+                              : String(t.market_cap_category).toUpperCase().includes('MICRO')
+                              ? 'rgba(236, 72, 153, 0.4)'
+                              : String(t.market_cap_category).toUpperCase().includes('SMALL')
+                              ? 'rgba(249, 115, 22, 0.4)'
+                              : 'rgba(6, 182, 212, 0.4)'
+                          }`
+                        }}>
+                          {(t.market_cap_category || 'MICRO CAP').toUpperCase()}
+                          {t.market_cap_cr > 0 ? ` (${t.market_cap_cr >= 1000 ? `₹${(t.market_cap_cr / 1000).toFixed(1)}k Cr` : `₹${Number(t.market_cap_cr).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`})` : ''}
+                        </span>
                       </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <button type="button" onClick={(e) => { e.stopPropagation(); setDetailTicker(t.ticker) }}
                         title={`View Interactive Detail Report for ${t.ticker}`}
                         style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, transition: 'all .15s ease' }}>
@@ -2679,7 +2833,8 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
                       </button>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{t.sector}</span></td>
+                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
+                  <td><span style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{renderTruncated(t.sector)}</span></td>
                   <td><b style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>₹{t.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</b></td>
                   <td>
                     <span style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', padding: '3px 8px', borderRadius: 4, fontWeight: 800, fontFamily: "'DM Mono', monospace" }}>
@@ -2689,13 +2844,55 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
                   <td><span style={{ background: 'rgba(234,179,8,0.15)', color: '#facc15', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.best_buy_zone}</span></td>
                   <td><span style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4d4f', padding: '4px 10px', borderRadius: 4, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.stop_loss}</span></td>
                   <td><b style={{ color: '#34d399', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: '1.15rem', fontWeight: 800 }}>{t.target_price}</b></td>
-                  <td><span className="badge buy" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{t.setup_signal}</span></td>
-                  <td><span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>{t.insight}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* Client-side Pagination Controls */}
+        {!loading && !error && filteredTrades.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>
+              Showing {filteredTrades.length > 0 ? (page - 1) * (pageSize === 'ALL' ? filteredTrades.length : Number(pageSize)) + 1 : 0} to {pageSize === 'ALL' ? filteredTrades.length : Math.min(page * Number(pageSize), filteredTrades.length)} of {filteredTrades.length} entries
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#cbd5e1' }}>
+                <span>Page Size:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(e.target.value)}
+                  style={{ background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '2px 6px', fontSize: 12 }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="ALL">All</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '4px 10px', borderRadius: 4, fontSize: 12, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.5 : 1 }}
+                >
+                  ◄ Prev
+                </button>
+                <span style={{ fontSize: 12, color: '#facc15', fontWeight: 700 }}>
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '4px 10px', borderRadius: 4, fontSize: 12, cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.5 : 1 }}
+                >
+                  Next ►
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
       {detailTicker && <ReportDetailModal ticker={detailTicker} onClose={() => setDetailTicker(null)} />}
       {visualizerTicker && <StockVisualizerModal ticker={visualizerTicker} onClose={() => setVisualizerTicker(null)} />}
@@ -2950,6 +3147,13 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
       if (col === 'reasons') return false  // excluded globally — info available on Lookup page
       return !isInternalTimestamp(col)
     })
+
+    if (activeTable === 'historical_calls') {
+      // Remove duplicate 'status' column when 'call_status' or 'outcome' is present
+      if (cols.includes('call_status') || cols.includes('outcome')) {
+        cols = cols.filter(col => col !== 'status')
+      }
+    }
 
     // Map id, run_time, or uniqueid to "record_id"
     cols = cols.map(c => (c === 'id' || c === 'run_time' || c.toLowerCase() === 'uniqueid') ? 'record_id' : c)
@@ -3387,9 +3591,17 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                 <th style={{ width: 65, textAlign: 'center', color: '#7ec8f0', background: 'rgba(126,200,240,0.1)' }}># S.No</th>
                 {displayColumns.map(key => {
                   const origKey = (key === 'record_id') ? (data?.columns?.includes('uniqueid') ? 'uniqueid' : data?.columns?.includes('run_time') ? 'run_time' : 'id') : key
+                  let headerLabel = key.replaceAll('_', ' ')
+                  if (activeTable === 'historical_calls') {
+                    if (key === 'current_price' || key === 'cmp') {
+                      headerLabel = 'Call CMP'
+                    } else if (key === 'call_status' || key === 'outcome') {
+                      headerLabel = 'Call Status'
+                    }
+                  }
                   return (
                     <th key={key} onClick={() => sortBy(key)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                      {key.replaceAll('_', ' ')} {sort.key === origKey && (sort.asc ? '↑' : '↓')}
+                      {headerLabel} {sort.key === origKey && (sort.asc ? '↑' : '↓')}
                     </th>
                   )
                 })}

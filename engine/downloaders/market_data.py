@@ -259,8 +259,11 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
 
         is_other_income_ok = int(abs(avg_other_inc) <= (0.05 * avg_pat)) if avg_pat > 0 else int(abs(avg_other_inc) == 0.0)
 
-        # PE and Debt
+        # PE, Debt, and Market Cap
         info = yfinance_safe_call(lambda: tk.info) or {}
+        raw_mcap = info.get('marketCap') or info.get('totalAssets')
+        market_cap = _safe_float(raw_mcap) or 0.0
+
         raw_pe = info.get('trailingPE') or info.get('forwardPE')
         current_pe = _safe_float(raw_pe) or 0.0
         avg_pe = 20.0  # standard fallback
@@ -279,12 +282,13 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO fundamentals (
-                        ticker, fetched_date, current_pe, avg_pe, last_pat, avg_pat,
+                        ticker, fetched_date, market_cap, current_pe, avg_pe, last_pat, avg_pat,
                         last_other_income, avg_other_income, debt_to_equity,
                         is_pat_growing, is_other_income_ok, is_pe_ok, is_debt_equity_ok,
                         fundamental_score, passed, details
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (ticker, fetched_date) DO UPDATE SET
+                        market_cap = EXCLUDED.market_cap,
                         current_pe = EXCLUDED.current_pe, avg_pe = EXCLUDED.avg_pe,
                         last_pat = EXCLUDED.last_pat, avg_pat = EXCLUDED.avg_pat,
                         last_other_income = EXCLUDED.last_other_income, avg_other_income = EXCLUDED.avg_other_income,
@@ -293,7 +297,7 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
                         is_debt_equity_ok = EXCLUDED.is_debt_equity_ok, fundamental_score = EXCLUDED.fundamental_score,
                         passed = EXCLUDED.passed, details = EXCLUDED.details
                 """, (
-                    ticker_clean, today, current_pe, avg_pe, last_pat, avg_pat,
+                    ticker_clean, today, market_cap, current_pe, avg_pe, last_pat, avg_pat,
                     last_other_inc, avg_other_inc, debt_to_equity,
                     is_pat_growing, is_other_income_ok, is_pe_ok, is_debt_equity_ok,
                     score, passed, "{}"

@@ -146,6 +146,37 @@ CREATE TABLE IF NOT EXISTS fundamentals (
     PRIMARY KEY (ticker, fetched_date)
 );
 
+CREATE TABLE IF NOT EXISTS mf_holdings (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    fund_name TEXT NOT NULL,
+    holding_pct DOUBLE PRECISION DEFAULT 0.0,
+    shares_held BIGINT DEFAULT 0,
+    rank INTEGER DEFAULT 0,
+    disclosure_date TEXT,
+    downloaded_at TEXT,
+    UNIQUE (ticker, fund_name)
+);
+
+CREATE TABLE IF NOT EXISTS chart_patterns (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    pattern_code TEXT NOT NULL,
+    pattern_name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'NEUTRAL',
+    timeframe TEXT NOT NULL DEFAULT 'DAILY',
+    detected_date DATE NOT NULL,
+    start_date DATE,
+    end_date DATE,
+    high_price DOUBLE PRECISION,
+    low_price DOUBLE PRECISION,
+    close_price DOUBLE PRECISION,
+    strength_score DOUBLE PRECISION DEFAULT 50.0,
+    details JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (ticker, pattern_code, timeframe, detected_date)
+);
+
 -- 4. F&O Derivative Chain Tables
 CREATE TABLE IF NOT EXISTS raw_fno_derivatives (
     ticker            TEXT NOT NULL,
@@ -343,6 +374,7 @@ CREATE INDEX IF NOT EXISTS idx_users_watchlist_id ON users(watchlist_id);
 CREATE INDEX IF NOT EXISTS idx_ohlcv_ticker_date ON ohlcv_daily(ticker, trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_indicators_ticker_date ON indicators_daily(ticker, trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_fno_ticker ON raw_fno_derivatives(ticker);
+CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
 
 -- Seed Initial System Configuration
 INSERT INTO system_config (key, value) VALUES

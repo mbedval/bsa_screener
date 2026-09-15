@@ -288,6 +288,18 @@ Daily strike-level derivative option chain snapshots.
 - **`ticker`**, **`strike_price`**, **`option_type`** (`CE`/`PE`), **`expiry_date`** (`TEXT`): Composite PK.
 - **`volume`**, **`ltp`**, **`underlying_price`**, **`last_updated`**.
 
+#### `mf_holdings`
+Quarterly domestic mutual fund & institutional holdings downloaded per stock.
+- **`id`** (`SERIAL`, PK).
+- **`ticker`** (`TEXT`, FK -> `ticker_master.ticker` ON DELETE CASCADE).
+- **`fund_name`** (`TEXT`): Name of the mutual fund scheme or institution.
+- **`holding_pct`** (`DOUBLE PRECISION`): Holding percentage (e.g. 2.76).
+- **`shares_held`** (`BIGINT`): Quantity of shares held (if available).
+- **`rank`** (`INTEGER`): Institutional holder rank by holding percentage.
+- **`disclosure_date`** (`TEXT`): Disclosure quarter date (e.g. `'Dec 2024'`).
+- **`downloaded_at`** (`TEXT`): ISO timestamp when downloaded.
+- **`UNIQUE (ticker, fund_name)`**.
+
 ---
 
 ### 3.3 Engine Analysis Summaries & Scanner Reports

@@ -2097,6 +2097,22 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.2)')}>{master.ticker || searchedSymbol}</span>
                   <span style={badgeStyle('#a855f7', 'rgba(168, 85, 247, 0.2)')}>{master.exchange || 'NS'}</span>
                   <span style={badgeStyle('#22c55e', 'rgba(34, 197, 94, 0.2)')}>{master.is_fno ? 'EQUITY / F&O' : 'EQUITY'}</span>
+                  {master.market_cap_category && (
+                    <span style={
+                      String(master.market_cap_category).toUpperCase().includes('LARGE')
+                        ? badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.25)')
+                        : String(master.market_cap_category).toUpperCase().includes('MID')
+                        ? badgeStyle('#06b6d4', 'rgba(6, 182, 212, 0.25)')
+                        : String(master.market_cap_category).toUpperCase().includes('SMALL')
+                        ? badgeStyle('#f97316', 'rgba(249, 115, 22, 0.25)')
+                        : String(master.market_cap_category).toUpperCase().includes('SME')
+                        ? badgeStyle('#e11d48', 'rgba(225, 29, 72, 0.25)')
+                        : badgeStyle('#ec4899', 'rgba(236, 72, 153, 0.25)')
+                    }>
+                      📊 {master.market_cap_category.toUpperCase()}
+                      {master.market_cap_cr > 0 ? ` (₹${Number(master.market_cap_cr).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr)` : ''}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -3051,7 +3067,7 @@ export function SectorWiseReportPage({ apiBase = '/api/intelligence', dataset = 
         </div>
       </div>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Preloading top 10 tickers across all sectors…</div>}
+      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><RefreshCw size={20} className="spin" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8, color: '#38bdf8' }} /> Loading top 10 tickers across sectors…</div>}
       {error && <div style={{ padding: 20, background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', color: '#f87171', borderRadius: 8, marginBottom: 20 }}>{error}</div>}
 
       {!loading && !error && (
@@ -3374,7 +3390,7 @@ export function MarketCapWiseReportPage({ apiBase = '/api/intelligence', dataset
         </div>
       </div>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Preloading top 10 tickers across market cap categories…</div>}
+      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><RefreshCw size={20} className="spin" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8, color: '#38bdf8' }} /> Loading top 10 tickers across market cap categories…</div>}
       {error && <div style={{ padding: 20, background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', color: '#f87171', borderRadius: 8, marginBottom: 20 }}>{error}</div>}
 
       {!loading && !error && (
@@ -3661,8 +3677,9 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
       </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: 15 }}>
-          Evaluating candlestick pattern direction pass/fail track records across all market universes…
+        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: 14 }}>
+          <RefreshCw size={20} className="spin" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8, color: '#38bdf8' }} />
+          Evaluating pattern performance track records…
         </div>
       )}
 

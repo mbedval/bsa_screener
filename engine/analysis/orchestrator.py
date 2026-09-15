@@ -10,6 +10,7 @@ from engine.analysis.projection import calculate_22d_projection
 from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
 from engine.analysis.sector_followers import generate_sector_followers_analysis
 from engine.analysis.retracement import generate_retracement_speculator_analysis
+from engine.analysis.patterns import scan_and_store_ticker_patterns
 
 from engine.utils.logger import setup_logger
 
@@ -106,6 +107,11 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
         
         opt_res = analyze_options_chain(ticker)
         proj_22d = calculate_22d_projection(ticker, tech_res["score"])
+        
+        try:
+            scan_and_store_ticker_patterns(ticker)
+        except Exception as pe:
+            logger.error(f"Error scanning chart patterns for {ticker}: {pe}")
 
         # Compute aggregate scores
         # Behavioral score based on news sentiment and accumulation index

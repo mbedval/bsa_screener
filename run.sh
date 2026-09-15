@@ -20,6 +20,8 @@ fi
 if [ -f "$SCRIPT_DIR/.venv/bin/python" ] && "$SCRIPT_DIR/.venv/bin/python" -c "import uvicorn" 2>/dev/null; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
     exec "$PYTHON_BIN" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload "$@"
+elif python3 -c "import uvicorn" 2>/dev/null; then
+    exec python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload "$@"
 elif command -v uvicorn >/dev/null 2>&1; then
     exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload "$@"
 else
