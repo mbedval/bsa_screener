@@ -447,6 +447,13 @@ function App() {
   }
 
   useEffect(() => {
+    if (window.location.hash === '#live_pattern_hub') {
+      setActive('research:live_pattern_hub')
+      setPath('intelligence')
+    }
+  }, [])
+
+  useEffect(() => {
     if (path !== '' && path !== '/') {
       refreshDashboard()
     }

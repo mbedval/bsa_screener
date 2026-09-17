@@ -5097,5 +5097,3 @@ export function WatchlistMonitorPage({ apiBase = '/api/intelligence', dataset = 
   )
 }
 
-
-
