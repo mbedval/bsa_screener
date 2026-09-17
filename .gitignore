@@ -1,14 +1,52 @@
-.venv
-*__.py
-frontend/node_modules
-*.pyc
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local configuration and databases
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite3
+
+# Python packaging and build artifacts
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor and tool metadata
+.vscode/
+.idea/
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Generated reports and logs
 backend/output/htmls/*
 backend/output/pdf/*
 output/htmls/*
 output/pdf/*
+output/engine.log
 backend/app/__pycache__/*
 engine/database/__pycache__/*
 engine/analysis/__pycache__/*
 engine/reports/__pycache__/*
 backend/app/__pycache__/*
-output/engine.log
