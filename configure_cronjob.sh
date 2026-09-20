@@ -37,9 +37,10 @@ ${CRON_COMMENT_HEADER}
 0,15,30,45 9-14 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-spot >> ${LOG_DIR}/cron_nse.log 2>&1
 0 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-spot >> ${LOG_DIR}/cron_nse.log 2>&1
 
-# NSE Derivatives / Option Chain Data (Every 15 mins 09:16-14:46 & 15:01)
-16,31,46 9-14 * * 1-5  ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
-1 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
+# NSE Derivatives / Option Chain Data (Every 2 mins during market hours 09:16-15:30)
+16-58/2 9 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
+*/2 10-14 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
+0-30/2 15 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1
 EOF
 
 

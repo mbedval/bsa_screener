@@ -10,7 +10,7 @@ import {
 
 const PAGE_SIZE = 10
 
-export default function TickersPage({ dataset }) {
+export default function TickersPage({ dataset, onSelectTicker }) {
   const [rows, setRows]           = useState([])
   const [sectors, setSectors]     = useState([])
   const [loading, setLoading]     = useState(true)
@@ -305,7 +305,24 @@ export default function TickersPage({ dataset }) {
                       style={{ cursor: 'pointer' }}
                     />
                   </td>
-                  <td><b style={{color:'#7ec8f0', fontFamily:"'DM Mono'"}}>{row.ticker}</b></td>
+                  <td>
+                    <button 
+                      onClick={() => onSelectTicker && onSelectTicker(row.ticker)}
+                      style={{
+                        background: 'none', 
+                        border: 'none', 
+                        padding: 0, 
+                        color: '#7ec8f0', 
+                        fontFamily: "'DM Mono'", 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer', 
+                        textDecoration: 'underline'
+                      }}
+                      title={`View ${row.ticker} Details`}
+                    >
+                      {row.ticker}
+                    </button>
+                  </td>
                   <td style={{maxWidth:280}}>
                     <span style={{ color: '#e2e8f0', display: 'inline-block', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }} title={row.company_name}>
                       {row.company_name || '—'}

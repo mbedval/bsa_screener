@@ -987,6 +987,7 @@ const STATIC_PATTERNS = [
 export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'intelligence', fnoOnly = false, indicesOnly = false }) {
   const isUS = dataset === 'us_intelligence'
   const [catalog, setCatalog] = useState(STATIC_PATTERNS)
+  const [activeCategory, setActiveCategory] = useState('BULLISH')
   const [selectedPatterns, setSelectedPatterns] = useState(['bullish_engulfing'])
   const [timeframe, setTimeframe] = useState('DAILY')
   const [patternData, setPatternData] = useState([])
@@ -1052,6 +1053,8 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
   const neutralList = catalog.filter(p => p.category === 'NEUTRAL')
   const bullishList = catalog.filter(p => p.category === 'BULLISH')
   const bearishList = catalog.filter(p => p.category === 'BEARISH')
+  
+  const visibleList = activeCategory === 'BULLISH' ? bullishList : (activeCategory === 'BEARISH' ? bearishList : neutralList)
 
   const cardStyle = { background: '#161b22', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 16 }
 
@@ -1061,16 +1064,52 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
-              ☑️ Select Patterns ({selectedPatterns.length} Active Filters):
+              ☑️ Pattern View:
             </span>
             <button
-              onClick={() => setSelectedPatterns(catalog.map(p => p.code))}
-              style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              onClick={() => { setActiveCategory('BULLISH'); setSelectedPatterns(bullishList.map(p => p.code)) }}
+              style={{
+                background: activeCategory === 'BULLISH' ? 'rgba(34,197,94,0.2)' : 'transparent',
+                color: activeCategory === 'BULLISH' ? '#4ade80' : '#cbd5e1',
+                border: `1px solid ${activeCategory === 'BULLISH' ? '#22c55e' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+              }}
             >
-              Select All (15)
+              🚀 Bullish
             </button>
             <button
-              onClick={() => setSelectedPatterns(['bullish_engulfing'])}
+              onClick={() => { setActiveCategory('BEARISH'); setSelectedPatterns(bearishList.map(p => p.code)) }}
+              style={{
+                background: activeCategory === 'BEARISH' ? 'rgba(239,68,68,0.2)' : 'transparent',
+                color: activeCategory === 'BEARISH' ? '#f87171' : '#cbd5e1',
+                border: `1px solid ${activeCategory === 'BEARISH' ? '#ef4444' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              ⚠️ Bearish
+            </button>
+            <button
+              onClick={() => { setActiveCategory('NEUTRAL'); setSelectedPatterns(neutralList.map(p => p.code)) }}
+              style={{
+                background: activeCategory === 'NEUTRAL' ? 'rgba(234,179,8,0.2)' : 'transparent',
+                color: activeCategory === 'NEUTRAL' ? '#facc15' : '#cbd5e1',
+                border: `1px solid ${activeCategory === 'NEUTRAL' ? '#eab308' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              ⚖️ Neutral
+            </button>
+
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)' }} />
+
+            <button
+              onClick={() => setSelectedPatterns(visibleList.map(p => p.code))}
+              style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Select All ({visibleList.length})
+            </button>
+            <button
+              onClick={() => setSelectedPatterns(visibleList.length ? [visibleList[0].code] : [])}
               style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
             >
               Reset Default
@@ -1108,12 +1147,27 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
             >
               📊 Weekly Chart (1WK)
             </button>
+            <button
+              onClick={() => setTimeframe('MONTHLY')}
+              style={{
+                background: timeframe === 'MONTHLY' ? '#38bdf8' : 'transparent',
+                color: timeframe === 'MONTHLY' ? '#0f172a' : '#cbd5e1',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              🗓️ Monthly Chart (1M)
+            </button>
           </div>
         </div>
 
-        {/* 15 Pattern Checkboxes Grid */}
+        {/* Pattern Checkboxes Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, background: '#0d1117', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
-          {[...neutralList, ...bullishList, ...bearishList].map(p => {
+          {visibleList.map(p => {
             const isChecked = selectedPatterns.includes(p.code)
             const cnt = p.counts ? (p.counts[timeframe]?.tickers ?? 0) : 0
             const badgeBg = p.category === 'BULLISH' ? 'rgba(34,197,94,0.2)' : (p.category === 'BEARISH' ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)')
@@ -1157,7 +1211,7 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: '#f8fafc' }}>
-                {selectedPatterns.length === 15 ? 'All 15 Candlestick Patterns Selected' : `${selectedPatterns.length} Patterns Selected`}
+                {selectedPatterns.length === visibleList.length ? `All ${visibleList.length} ${activeCategory} Patterns Selected` : `${selectedPatterns.length} Patterns Selected`}
               </span>
             </div>
             <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#94a3b8' }}>

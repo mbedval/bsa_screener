@@ -90,7 +90,26 @@ The engine CLI runs all background pipeline jobs and supports batch downloading,
 
 ---
 
-## 4. Web Application Setup
+## 4. Automation & Background Data Sync
+
+To keep the market data, technical indicators, and F&O option chains updated throughout the active trading session, the application provides an automated cronjob configuration script. 
+
+### Configuring the Cronjobs
+To install or update the automated background tasks, simply run the provided bash script:
+```bash
+./configure_cronjob.sh
+```
+
+### Default Automation Schedule (Monday to Friday)
+Once configured, the following processes run automatically in the background during market hours:
+1. **Spot Market & Technical Data (`download-spot`)**: Synchronizes end-of-day data, intraday bars, and calculates foundational metrics every 15 minutes between `09:15` and `15:00`.
+2. **Derivatives & Option Chains (`download-fno`)**: Downloads live options chain, strike prices, implied volatility (IV), and open interest (OI) for all F&O stocks and indices **every 2 minutes** between `09:16` and `15:30`.
+
+The logs for these automated tasks are safely stored in the `logs/` directory for monitoring (`logs/cron_nse.log` and `logs/cron_fno.log`).
+
+---
+
+## 5. Web Application Setup
 
 The web application consists of a FastAPI backend (which serves the compiled React UI statically) and APIs accessible across your local network.
 

@@ -70,6 +70,27 @@ def resample_to_weekly(df: pd.DataFrame) -> pd.DataFrame:
     weekly["trade_date"] = weekly["trade_date"].dt.strftime("%Y-%m-%d")
     return weekly
 
+# ─── Resample Daily OHLCV to Monthly Bars ─────────────────────────────────────
+def resample_to_monthly(df: pd.DataFrame) -> pd.DataFrame:
+    """Resample daily OHLCV DataFrame to monthly bars."""
+    if df.empty or "trade_date" not in df.columns:
+        return pd.DataFrame()
+    
+    temp = df.copy()
+    temp["trade_date"] = pd.to_datetime(temp["trade_date"])
+    temp = temp.sort_values("trade_date").set_index("trade_date")
+
+    monthly = temp.resample("ME").agg({
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum"
+    }).dropna().reset_index()
+
+    monthly["trade_date"] = monthly["trade_date"].dt.strftime("%Y-%m-%d")
+    return monthly
+
 # ─── Pattern Scanner Logic ────────────────────────────────────────────────────
 def detect_candlestick_patterns(df: pd.DataFrame, timeframe: str = "DAILY") -> List[Dict[str, Any]]:
     """
@@ -324,9 +345,11 @@ def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> in
 
                 df_daily = pd.DataFrame(rows)
                 df_weekly = resample_to_weekly(df_daily)
+                df_monthly = resample_to_monthly(df_daily)
 
                 daily_patterns = detect_candlestick_patterns(df_daily, timeframe="DAILY")
                 weekly_patterns = detect_candlestick_patterns(df_weekly, timeframe="WEEKLY")
+                monthly_patterns = detect_candlestick_patterns(df_monthly, timeframe="MONTHLY")
 
                 all_detected = []
                 for p in daily_patterns:
@@ -335,6 +358,10 @@ def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> in
 
                 for p in weekly_patterns:
                     p["timeframe"] = "WEEKLY"
+                    all_detected.append(p)
+
+                for p in monthly_patterns:
+                    p["timeframe"] = "MONTHLY"
                     all_detected.append(p)
 
                 stored_count = 0

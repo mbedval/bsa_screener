@@ -5,11 +5,30 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from enum import Enum
 from engine.database.connection import get_db_connection
 from engine.utils.helpers import format_ticker, clean_ticker
 from engine.utils.rate_limiter import pace_yfinance_request, yfinance_safe_call, DEFAULT_MAX_WORKERS
 
 logger = logging.getLogger("bsa_market_downloader")
+
+class YFPeriod(str, Enum):
+    DAY_1 = "1d"
+    DAY_5 = "5d"
+    MONTH_1 = "1mo"
+    MONTH_3 = "3mo"
+    MONTH_6 = "6mo"
+    YEAR_1 = "1y"
+    YEAR_2 = "2y"
+    YEAR_5 = "5y"
+    YEAR_10 = "10y"
+    YTD = "ytd"
+    MAX = "max"
+
+    @classmethod
+    def valid_periods(cls):
+        return [e.value for e in cls]
+
 
 def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Compute standard technical indicators on a daily price DataFrame."""
@@ -99,6 +118,10 @@ def get_latest_trade_date(ticker_clean: str) -> datetime or None:
 
 def download_ticker_data(ticker_raw: str, period: str = None, force: bool = False) -> bool:
     """Download OHLCV, compute indicators, fetch meta & fundamentals with smart incremental freshness logic."""
+    if period and period not in YFPeriod.valid_periods():
+        logger.error(f"Invalid period '{period}'. Valid periods are: {', '.join(YFPeriod.valid_periods())}")
+        return False
+
     ticker_clean = clean_ticker(ticker_raw)
     formatted = format_ticker(ticker_raw)
     now_str = datetime.now().isoformat(timespec="seconds")
@@ -115,19 +138,33 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
                     logger.info(f"Ticker {ticker_clean} is already up to date ({last_date.strftime('%Y-%m-%d')}). Skipping download.")
                     return True
                 elif days_diff <= 7:
-                    period = "5d"
+                    period = YFPeriod.DAY_5.value
                 elif days_diff <= 30:
-                    period = "1mo"
+                    period = YFPeriod.MONTH_1.value
                 else:
-                    period = "2y"
+                    period = YFPeriod.YEAR_2.value
             else:
-                period = "2y"
+                period = YFPeriod.YEAR_2.value
 
         # 1. Fetch OHLCV with rate limit protection & backoff
         tk = yf.Ticker(formatted)
         df = yfinance_safe_call(lambda: tk.history(period=period, interval="1d"))
+        
+        if (df is None or df.empty) and period in [YFPeriod.DAY_5.value, YFPeriod.MONTH_1.value]:
+            logger.info(f"Retry fetching {ticker_clean} with period=1y because {period} returned empty")
+            df = yfinance_safe_call(lambda: tk.history(period=YFPeriod.YEAR_1.value, interval="1d"))
+
         if df is None or df.empty:
             logger.warning(f"No price data found for {ticker_clean}")
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO excluded_tickers (ticker, reason, added_by, status, created_at)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (ticker) DO UPDATE SET 
+                        reason = EXCLUDED.reason, status = EXCLUDED.status, created_at = EXCLUDED.created_at
+                    """, (ticker_clean, "No price data found (possibly delisted)", "SYSTEM", "EXCLUDED", now_str))
+                    conn.commit()
             return False
 
         # Localize timezones
@@ -315,7 +352,12 @@ def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callba
     all_tickers = []
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT ticker FROM ticker_master")
+            cur.execute("""
+                SELECT tm.ticker 
+                FROM ticker_master tm
+                LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
+                WHERE et.ticker IS NULL
+            """)
             all_tickers = [row[0] for row in cur.fetchall()]
 
     if not all_tickers:

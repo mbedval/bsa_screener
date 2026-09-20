@@ -13,9 +13,9 @@ import ScreenerTickerMappingPage from './ScreenerTickerMappingPage.jsx'
 
 export { SectorsPage, TickersPage, IndicesPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage }
 
-export default function MasterSubmodule({ subView, onNavigate, dataset }) {
+export default function MasterSubmodule({ subView, onNavigate, dataset, onSelectTicker }) {
   switch (subView) {
-    case 'tickers':    return <TickersPage dataset={dataset} />
+    case 'tickers':    return <TickersPage dataset={dataset} onSelectTicker={onSelectTicker} />
     case 'indices':    return <IndicesPage dataset={dataset} />
     case 'watchlists': return <WatchlistsPage dataset={dataset} />
     case 'users':      return <UsersPage dataset={dataset} />

@@ -770,7 +770,7 @@ function App() {
         ) : active === 'charts_visualizations' ? (
           <ChartsVisualizationsPage apiBase={apiBase} dataset={dataset} />
         ) : active.startsWith('master:') ? (
-          <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} dataset={dataset} />
+          <MasterSubmodule subView={active.replace('master:', '')} onNavigate={handleMasterNav} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active.startsWith('sector:') ? (
           <SectorIntelligencePage
             sectorName={activeSector}

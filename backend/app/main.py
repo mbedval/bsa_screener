@@ -2796,14 +2796,14 @@ def get_pattern_occurrences(
                     LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
                     WHERE LOWER(p.pattern_code) = ANY(%s)
                       AND UPPER(p.timeframe) = UPPER(%s)
-                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns WHERE UPPER(timeframe) = UPPER(%s)) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.sector = 'Market Index'
                           OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
                       )
                     ORDER BY p.detected_date DESC, p.strength_score DESC
                     LIMIT %s
-                """, (codes, timeframe, days, limit))
+                """, (codes, timeframe, timeframe, days, limit))
             elif fno_only:
                 cur.execute("""
                     SELECT 
@@ -2827,7 +2827,7 @@ def get_pattern_occurrences(
                     LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
                     WHERE LOWER(p.pattern_code) = ANY(%s)
                       AND UPPER(p.timeframe) = UPPER(%s)
-                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns WHERE UPPER(timeframe) = UPPER(%s)) - (INTERVAL '1 day' * %s)
                       AND (
                           tm.is_fno = true 
                           OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
@@ -2835,7 +2835,7 @@ def get_pattern_occurrences(
                       )
                     ORDER BY p.detected_date DESC, p.strength_score DESC
                     LIMIT %s
-                """, (codes, timeframe, days, limit))
+                """, (codes, timeframe, timeframe, days, limit))
             else:
                 cur.execute("""
                     SELECT 
@@ -2859,10 +2859,10 @@ def get_pattern_occurrences(
                     LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
                     WHERE LOWER(p.pattern_code) = ANY(%s)
                       AND UPPER(p.timeframe) = UPPER(%s)
-                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                      AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns WHERE UPPER(timeframe) = UPPER(%s)) - (INTERVAL '1 day' * %s)
                     ORDER BY p.detected_date DESC, p.strength_score DESC
                     LIMIT %s
-                """, (codes, timeframe, days, limit))
+                """, (codes, timeframe, timeframe, days, limit))
             rows = cur.fetchall()
             return {"pattern_codes": codes, "timeframe": timeframe, "days": days, "fno_only": fno_only, "indices_only": indices_only, "rows": [dict(r) for r in rows], "count": len(rows)}
     except Exception as e:
