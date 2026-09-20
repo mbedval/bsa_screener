@@ -125,6 +125,7 @@ def fetch_mf_holdings_from_screener(company_id: int) -> Optional[Dict]:
 def parse_and_rank_mf_holdings(raw_data: Dict) -> List[Dict]:
     """
     Parse raw Screener investors JSON and extract fund holdings sorted by holding_pct desc.
+    Also retains historical quarter data for mf_behavior analysis.
     """
     parsed = []
     if not isinstance(raw_data, dict):
@@ -145,11 +146,21 @@ def parse_and_rank_mf_holdings(raw_data: Dict) -> List[Dict]:
         except (ValueError, TypeError):
             pct = 0.0
 
-        if pct > 0:
+        # Extract historical quarters for this fund
+        historical = []
+        for q in quarters:
+            try:
+                hist_pct = float(holdings_by_q.get(q, "0"))
+                historical.append({"quarter": q, "holding_pct": hist_pct})
+            except:
+                pass
+
+        if pct > 0 or len(historical) > 0:
             parsed.append({
                 "fund_name": fund_name.strip(),
                 "holding_pct": pct,
-                "disclosure_date": latest_q
+                "disclosure_date": latest_q,
+                "historical": historical
             })
 
     # Sort descending by holding %
@@ -162,15 +173,25 @@ def parse_and_rank_mf_holdings(raw_data: Dict) -> List[Dict]:
     return parsed
 
 
+def quarter_str_to_date(q_str: str) -> str:
+    try:
+        month_str, year = q_str.split(" ")
+        month_map = {"Mar": "03-31", "Jun": "06-30", "Sep": "09-30", "Dec": "12-31"}
+        if month_str in month_map:
+            return f"{year}-{month_map[month_str]}"
+    except:
+        pass
+    return "2000-01-01"
+
 def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
     """
-    Insert/Upsert parsed mutual fund holdings into `mf_holdings` PostgreSQL table.
+    Save parsed holdings to the DB (current snapshot and historical).
     """
-    now_str = datetime.now().isoformat()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Ensure table exists
+                # Ensure current table exists
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS mf_holdings (
                         id SERIAL PRIMARY KEY,
@@ -185,9 +206,12 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
                     );
                     CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
                 """)
+                
+                # We assume mf_historical_holdings exists via schema.sql
 
                 # Delete old holdings for clean refresh
                 cur.execute("DELETE FROM mf_holdings WHERE ticker = %s;", (ticker,))
+                # cur.execute("DELETE FROM mf_historical_holdings WHERE ticker = %s;", (ticker,))
 
                 if holdings:
                     query = """
@@ -200,7 +224,16 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
                             disclosure_date = EXCLUDED.disclosure_date,
                             downloaded_at = EXCLUDED.downloaded_at;
                     """
+                    
+                    hist_query = """
+                        INSERT INTO mf_historical_holdings (snapshot_date, scheme_id, ticker, portfolio_weight_pct, source)
+                        VALUES (%s, %s, %s, %s, 'screener')
+                        ON CONFLICT (snapshot_date, scheme_id, ticker) 
+                        DO UPDATE SET portfolio_weight_pct = EXCLUDED.portfolio_weight_pct;
+                    """
+                    
                     for h in holdings:
+                        # 1. Save current snapshot
                         cur.execute(query, (
                             ticker,
                             h["fund_name"],
@@ -210,6 +243,26 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
                             h["disclosure_date"],
                             now_str
                         ))
+                        
+                        # 2. Save historical snapshots
+                        if "historical" in h:
+                            # resolve scheme_id
+                            cur.execute("SELECT id FROM mf_scheme WHERE scheme_name = %s", (h["fund_name"],))
+                            res = cur.fetchone()
+                            if res:
+                                scheme_id = res[0]
+                            else:
+                                cur.execute("INSERT INTO mf_scheme (scheme_name) VALUES (%s) RETURNING id", (h["fund_name"],))
+                                scheme_id = cur.fetchone()[0]
+
+                            for hist in h["historical"]:
+                                dt_str = quarter_str_to_date(hist["quarter"])
+                                cur.execute(hist_query, (
+                                    dt_str,
+                                    scheme_id,
+                                    ticker,
+                                    hist["holding_pct"]
+                                ))
                 conn.commit()
         return True
     except Exception as err:

@@ -7,7 +7,7 @@ import {
   Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage } from './visualizer/index.jsx'
 
 
 
@@ -567,6 +567,9 @@ function App() {
                 <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
                   <Activity size={14} /> Period Comparison
                 </button>
+                <button className={`nav-item ${active === 'research:mf_behavior' ? 'selected' : ''}`} onClick={() => setActive('research:mf_behavior')}>
+                  <Activity size={14} /> Mutual Fund Behaviour
+                </button>
               </div>
             )}
           </section>
@@ -812,6 +815,8 @@ function App() {
           </ChartErrorBoundary>
         ) : active === 'research:watchlist_monitor' ? (
           <WatchlistMonitorPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:mf_behavior' ? (
+          <MFBehaviorPage />
         ) : (
           <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleProfileTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}

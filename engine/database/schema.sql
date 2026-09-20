@@ -394,3 +394,34 @@ CREATE INDEX IF NOT EXISTS idx_fno_ticker ON raw_fno_derivatives(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_ticker ON chart_patterns(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_code_tf ON chart_patterns(pattern_code, timeframe);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
+
+-- 12. Historical Mutual Fund Behaviour Module
+CREATE TABLE IF NOT EXISTS mf_amc (
+    id SERIAL PRIMARY KEY,
+    amc_name TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mf_scheme (
+    id SERIAL PRIMARY KEY,
+    amc_id INTEGER REFERENCES mf_amc(id),
+    scheme_code TEXT,
+    scheme_name TEXT NOT NULL,
+    UNIQUE(amc_id, scheme_name)
+);
+
+CREATE TABLE IF NOT EXISTS mf_historical_holdings (
+    id SERIAL PRIMARY KEY,
+    snapshot_date DATE NOT NULL,
+    scheme_id INTEGER REFERENCES mf_scheme(id),
+    ticker TEXT REFERENCES ticker_master(ticker),
+    isin TEXT,
+    shares BIGINT,
+    market_value DOUBLE PRECISION,
+    portfolio_weight_pct DOUBLE PRECISION,
+    source TEXT,
+    source_date DATE,
+    retrieved_at TIMESTAMP DEFAULT now(),
+    UNIQUE(snapshot_date, scheme_id, ticker)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);

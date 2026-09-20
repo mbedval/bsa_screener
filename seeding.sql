@@ -1,4 +1,4 @@
--- Clean Master Seeding Script for PostgreSQL database (bsa_db)
+-- Clean Master DDL Schema for PostgreSQL database (bsa_db)
 
 -- 1. Configuration Tables
 CREATE TABLE IF NOT EXISTS system_config (
@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS ticker_master (
     company_name       TEXT NOT NULL,
     is_fno             BOOLEAN DEFAULT FALSE,
     sector             TEXT,
+    market_cap_category TEXT DEFAULT 'Largecap',
     index_memberships  TEXT[] DEFAULT '{}',
     exchange           TEXT DEFAULT 'NSE',
     updated_at         TIMESTAMP DEFAULT now()
@@ -77,16 +78,61 @@ CREATE TABLE IF NOT EXISTS excluded_tickers (
     created_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS fno_master (
+CREATE TABLE IF NOT EXISTS fno_stock_master (
     id SERIAL PRIMARY KEY,
     symbol TEXT UNIQUE NOT NULL,
     underlying_name TEXT NOT NULL,
-    instrument_type TEXT NOT NULL,
+    instrument_type TEXT DEFAULT 'STOCK',
     serial_number INTEGER,
     is_active BOOLEAN DEFAULT TRUE,
     entry_date TEXT DEFAULT CURRENT_DATE::text,
     exit_date TEXT,
     created_at TEXT DEFAULT NOW()::text
+);
+
+CREATE TABLE IF NOT EXISTS fno_index_master (
+    id SERIAL PRIMARY KEY,
+    symbol TEXT UNIQUE NOT NULL,
+    underlying_name TEXT NOT NULL,
+    instrument_type TEXT DEFAULT 'INDEX',
+    serial_number INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    entry_date TEXT DEFAULT CURRENT_DATE::text,
+    exit_date TEXT,
+    created_at TEXT DEFAULT NOW()::text
+);
+
+CREATE TABLE IF NOT EXISTS reference_pages (
+    id          SERIAL PRIMARY KEY,
+    title       TEXT NOT NULL,
+    url         TEXT NOT NULL,
+    category    TEXT DEFAULT 'General',
+    description TEXT,
+    created_at  TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS indices_master (
+    symbol          TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    exchange        TEXT DEFAULT 'NSE',
+    category        TEXT DEFAULT 'BENCHMARK',
+    is_fno          BOOLEAN DEFAULT TRUE,
+    lot_size        INTEGER DEFAULT 25,
+    benchmark_price DOUBLE PRECISION,
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMP DEFAULT now(),
+    updated_at      TIMESTAMP DEFAULT now()
+);
+
+-- 11. Opportunities and Risk Table
+CREATE TABLE IF NOT EXISTS opportunities_risk (
+    ticker            TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    opportunities     TEXT,
+    risk              TEXT,
+    is_multibagger    BOOLEAN DEFAULT FALSE,
+    additional_note   TEXT,
+    created_at        TIMESTAMP DEFAULT NOW(),
+    updated_at        TIMESTAMP DEFAULT NOW()
 );
 
 -- 3. Market Data Tables
@@ -147,37 +193,6 @@ CREATE TABLE IF NOT EXISTS fundamentals (
     PRIMARY KEY (ticker, fetched_date)
 );
 
-CREATE TABLE IF NOT EXISTS mf_holdings (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    fund_name TEXT NOT NULL,
-    holding_pct DOUBLE PRECISION DEFAULT 0.0,
-    shares_held BIGINT DEFAULT 0,
-    rank INTEGER DEFAULT 0,
-    disclosure_date TEXT,
-    downloaded_at TEXT,
-    UNIQUE (ticker, fund_name)
-);
-
-CREATE TABLE IF NOT EXISTS chart_patterns (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    pattern_code TEXT NOT NULL,
-    pattern_name TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'NEUTRAL',
-    timeframe TEXT NOT NULL DEFAULT 'DAILY',
-    detected_date DATE NOT NULL,
-    start_date DATE,
-    end_date DATE,
-    high_price DOUBLE PRECISION,
-    low_price DOUBLE PRECISION,
-    close_price DOUBLE PRECISION,
-    strength_score DOUBLE PRECISION DEFAULT 50.0,
-    details JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (ticker, pattern_code, timeframe, detected_date)
-);
-
 -- 4. F&O Derivative Chain Tables
 CREATE TABLE IF NOT EXISTS raw_fno_derivatives (
     ticker            TEXT NOT NULL,
@@ -208,7 +223,19 @@ CREATE TABLE IF NOT EXISTS analysis_summaries (
     updated_at         TIMESTAMP DEFAULT now()
 );
 
--- 6. Historical Calls, Call Efficiency, and Intraday Calls Tables
+CREATE TABLE IF NOT EXISTS broker_recommendations (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    rec_date TEXT DEFAULT CURRENT_DATE::text,
+    recommender TEXT NOT NULL,
+    cmp DOUBLE PRECISION,
+    stop_loss DOUBLE PRECISION,
+    target DOUBLE PRECISION,
+    time_period TEXT,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS historical_calls (
     id SERIAL PRIMARY KEY,
     uniqueid TEXT,
@@ -312,60 +339,49 @@ CREATE TABLE IF NOT EXISTS fno_active (
 );
 
 CREATE TABLE IF NOT EXISTS opportunities_risk (
-    ticker          TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    about_company   TEXT,
-    opportunities   TEXT,
-    risk            TEXT,
-    is_multibagger  BOOLEAN DEFAULT FALSE,
+    ticker VARCHAR(50) PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    about_company TEXT,
+    opportunities TEXT,
+    risk TEXT,
+    is_multibagger BOOLEAN DEFAULT FALSE,
     additional_note TEXT,
-    created_at      TIMESTAMP DEFAULT now(),
-    updated_at      TIMESTAMP DEFAULT now(),
-    product_services TEXT,
-    sectors         TEXT[] DEFAULT '{}'
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS indices_master (
-    symbol          TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    exchange        TEXT DEFAULT 'NSE',
-    category        TEXT DEFAULT 'BENCHMARK',
-    is_fno          BOOLEAN DEFAULT TRUE,
-    lot_size        INTEGER DEFAULT 25,
-    benchmark_price DOUBLE PRECISION,
-    is_active       BOOLEAN DEFAULT TRUE,
-    updated_at      TIMESTAMP DEFAULT now()
+CREATE TABLE IF NOT EXISTS chart_patterns (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    pattern_code TEXT NOT NULL,
+    pattern_name TEXT NOT NULL,
+    category TEXT DEFAULT 'CANDLESTICK',
+    timeframe TEXT DEFAULT 'DAILY',
+    detected_date DATE DEFAULT CURRENT_DATE,
+    start_date DATE,
+    end_date DATE,
+    high_price DOUBLE PRECISION,
+    low_price DOUBLE PRECISION,
+    close_price DOUBLE PRECISION,
+    strength_score DOUBLE PRECISION DEFAULT 1.0,
+    details TEXT,
+    created_at TIMESTAMP DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS broker_recommendations (
-    id              SERIAL PRIMARY KEY,
-    ticker          TEXT NOT NULL,
-    rec_date        TEXT,
-    recommender     TEXT NOT NULL,
-    cmp             DOUBLE PRECISION,
-    stop_loss       DOUBLE PRECISION,
-    target          DOUBLE PRECISION,
-    time_period     TEXT,
-    description     TEXT,
-    created_at      TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS reference_pages (
-    id              SERIAL PRIMARY KEY,
-    title           TEXT NOT NULL,
-    url             TEXT NOT NULL,
-    category        TEXT DEFAULT 'General',
-    description     TEXT,
-    created_at      TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS screener_ticker_mappings (
-    id                  SERIAL PRIMARY KEY,
-    yfinance_ticker     TEXT UNIQUE NOT NULL,
-    screener_ticker     TEXT NOT NULL,
-    screener_company_id INTEGER DEFAULT NULL,
-    company_name        TEXT,
-    notes               TEXT,
-    last_updated        TEXT
+CREATE TABLE IF NOT EXISTS mf_holdings (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    fund_name TEXT NOT NULL,
+    holding_pct DOUBLE PRECISION DEFAULT 0.0,
+    shares_held BIGINT DEFAULT 0,
+    rank INT DEFAULT 0,
+    disclosed_date TEXT,
+    disclosure_date TEXT,
+    downloaded_at TIMESTAMP DEFAULT now(),
+    value_cr DOUBLE PRECISION DEFAULT 0.0,
+    as_of_date TEXT,
+    created_at TIMESTAMP DEFAULT now(),
+    updated_at TIMESTAMP DEFAULT now(),
+    UNIQUE (ticker, fund_name)
 );
 
 -- Indexes for Optimization
@@ -375,112 +391,37 @@ CREATE INDEX IF NOT EXISTS idx_users_watchlist_id ON users(watchlist_id);
 CREATE INDEX IF NOT EXISTS idx_ohlcv_ticker_date ON ohlcv_daily(ticker, trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_indicators_ticker_date ON indicators_daily(ticker, trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_fno_ticker ON raw_fno_derivatives(ticker);
+CREATE INDEX IF NOT EXISTS idx_chart_patterns_ticker ON chart_patterns(ticker);
+CREATE INDEX IF NOT EXISTS idx_chart_patterns_code_tf ON chart_patterns(pattern_code, timeframe);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
 
--- Seed Initial System Configuration
-INSERT INTO system_config (key, value) VALUES
-('telegram_bot_token', ''),
-('telegram_chat_id', ''),
-('gmail_user', ''),
-('gmail_app_password', '')
-ON CONFLICT (key) DO NOTHING;
+-- 12. Historical Mutual Fund Behaviour Module
+CREATE TABLE IF NOT EXISTS mf_amc (
+    id SERIAL PRIMARY KEY,
+    amc_name TEXT UNIQUE NOT NULL
+);
 
--- Seed Ticker History Mappings
-INSERT INTO ticker_mappings (old_ticker, new_ticker) VALUES
-('BATA', 'BATAINDIA'),
-('BERGERPAINTS', 'BERGEPAINT'),
-('BLUESTARLT', 'BLUESTARCO'),
-('DATAPATNS', 'DATAPATTNS'),
-('LTIM', 'LTM'),
-('NALCO', 'NATIONALUM'),
-('NATCOPHARMA', 'NATCOPHARM'),
-('PVR', 'PVRINOX'),
-('TATAMOTORS', 'TMCV'),
-('TIPS', 'TIPSMUSIC'),
-('TV18BRDCST', 'NETWORK18'),
-('ZOMATO', 'ETERNAL')
-ON CONFLICT (old_ticker) DO NOTHING;
+CREATE TABLE IF NOT EXISTS mf_scheme (
+    id SERIAL PRIMARY KEY,
+    amc_id INTEGER REFERENCES mf_amc(id),
+    scheme_code TEXT,
+    scheme_name TEXT NOT NULL,
+    UNIQUE(amc_id, scheme_name)
+);
 
--- Seed Alternative Names
-INSERT INTO alternative_names (id, data_ticker, current_ticker, company_name, notes, last_updated) VALUES
-(1, 'ZOMATO', 'ETERNAL', 'Eternal Ltd (formerly Zomato Ltd)', 'Company rebranded to Eternal Ltd; raw download ticker is ZOMATO', CURRENT_TIMESTAMP::text),
-(2, 'MOTHERSUMI', 'MOTHERSON', 'Samvardhana Motherson International Ltd', 'Name updated post-demerger restructuring', CURRENT_TIMESTAMP::text),
-(3, 'CADILAHC', 'ZYDUSLIFE', 'Zydus Lifesciences Ltd', 'Rebranded from Cadila Healthcare Ltd', CURRENT_TIMESTAMP::text),
-(4, 'LTI', 'LTIM', 'LTIMindtree Ltd', 'Merged entity of LTI and Mindtree Ltd', CURRENT_TIMESTAMP::text)
-ON CONFLICT (id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS mf_historical_holdings (
+    id SERIAL PRIMARY KEY,
+    snapshot_date DATE NOT NULL,
+    scheme_id INTEGER REFERENCES mf_scheme(id),
+    ticker TEXT REFERENCES ticker_master(ticker),
+    isin TEXT,
+    shares BIGINT,
+    market_value DOUBLE PRECISION,
+    portfolio_weight_pct DOUBLE PRECISION,
+    source TEXT,
+    source_date DATE,
+    retrieved_at TIMESTAMP DEFAULT now(),
+    UNIQUE(snapshot_date, scheme_id, ticker)
+);
 
--- Seed Excluded Tickers
-INSERT INTO excluded_tickers (id, ticker, reason, added_by, status, last_error, created_at) VALUES
-(1, 'ABAN', 'Download error: Stock suspended / delisted from exchange', 'SYSTEM_AUTO', 'EXCLUDED', 'yfinance download error 404: No data found for ABAN.NS', CURRENT_TIMESTAMP::text),
-(2, 'DEWAN', 'Delisted stock insolvency proceedings', 'SYSTEM_AUTO', 'EXCLUDED', 'yfinance download error 404: Symbol not found', CURRENT_TIMESTAMP::text),
-(3, 'SREINFRA', 'Trading halted / insolvency status', 'MANUAL', 'EXCLUDED', 'Manual exclusion: insolvency resolution', CURRENT_TIMESTAMP::text)
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Master Sectors
-INSERT INTO sectors (id, name, description) VALUES
-(1, 'Information Technology', 'IT Services, Software Development and Digital Solutions'),
-(2, 'Banking & Financials', 'Public/Private Sector Banks, NBFCs and Asset Management'),
-(3, 'Automobiles', 'Passenger Vehicles, Commercial Vehicles and Auto Components'),
-(4, 'Energy', 'Oil & Gas Exploration, Refining, Power Generation and Utilities'),
-(5, 'Healthcare', 'Pharmaceuticals, Biotechnology and Hospital Chains'),
-(6, 'FMCG', 'Fast Moving Consumer Goods and Retail Products'),
-(7, 'Metal & Mining', 'Ferrous, Non-Ferrous Metals and Mining Operations'),
-(8, 'Real Estate', 'Commercial and Residential Property Developers'),
-(9, 'Telecommunications', 'Telecom Operators and Communication Infrastructure'),
-(10, 'Capital Goods', 'Heavy Electrical, Engineering and Industrial Equipment'),
-(11, 'Media & Entertainment', 'Broadcasting, Digital Media and Entertainment Services'),
-(12, 'Consumer Durables', 'Home Appliances, Electronics and Lifestyle Products'),
-(13, 'Chemical', 'Specialty Chemicals, Agrochemicals and Petrochemicals'),
-(14, 'Defense', 'Defense Equipment Manufacturing and Aerospace Electronics'),
-(15, 'Shipping & Logistics', 'Port Operators, Logistics and Supply Chain Services'),
-(16, 'Infrastructure', 'Construction, Highways and Infrastructure Development'),
-(17, 'Services', 'Commercial Services, E-Commerce and Hospitality'),
-(18, 'Miscellaneous', 'Diversified Conglomerates and Other Sectors')
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Sample Master Tickers (clean baseline)
-INSERT INTO ticker_master (ticker, company_name, is_fno, sector, index_memberships, exchange) VALUES
-('RELIANCE', 'Reliance Industries Limited', true, 'Energy', ARRAY['NIFTY', 'NIFTY50'], 'NSE'),
-('TCS', 'Tata Consultancy Services Limited', true, 'Information Technology', ARRAY['NIFTY', 'NIFTY50'], 'NSE'),
-('WIPRO', 'Wipro Limited', true, 'Information Technology', ARRAY['NIFTY', 'NIFTY50'], 'NSE')
-ON CONFLICT (ticker) DO NOTHING;
-
--- Map Sample Tickers to Sectors
-INSERT INTO ticker_sector (ticker, sector_id) VALUES
-('RELIANCE', 4),
-('TCS', 1),
-('WIPRO', 1)
-ON CONFLICT (ticker, sector_id) DO NOTHING;
-
--- Seed Baseline FNO Master Entries (Key Indices & Sample Tickers)
-INSERT INTO fno_master (id, symbol, underlying_name, instrument_type, serial_number, is_active, entry_date, created_at) VALUES
-(1, 'NIFTY', 'Nifty 50', 'INDEX', 1, true, CURRENT_DATE::text, NOW()::text),
-(2, 'BANKNIFTY', 'Nifty BANK', 'INDEX', 2, true, CURRENT_DATE::text, NOW()::text),
-(3, 'FINNIFTY', 'Nifty FINANCIAL SERVICES', 'INDEX', 3, true, CURRENT_DATE::text, NOW()::text),
-(4, 'RELIANCE', 'Reliance Industries Limited', 'STOCK', 4, true, CURRENT_DATE::text, NOW()::text),
-(5, 'TCS', 'Tata Consultancy Services Limited', 'STOCK', 5, true, CURRENT_DATE::text, NOW()::text),
-(6, 'WIPRO', 'Wipro Limited', 'STOCK', 6, true, CURRENT_DATE::text, NOW()::text)
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Sample Watchlist
-INSERT INTO watchlist (id, name, description) VALUES
-(1, 'Default Watchlist', 'Primary sample watchlist for active screening')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO watchlist_items (watchlist_id, ticker) VALUES
-(1, 'RELIANCE'),
-(1, 'TCS'),
-(1, 'WIPRO')
-ON CONFLICT (watchlist_id, ticker) DO NOTHING;
-
--- Seed Sample User
-INSERT INTO users (email, first_name, last_name, watchlist_id, is_subscribed) VALUES
-('admin@example.com', 'Admin', 'User', 1, true)
-ON CONFLICT (email) DO NOTHING;
-
--- Reset Sequences for Clean Incrementing
-SELECT pg_catalog.setval('sectors_id_seq', (SELECT MAX(id) FROM sectors), true);
-SELECT pg_catalog.setval('watchlist_id_seq', (SELECT MAX(id) FROM watchlist), true);
-SELECT pg_catalog.setval('fno_master_id_seq', (SELECT MAX(id) FROM fno_master), true);
-SELECT pg_catalog.setval('alternative_names_id_seq', (SELECT MAX(id) FROM alternative_names), true);
-SELECT pg_catalog.setval('excluded_tickers_id_seq', (SELECT MAX(id) FROM excluded_tickers), true);
+CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);

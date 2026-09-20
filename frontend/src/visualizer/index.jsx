@@ -7,6 +7,10 @@ import {
   TrendingUp, BarChart3, Activity, Layers, ArrowUpRight, ArrowDownRight,
   RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star, Printer
 } from 'lucide-react'
+import MFBehaviorModule from './MFBehaviorModule'
+import MFBehaviorPage from './MFBehaviorPage'
+
+export { MFBehaviorPage }
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
 export class ChartErrorBoundary extends Component {

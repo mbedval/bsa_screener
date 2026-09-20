@@ -172,6 +172,13 @@ def main():
         except Exception as e:
             logger.error(f"Error running pre-calculation for sectorwise followers: {e}")
 
+        # Pre-calculate Mutual Fund Behavior for database
+        try:
+            from engine.analyzers.mf_behavior import precalculate_all_mf_behavior
+            precalculate_all_mf_behavior()
+        except Exception as e:
+            logger.error(f"Error running pre-calculation for mutual fund behavior: {e}")
+
     def backup_historical_calls():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")
         with get_db_connection() as conn:

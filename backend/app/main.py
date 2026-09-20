@@ -3585,6 +3585,26 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
     except Exception as e:
         logger.error(f"Error searching ticker profile for {ticker}: {e}")
         raise HTTPException(500, f"Error searching ticker details: {e}")
+
+@app.get("/api/{dataset}/research/mf-behavior/{ticker}")
+@app.get("/api/research/mf-behavior/{ticker}")
+def get_historical_mf_behavior(ticker: str, dataset: str = "intelligence"):
+    """
+    Returns historical mutual fund behavior analysis for the given ticker
+    from the precalculated mf_behavior table.
+    """
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT data FROM mf_behavior WHERE ticker = %s", (ticker.upper().strip(),))
+            res = cur.fetchone()
+            if res and res["data"]:
+                return {"success": True, "data": res["data"]}
+            else:
+                return {"success": False, "message": "No historical MF data found for ticker."}
+    except Exception as e:
+        logger.error(f"Error fetching historical MF behavior for {ticker}: {e}")
+        raise HTTPException(500, f"Error fetching MF behavior: {e}")
 @app.get("/api/{dataset}/ticker-master-search/{ticker}")
 @app.get("/api/ticker-master-search/{ticker}")
 def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
