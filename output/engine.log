@@ -10612,3 +10612,77 @@ DETAIL:  Key (id)=(2) already exists.
 2026-09-20 23:04:44,997 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
 2026-09-20 23:07:20,607 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
 2026-09-20 23:07:36,981 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2568, Failed: 2, Time Taken: 375.75s
+2026-09-20 23:28:23,967 [INFO] bsa_cli: Triggered downloading Mutual Fund & FII holdings from Screener.in...
+2026-09-20 23:28:25,248 [INFO] bsa_cli: MF/FII download for HDFCBANK: MF(ok=True, saved=17), FII(ok=True, saved=35).
+2026-09-20 23:28:25,248 [INFO] bsa_cli: Running on-demand pipeline for ticker: HDFCBANK
+2026-09-20 23:28:25,543 [INFO] bsa_cli: Analysis completed and upserted for HDFCBANK
+2026-09-21 10:28:39,378 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-21 10:28:39,378 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-21 10:28:39,502 [INFO] bsa_cli: Clearing checkpoint for Phase 1 (Download Spot) and starting fresh...
+2026-09-21 11:07:17,461 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 11:40:25,375 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 11:44:43,615 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-21 11:44:43,626 [INFO] bsa_cli: Clearing checkpoint for Phase 2 (Download F&O) and starting fresh...
+2026-09-21 11:44:51,609 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-21 11:44:51,613 [INFO] bsa_cli: Clearing checkpoint for Phase 3 (Analyze All) and starting fresh...
+2026-09-21 11:44:51,628 [INFO] bsa_orchestrator: Starting analysis process. Total: 2570, Completed: 0, Pending: 2570
+2026-09-21 11:48:14,862 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 11:50:58,018 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 11:51:13,017 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2568, Failed: 2, Time Taken: 381.39s
+2026-09-21 11:55:25,389 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-21 11:55:25,394 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-21 11:55:25,425 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-21 11:55:25,427 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-21 14:18:07,041 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-21 14:18:07,041 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-21 14:18:07,152 [INFO] bsa_cli: Clearing checkpoint for Phase 1 (Download Spot) and starting fresh...
+2026-09-21 14:18:41,564 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 14:19:00,847 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 14:22:41,065 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-21 14:22:41,074 [INFO] bsa_cli: Clearing checkpoint for Phase 2 (Download F&O) and starting fresh...
+2026-09-21 14:22:45,183 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-21 14:22:45,186 [INFO] bsa_cli: Clearing checkpoint for Phase 3 (Analyze All) and starting fresh...
+2026-09-21 14:22:45,199 [INFO] bsa_orchestrator: Starting analysis process. Total: 2570, Completed: 0, Pending: 2570
+2026-09-21 14:26:46,966 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 14:29:59,894 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 14:30:17,969 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2568, Failed: 2, Time Taken: 452.77s
+2026-09-21 14:35:17,271 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-21 14:35:17,271 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-21 14:35:17,291 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-21 14:35:17,292 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-21 15:32:30,241 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-21 15:32:30,245 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-21 15:32:30,442 [INFO] bsa_cli: Clearing checkpoint for Phase 1 (Download Spot) and starting fresh...
+2026-09-21 15:32:42,975 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 15:32:50,758 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 15:37:00,426 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-21 15:37:00,436 [INFO] bsa_cli: Clearing checkpoint for Phase 2 (Download F&O) and starting fresh...
+2026-09-21 15:37:03,974 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-21 15:37:03,977 [INFO] bsa_cli: Clearing checkpoint for Phase 3 (Analyze All) and starting fresh...
+2026-09-21 15:37:03,986 [INFO] bsa_orchestrator: Starting analysis process. Total: 2570, Completed: 0, Pending: 2570
+2026-09-21 15:39:08,683 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-21 15:41:05,072 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-21 15:41:19,577 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2568, Failed: 2, Time Taken: 255.59s
+2026-09-21 15:45:11,800 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-21 15:45:11,805 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-21 15:45:11,849 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-21 15:45:11,852 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!
+2026-09-22 09:27:27,111 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...
+2026-09-22 09:27:27,112 [INFO] bsa_cli: --- Starting Phase 1: Spot Data Download ---
+2026-09-22 09:27:32,713 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1 (Download Spot)...
+2026-09-22 10:00:24,729 [WARNING] bsa_orchestrator: No price data available for JAYKAY-RE1, skipping analysis.
+2026-09-22 10:04:11,375 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-22 10:39:00,199 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-22 10:43:10,424 [INFO] bsa_cli: --- Starting Phase 2: F&O Derivatives Download ---
+2026-09-22 10:43:10,436 [INFO] bsa_cli: All 216 items for Phase 2 (Download F&O) are already completed. Use --fresh to re-download.
+2026-09-22 10:43:10,436 [INFO] bsa_cli: --- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---
+2026-09-22 10:47:35,998 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 3 (Analyze All)...
+2026-09-22 10:47:36,010 [INFO] bsa_orchestrator: Starting analysis process. Total: 2570, Completed: 0, Pending: 2570
+2026-09-22 10:51:16,339 [WARNING] bsa_orchestrator: No price data available for JAYKAY-RE1, skipping analysis.
+2026-09-22 10:51:30,376 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-09-22 10:54:05,544 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-09-22 10:54:21,243 [INFO] bsa_orchestrator: Analysis process completed. Total: 2570, Succeeded: 2567, Failed: 3, Time Taken: 405.23s
+2026-09-22 11:00:46,232 [INFO] bsa_cli: --- Starting Backup: Retaining Historical Calls ---
+2026-09-22 11:00:46,232 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-09-22 11:00:46,253 [INFO] bsa_cli: [✓] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to /home/jmbx/apps/bsa_screener/data/historical_call_bkp.csv.
+2026-09-22 11:00:46,253 [INFO] bsa_cli: [✓] Full pipeline execution completed successfully!

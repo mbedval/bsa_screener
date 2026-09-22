@@ -319,3 +319,136 @@ def download_all_mf_holdings(progress_callback=None, ticker_filter: Optional[str
 
     logger.info(f"Completed MF holdings download: {success_count}/{total} succeeded.")
     return success_count
+
+def fetch_fii_holdings_from_screener(company_id: int) -> Optional[Dict]:
+    """
+    Fetch FII / Foreign Institution quarterly shareholder data from Screener API.
+    """
+    api_url = f"https://www.screener.in/api/3/{company_id}/investors/foreign_institutions/quarterly/"
+    try:
+        res = requests.get(api_url, headers=DEFAULT_HEADERS, timeout=12)
+        if res.status_code == 200:
+            return res.json()
+        else:
+            logger.warning(f"Screener API returned HTTP {res.status_code} for company ID {company_id} (FII)")
+    except Exception as err:
+        logger.warning(f"Failed fetching Screener FII shareholders for company ID {company_id}: {err}")
+    return None
+
+def parse_and_rank_fii_holdings(raw_data: Dict) -> List[Dict]:
+    """
+    Parse raw Screener investors JSON and extract fund holdings sorted by holding_pct desc.
+    """
+    parsed = []
+    if not isinstance(raw_data, dict):
+        return parsed
+
+    for fund_name, holdings_by_q in raw_data.items():
+        if not isinstance(holdings_by_q, dict):
+            continue
+
+        quarters = [q for q in holdings_by_q.keys() if q != "setAttributes"]
+        if not quarters:
+            continue
+
+        latest_q = quarters[-1]
+        pct_str = holdings_by_q.get(latest_q, "0")
+        try:
+            pct = float(pct_str)
+        except (ValueError, TypeError):
+            pct = 0.0
+
+        historical = []
+        for q in quarters:
+            val_str = holdings_by_q[q]
+            try:
+                val = float(val_str)
+                # Ensure date parses correctly
+                q_date = datetime.strptime(q, "%b %Y")
+                # Go to end of month
+                if q_date.month in [3, 6, 9, 12]:
+                    import calendar
+                    last_day = calendar.monthrange(q_date.year, q_date.month)[1]
+                    q_date = q_date.replace(day=last_day)
+                historical.append({"quarter": q, "date": q_date.strftime("%Y-%m-%d"), "pct": val})
+            except Exception:
+                pass
+
+        if historical:
+            parsed.append({
+                "fund_name": fund_name.strip(),
+                "holding_pct": pct,
+                "historical": historical
+            })
+
+    parsed.sort(key=lambda x: x["holding_pct"], reverse=True)
+    return parsed
+
+def download_fii_holdings_for_ticker(ticker: str) -> tuple[bool, int]:
+    """
+    Coordinates FII holdings fetch for a single ticker and saves to database.
+    """
+    company_id = resolve_screener_company_id(ticker)
+    if not company_id:
+        logger.warning(f"Skipping FII download for {ticker} - Screener company ID not found.")
+        return False, 0
+
+    raw_data = fetch_fii_holdings_from_screener(company_id)
+    if not raw_data:
+        return False, 0
+
+    parsed_data = parse_and_rank_fii_holdings(raw_data)
+    if not parsed_data:
+        return False, 0
+
+    # Upsert to DB
+    records_upserted = 0
+    now_ts = datetime.now()
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            for item in parsed_data:
+                investor_name = item['fund_name']
+                
+                # Upsert investor
+                cur.execute("""
+                    INSERT INTO fii_investor (investor_name)
+                    VALUES (%s)
+                    ON CONFLICT (investor_name) DO NOTHING
+                    RETURNING id;
+                """, (investor_name,))
+                inv_id_res = cur.fetchone()
+                
+                if inv_id_res:
+                    inv_id = inv_id_res[0]
+                else:
+                    cur.execute("SELECT id FROM fii_investor WHERE investor_name = %s", (investor_name,))
+                    inv_id = cur.fetchone()[0]
+                
+                # Insert historical quarters
+                for hist in item['historical']:
+                    cur.execute("""
+                        INSERT INTO fii_historical_holdings 
+                        (snapshot_date, investor_id, ticker, portfolio_weight_pct, retrieved_at)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (snapshot_date, investor_id, ticker) 
+                        DO UPDATE SET portfolio_weight_pct = EXCLUDED.portfolio_weight_pct,
+                                      retrieved_at = EXCLUDED.retrieved_at
+                    """, (hist['date'], inv_id, ticker, hist['pct'], now_ts))
+                    records_upserted += 1
+            
+            conn.commit()
+
+    logger.info(f"[{ticker}] Upserted {records_upserted} historical FII holding records.")
+    return True, records_upserted
+
+def download_all_fii_holdings(progress_callback=None):
+    from engine.cli import get_spot_tickers
+    tickers = get_spot_tickers()
+    if not tickers:
+        return
+    for idx, ticker in enumerate(tickers):
+        ok, count = download_fii_holdings_for_ticker(ticker)
+        if progress_callback:
+            progress_callback(idx + 1, len(tickers), ticker, count)
+

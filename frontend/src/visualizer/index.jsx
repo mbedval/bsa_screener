@@ -8,9 +8,14 @@ import {
   RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star, Printer
 } from 'lucide-react'
 import MFBehaviorModule from './MFBehaviorModule'
+import FIIBehaviorModule from './FIIBehaviorModule'
 import MFBehaviorPage from './MFBehaviorPage'
+import TickerTypeahead from './TickerTypeahead'
+import MFAccumulationReport from './MFAccumulationReport'
+import MFExitReport from './MFExitReport'
+import { SuperStocksReport } from './SuperStocksReport'
 
-export { MFBehaviorPage }
+export { MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport }
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
 export class ChartErrorBoundary extends Component {
@@ -1905,7 +1910,7 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
 }
 
 // ─── Search Detail Page (Ticker Master Dedicated Lookup) ──────────────────────
-export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'intelligence', initialTicker = 'RELIANCE' }) {
+export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'intelligence', initialTicker = 'RELIANCE', onNavigate }) {
   const [tickerInput, setTickerInput] = useState(initialTicker || 'RELIANCE')
   const [searchedSymbol, setSearchedSymbol] = useState(initialTicker || 'RELIANCE')
   const [data, setData] = useState(null)
@@ -2005,6 +2010,8 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   }
 
   const master = data?.master || {}
+  const instBehavior = data?.inst_behavior || { mf_status: 'Neutral', fii_status: 'Neutral' }
+  const retracementPattern = data?.retracement_pattern || {}
   const recommendations = data?.recommendations || []
   const quicktrade = data?.quicktrade || {}
   const screenerSignals = data?.screener_signals || {}
@@ -2083,13 +2090,13 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
 
         {/* Input Box & Search Button */}
         <div style={{ maxWidth: 650, display: 'flex', gap: 10, background: 'rgba(0,0,0,0.4)', padding: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)' }}>
-          <input
-            type="text"
+          <TickerTypeahead
             value={tickerInput}
             onChange={e => setTickerInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+            onSelect={(val) => { setTickerInput(val); handleSearch(val); }}
             placeholder="RELIANCE"
-            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', padding: '10px 14px', fontSize: 15, fontFamily: "'DM Mono', monospace", outline: 'none', textTransform: 'uppercase' }}
+            style={{ flex: 1 }}
+            inputStyle={{ background: 'transparent', border: 'none', color: '#fff', padding: '10px 14px', fontSize: 15, fontFamily: "'DM Mono', monospace", outline: 'none', textTransform: 'uppercase' }}
           />
           <button
             onClick={() => handleSearch()}
@@ -2246,16 +2253,8 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               </div>
             </div>
 
-            {/* Suggestion Remarks Banner */}
-            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
-              <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                💬 SUGGESTION REMARKS:
-              </b>
-              {master.suggestion_remarks || `Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only.`}
-            </div>
-
             {/* About Company Card */}
-            <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
               <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 14 }}>
                 🏢 About Company (Products & Services Overview)
               </b>
@@ -2268,6 +2267,89 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   Not Recorded in the System
                 </div>
               )}
+            </div>
+
+            {/* Suggestion Remarks Banner */}
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
+              <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                💬 SUGGESTION REMARKS:
+              </b>
+              {master.suggestion_remarks || `Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only.`}
+            </div>
+
+            {/* Institutional Behavior Cards (Horizontal Row) */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              {/* MF View Card */}
+              <div style={{ flex: 1, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>MF View (1M)</div>
+                <div style={{ 
+                  fontSize: 16, fontWeight: 800, 
+                  color: instBehavior.mf_status === 'Accumulation' ? '#34d399' : instBehavior.mf_status === 'Exit' ? '#ef4444' : '#fbbf24'
+                }}>
+                  {instBehavior.mf_status}
+                </div>
+              </div>
+
+              {/* FII View Card */}
+              <div style={{ flex: 1, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>FII View (1M)</div>
+                <div style={{ 
+                  fontSize: 16, fontWeight: 800, 
+                  color: instBehavior.fii_status === 'Accumulation' ? '#34d399' : instBehavior.fii_status === 'Exit' ? '#ef4444' : '#fbbf24'
+                }}>
+                  {instBehavior.fii_status}
+                </div>
+              </div>
+
+              {/* Retracement Pattern Card */}
+              <div 
+                style={{ flex: 1, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', textAlign: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
+                onClick={() => onNavigate && onNavigate('research:retracement')}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.05)'}
+              >
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Retracement Pattern</div>
+                <div style={{ 
+                  fontSize: 16, fontWeight: 800, 
+                  color: ((retracementPattern.breakout_stage || '').toLowerCase().includes('risk') || (retracementPattern.breakout_stage || '').toLowerCase().includes('fail')) ? '#ef4444' 
+                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('breakout') || (retracementPattern.breakout_stage || '').toLowerCase().includes('confirmed')) ? '#34d399'
+                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('consolidating') || (retracementPattern.breakout_stage || '').toLowerCase().includes('neutral')) ? '#fbbf24'
+                       : '#fbbf24' 
+                }}>
+                  {retracementPattern.breakout_stage ? `${retracementPattern.breakout_stage}: ${retracementPattern.consolidation_days} Days` : 'No Data'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Metrics Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>LAST CLOSE PRICE</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {quicktrade.close != null ? `${Number(quicktrade.close).toFixed(2)}` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>P/E RATIO</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fundamentals?.pe_metrics?.pe != null ? `${Number(fundamentals.pe_metrics.pe).toFixed(2)}` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fundamentals?.pat_metrics?.pat != null ? `${fundamentals.pat_metrics.pat} Cr` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>TECHNICAL SCORE</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#c084fc', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {quicktrade.overall_score != null ? `${Number(quicktrade.overall_score).toFixed(2)}/100` : '—'}
+              </div>
             </div>
           </div>
 
@@ -2618,20 +2700,6 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             </div>
           </div>
 
-          {/* 3. TradingView Candlestick Chart Section */}
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <BarChart3 size={18} style={{ color: '#38bdf8' }} /> TradingView Candlestick Chart & Technical Patterns
-              </h3>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>Interactive Price Action, 20 SMA & Volume Histogram</span>
-            </div>
-
-            {/* Chart Container */}
-            <ChartErrorBoundary>
-              <StockChartVisualizer ticker={data.ticker} height={420} apiBase={apiBase} />
-            </ChartErrorBoundary>
-          </div>
 
           {/* 4. Volume Spike Dates Table */}
           <div style={cardStyle}>
@@ -2883,6 +2951,21 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 </div>
               </div>
             )}
+          </div>
+
+          {/* 3. TradingView Candlestick Chart Section (Moved to Bottom) */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BarChart3 size={18} style={{ color: '#38bdf8' }} /> TradingView Candlestick Chart & Technical Patterns
+              </h3>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>Interactive Price Action, 20 SMA & Volume Histogram</span>
+            </div>
+
+            {/* Chart Container */}
+            <ChartErrorBoundary>
+              <StockChartVisualizer ticker={data.ticker} height={420} apiBase={apiBase} />
+            </ChartErrorBoundary>
           </div>
         </div>
       )}
@@ -4364,7 +4447,7 @@ function RallyComparisonModal({ followerTicker, leaderTicker, sector, apiBase, o
 
 export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelligence', dataset = 'intelligence' }) {
   const [data, setData] = useState([])
-  const [filters, setFilters] = useState({ fib_levels: [], tax_biases: [], sectors: [] })
+  const [filters, setFilters] = useState({ fib_levels: [], tax_biases: [], sectors: [], breakout_stages: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   
@@ -4372,6 +4455,7 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
   const [selectedFib, setSelectedFib] = useState('')
   const [selectedTax, setSelectedTax] = useState('')
   const [selectedSector, setSelectedSector] = useState('')
+  const [selectedBreakoutStage, setSelectedBreakoutStage] = useState('')
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -4388,6 +4472,7 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
       if (selectedFib) params.set('fib_level', selectedFib)
       if (selectedTax) params.set('tax_bias', selectedTax)
       if (selectedSector) params.set('sector', selectedSector)
+      if (selectedBreakoutStage) params.set('breakout_stage', selectedBreakoutStage)
 
       const base = apiBase || '/api/intelligence'
       const primaryUrl = `${base}/research/retracement-speculators?${params.toString()}`

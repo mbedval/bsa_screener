@@ -425,3 +425,26 @@ CREATE TABLE IF NOT EXISTS mf_historical_holdings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS fii_investor (
+    id SERIAL PRIMARY KEY,
+    investor_name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS fii_historical_holdings (
+    id SERIAL PRIMARY KEY,
+    snapshot_date DATE NOT NULL,
+    investor_id INTEGER REFERENCES fii_investor(id),
+    ticker TEXT REFERENCES ticker_master(ticker),
+    portfolio_weight_pct DOUBLE PRECISION,
+    retrieved_at TIMESTAMP DEFAULT now(),
+    UNIQUE(snapshot_date, investor_id, ticker)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fii_hist_ticker_date ON fii_historical_holdings(ticker, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS fii_behavior (
+    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP DEFAULT now()
+);

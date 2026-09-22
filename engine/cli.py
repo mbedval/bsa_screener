@@ -177,7 +177,14 @@ def main():
             from engine.analyzers.mf_behavior import precalculate_all_mf_behavior
             precalculate_all_mf_behavior()
         except Exception as e:
-            logger.error(f"Error running pre-calculation for mutual fund behavior: {e}")
+            logger.error(f"Error running pre-calculation for MF behavior: {e}")
+
+        # Pre-calculate FII Behavior for database
+        try:
+            from engine.analyzers.fii_behavior import precalculate_all_fii_behavior
+            precalculate_all_fii_behavior()
+        except Exception as e:
+            logger.error(f"Error running pre-calculation for FII behavior: {e}")
 
     def backup_historical_calls():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")
@@ -327,19 +334,23 @@ def main():
     elif args.mode == "backup":
         backup_historical_calls()
     elif args.mode == "mutualfund":
-        logger.info("Triggered downloading Mutual Fund holdings from Screener.in...")
+        logger.info("Triggered downloading Mutual Fund & FII holdings from Screener.in...")
         if args.ticker:
             ticker = args.ticker.upper().strip()
+            from engine.downloaders.mutual_fund import download_fii_holdings_for_ticker
             ok, count = download_mf_holdings_for_ticker(ticker)
-            logger.info(f"Mutual Fund download for {ticker}: ok={ok}, saved={count} funds.")
+            ok_fii, count_fii = download_fii_holdings_for_ticker(ticker)
+            logger.info(f"MF/FII download for {ticker}: MF(ok={ok}, saved={count}), FII(ok={ok_fii}, saved={count_fii}).")
         else:
             total_tickers = len(get_spot_tickers())
-            progress, task_id = create_phase_progress(1, "Mutual Fund Holdings", total_tickers)
+            progress, task_id = create_phase_progress(1, "Mutual Fund & FII Holdings", total_tickers)
+            from engine.downloaders.mutual_fund import download_all_fii_holdings
             with progress:
                 def cb(current, total, ticker, count):
                     progress.update(task_id, advance=1)
                 download_all_mf_holdings(progress_callback=cb)
-            logger.info("[✓] Mutual Fund holdings download completed!")
+                download_all_fii_holdings(progress_callback=cb)
+            logger.info("[✓] Mutual Fund & FII holdings download completed!")
     elif args.mode == "news-analyze":
         if not args.ticker:
             logger.error("--ticker argument is required when running --mode news-analyze (e.g. --mode news-analyze --ticker CROMPTON)")

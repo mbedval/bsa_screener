@@ -3586,6 +3586,109 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
         logger.error(f"Error searching ticker profile for {ticker}: {e}")
         raise HTTPException(500, f"Error searching ticker details: {e}")
 
+@app.get("/api/{dataset}/research/mf-accumulation-report")
+@app.get("/api/research/mf-accumulation-report")
+def get_mf_accumulation_report(dataset: str = "intelligence", period: str = "1M"):
+    """
+    Returns top 25 tickers where MF holding has increased compared to the selected period.
+    """
+    if period not in ["1M", "3M", "6M", "12M"]:
+        period = "1M"
+        
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            query = f"""
+                SELECT m.ticker, 
+                       t.company_name,
+                       (m.data->>'current_weight')::float as current_weight, 
+                       (m.data->'changes'->>'{period}')::float as change_val
+                FROM mf_behavior m
+                LEFT JOIN ticker_master t ON m.ticker = t.ticker
+                WHERE m.data->'changes'->>'{period}' IS NOT NULL
+                  AND (m.data->'changes'->>'{period}')::numeric > 0
+                ORDER BY (m.data->'changes'->>'{period}')::numeric DESC
+                LIMIT 25
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            return {"success": True, "data": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error fetching MF accumulation report: {e}")
+        raise HTTPException(500, f"Error fetching MF accumulation report: {e}")
+
+@app.get("/api/{dataset}/research/mf-exit-report")
+@app.get("/api/research/mf-exit-report")
+def get_mf_exit_report(dataset: str = "intelligence", period: str = "1M"):
+    """
+    Returns top 25 tickers where MF holding has decreased compared to the selected period.
+    """
+    if period not in ["1M", "3M", "6M", "12M"]:
+        period = "1M"
+        
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            query = f"""
+                SELECT m.ticker, 
+                       t.company_name,
+                       (m.data->>'current_weight')::float as current_weight, 
+                       (m.data->'changes'->>'{period}')::float as change_val
+                FROM mf_behavior m
+                LEFT JOIN ticker_master t ON m.ticker = t.ticker
+                WHERE m.data->'changes'->>'{period}' IS NOT NULL
+                  AND (m.data->'changes'->>'{period}')::numeric < 0
+                ORDER BY (m.data->'changes'->>'{period}')::numeric ASC
+                LIMIT 25
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            return {"success": True, "data": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error fetching MF exit report: {e}")
+        raise HTTPException(500, f"Error fetching MF exit report: {e}")
+
+@app.get("/api/{dataset}/research/super-stocks-report")
+@app.get("/api/research/super-stocks-report")
+def get_super_stocks_report(dataset: str = "intelligence", min_proj_pct: float = 5.0):
+    """
+    Returns stocks with best fundamental score, retracement breakout,
+    MF & FII positive accumulation, and 22-day projection > min_proj_pct.
+    """
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            query = """
+                SELECT t.ticker,
+                       t.company_name,
+                       ans.fundamental_score,
+                       rsp.breakout_stage,
+                       (m.data->'changes'->>'1M')::float as mf_1m_change,
+                       (fii.data->'changes'->>'3M')::float as fii_3m_change,
+                       ROUND((((ans.projection_22d::jsonb ->> -1)::numeric - ans.close) / NULLIF(ans.close, 0) * 100)::numeric, 2)::float as projection_22d_pct
+                FROM ticker_master t
+                JOIN analysis_summaries ans ON t.ticker = ans.ticker
+                JOIN retracement_speculator_patterns rsp ON t.ticker = rsp.ticker
+                LEFT JOIN mf_behavior m ON t.ticker = m.ticker
+                LEFT JOIN fii_behavior fii ON t.ticker = fii.ticker
+                WHERE rsp.breakout_stage ILIKE '%%Breakout%%'
+                  AND m.data->'changes'->>'1M' IS NOT NULL
+                  AND (m.data->'changes'->>'1M')::numeric > 0
+                  AND fii.data->'changes'->>'3M' IS NOT NULL
+                  AND (fii.data->'changes'->>'3M')::numeric > 0
+                  AND ans.projection_22d IS NOT NULL 
+                  AND ans.projection_22d != ''
+                  AND ans.projection_22d != '[]'
+                  AND (((ans.projection_22d::jsonb ->> -1)::numeric - ans.close) / NULLIF(ans.close, 0) * 100) >= %s
+                ORDER BY ans.fundamental_score DESC NULLS LAST
+            """
+            cur.execute(query, (min_proj_pct,))
+            rows = cur.fetchall()
+            return {"success": True, "data": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error fetching Super Stocks report: {e}")
+        raise HTTPException(500, f"Error fetching Super Stocks report: {e}")
+
 @app.get("/api/{dataset}/research/mf-behavior/{ticker}")
 @app.get("/api/research/mf-behavior/{ticker}")
 def get_historical_mf_behavior(ticker: str, dataset: str = "intelligence"):
@@ -3605,6 +3708,26 @@ def get_historical_mf_behavior(ticker: str, dataset: str = "intelligence"):
     except Exception as e:
         logger.error(f"Error fetching historical MF behavior for {ticker}: {e}")
         raise HTTPException(500, f"Error fetching MF behavior: {e}")
+
+@app.get("/api/{dataset}/research/fii-behavior/{ticker}")
+@app.get("/api/research/fii-behavior/{ticker}")
+def get_historical_fii_behavior(ticker: str, dataset: str = "intelligence"):
+    """
+    Returns historical FII behavior analysis for the given ticker
+    from the precalculated fii_behavior table.
+    """
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT data FROM fii_behavior WHERE ticker = %s", (ticker.upper().strip(),))
+            res = cur.fetchone()
+            if res and res["data"]:
+                return {"success": True, "data": res["data"]}
+            else:
+                return {"success": False, "message": "No historical FII data found for ticker."}
+    except Exception as e:
+        logger.error(f"Error fetching historical FII behavior for {ticker}: {e}")
+        raise HTTPException(500, f"Error fetching FII behavior: {e}")
 @app.get("/api/{dataset}/ticker-master-search/{ticker}")
 @app.get("/api/ticker-master-search/{ticker}")
 def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
@@ -4037,6 +4160,43 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error querying opportunities_risk for {actual_ticker}: {e}")
 
+            # Fetch Institutional Behavior (MF & FII 1M Changes)
+            inst_behavior = {"mf_status": "Neutral", "fii_status": "Neutral"}
+            try:
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT 
+                            (SELECT (data->'changes'->>'1M')::float FROM mf_behavior WHERE ticker = %s) as mf_1m,
+                            (SELECT (data->'changes'->>'1M')::float FROM fii_behavior WHERE ticker = %s) as fii_1m
+                    """, (actual_ticker, actual_ticker))
+                    inst_row = cur.fetchone()
+                    if inst_row:
+                        mf_1m = inst_row.get('mf_1m')
+                        fii_1m = inst_row.get('fii_1m')
+                        if mf_1m is not None:
+                            if mf_1m > 0: inst_behavior['mf_status'] = 'Accumulation'
+                            elif mf_1m < 0: inst_behavior['mf_status'] = 'Exit'
+                        if fii_1m is not None:
+                            if fii_1m > 0: inst_behavior['fii_status'] = 'Accumulation'
+                            elif fii_1m < 0: inst_behavior['fii_status'] = 'Exit'
+            except Exception as e:
+                logger.error(f"Error querying institutional behavior for {actual_ticker}: {e}")
+
+            # Fetch Retracement Pattern
+            retracement_pattern = None
+            try:
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT breakout_stage, consolidation_days 
+                        FROM retracement_speculator_patterns 
+                        WHERE ticker = %s
+                    """, (actual_ticker,))
+                    ret_row = cur.fetchone()
+                    if ret_row:
+                        retracement_pattern = dict(ret_row)
+            except Exception as e:
+                logger.error(f"Error querying retracement pattern for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
@@ -4051,7 +4211,9 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "pattern_history": pattern_history,
                 "pattern_stats": pattern_stats,
                 "mf_holdings": mf_holdings,
-                "opportunities_risk": opportunities_risk
+                "opportunities_risk": opportunities_risk,
+                "inst_behavior": inst_behavior,
+                "retracement_pattern": retracement_pattern
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
@@ -4195,6 +4357,7 @@ def get_retracement_speculators(
     fib_level: str = '',
     tax_bias: str = '',
     sector: str = '',
+    breakout_stage: str = '',
     limit: int = 500
 ):
     try:
@@ -4243,6 +4406,10 @@ def get_retracement_speculators(
                 where_clauses.append("sector ILIKE %s")
                 params.append(f"%{sector}%")
 
+            if breakout_stage:
+                where_clauses.append("breakout_stage ILIKE %s")
+                params.append(f"%{breakout_stage}%")
+
             query = f"""
                 SELECT 
                     ticker, company_name, sector, cap_type, cmp, swing_high, swing_low,
@@ -4269,13 +4436,17 @@ def get_retracement_speculators(
             cur.execute("SELECT DISTINCT sector FROM retracement_speculator_patterns WHERE sector IS NOT NULL ORDER BY sector;")
             sectors = [r['sector'] for r in cur.fetchall()]
 
+            cur.execute("SELECT DISTINCT breakout_stage FROM retracement_speculator_patterns WHERE breakout_stage IS NOT NULL ORDER BY breakout_stage;")
+            breakout_stages = [r['breakout_stage'] for r in cur.fetchall()]
+
             return {
                 "total": len(rows),
                 "data": rows,
                 "filters": {
                     "fib_levels": fib_levels,
                     "tax_biases": tax_biases,
-                    "sectors": sectors
+                    "sectors": sectors,
+                    "breakout_stages": breakout_stages
                 }
             }
     except Exception as e:

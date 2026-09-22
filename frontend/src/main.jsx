@@ -7,7 +7,7 @@ import {
   Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport } from './visualizer/index.jsx'
 
 
 
@@ -568,7 +568,16 @@ function App() {
                   <Activity size={14} /> Period Comparison
                 </button>
                 <button className={`nav-item ${active === 'research:mf_behavior' ? 'selected' : ''}`} onClick={() => setActive('research:mf_behavior')}>
-                  <Activity size={14} /> Mutual Fund Behaviour
+                  <Activity size={14} /> Institutional Behaviour
+                </button>
+                <button className={`nav-item ${active === 'research:mf_accumulation' ? 'selected' : ''}`} onClick={() => setActive('research:mf_accumulation')}>
+                  <TrendingUp size={14} /> Accumulation by MF
+                </button>
+                <button className={`nav-item ${active === 'research:mf_exit' ? 'selected' : ''}`} onClick={() => setActive('research:mf_exit')}>
+                  <TrendingUp size={14} style={{ transform: 'rotate(180deg)', color: '#ef4444' }} /> Exit by MF
+                </button>
+                <button className={`nav-item ${active === 'research:super_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:super_stocks')}>
+                  <Star size={14} style={{ color: '#f59e0b' }} /> Super Stocks
                 </button>
               </div>
             )}
@@ -789,7 +798,7 @@ function App() {
           <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:search_detail' ? (
           <ChartErrorBoundary>
-            <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} />
+            <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} onNavigate={(page) => setActive(page)} />
           </ChartErrorBoundary>
         ) : active === 'research:ticker_profile' ? (
           <TickerResearchProfilePage apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker} onNavigate={(tab) => setActive(tab)} />
@@ -817,6 +826,12 @@ function App() {
           <WatchlistMonitorPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:mf_behavior' ? (
           <MFBehaviorPage />
+        ) : active === 'research:mf_accumulation' ? (
+          <MFAccumulationReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:mf_exit' ? (
+          <MFExitReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:super_stocks' ? (
+          <SuperStocksReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
         ) : (
           <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleProfileTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}
