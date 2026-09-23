@@ -127,7 +127,7 @@ ANALYSIS_REPORT_TABLE_NAMES = {
     "delivery_spikes", "sector_report", "quicktrade_timestamp", "quicktrade",
     "operatorfootprint", "screener_timestamp", "screener", "breakout",
     "trend_trading", "reversal_trading", "support_resistance", "swinger",
-    "monthly_swinger", "fno_active", "analysis_summaries", "intraday_call",
+    "monthly_swinger", "continuous_hh_hl", "fno_active", "analysis_summaries", "intraday_call",
     "historical_calls", "call_efficiency", "broker_recommendations",
     "cash_flow_summary", "fundamental_hub", "fundamental-hub", "technical_hub", "technical-hub",
     "retracement_speculator_patterns", "retracement-speculators"
@@ -427,8 +427,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
         except OperationalError as error:
             raise database_error(error)
 
-    # 5. Technical Scanners (screener, breakout, trend_trading, reversal_trading, support_resistance, swinger, monthly_swinger, technical_hub)
-    if table_name in ("screener", "screener_timestamp", "technical_hub", "technical-hub", "breakout", "trend_trading", "reversal_trading", "support_resistance", "swinger", "monthly_swinger"):
+    # 5. Technical Scanners (screener, breakout, trend_trading, reversal_trading, support_resistance, swinger, monthly_swinger, technical_hub, continuous_hh_hl)
+    if table_name in ("screener", "screener_timestamp", "technical_hub", "technical-hub", "breakout", "trend_trading", "reversal_trading", "support_resistance", "swinger", "monthly_swinger", "continuous_hh_hl"):
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
                 max_ind_date = None
@@ -473,7 +473,13 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     params.extend([f"%{search}%"] * len(searchable))
                 where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
 
-                base_from = " FROM analysis_summaries a LEFT JOIN latest_ind i ON a.ticker = i.ticker LEFT JOIN latest_ohlcv o ON a.ticker = o.ticker "
+                if table_name == "continuous_hh_hl":
+                    base_from = """ FROM continuous_hhhl_scanner c
+                        JOIN analysis_summaries a ON a.ticker = c.ticker
+                        LEFT JOIN latest_ind i ON a.ticker = i.ticker
+                        LEFT JOIN latest_ohlcv o ON a.ticker = o.ticker """
+                else:
+                    base_from = " FROM analysis_summaries a LEFT JOIN latest_ind i ON a.ticker = i.ticker LEFT JOIN latest_ohlcv o ON a.ticker = o.ticker "
 
                 count_sql = cte + sql.SQL(" SELECT count(*) AS total " + base_from) + where_clause
                 cur.execute(count_sql, [*cte_params, *params])
@@ -555,6 +561,21 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                         CASE WHEN a.close > o.vwap THEN 'POC SUPPORT' ELSE 'POC RESISTANCE' END AS volume_profile_signal,
                         CASE WHEN a.close > i.sma50 THEN 'S1 HOLDING' ELSE 'R1 REJECTED' END AS pivot_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS ichimoku_signal,
+                        a.overall_signal AS overall_call,
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                    """
+                elif table_name == "continuous_hh_hl":
+                    cols = ["run_time", "ticker", "close", "day_change", "current_hhhl", "avg_continuity_count", "broken_pattern_count", "broken_pattern_details", "overall_call", "score"]
+                    select_sql = """
+                    SELECT
+                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        a.ticker,
+                        c.close,
+                        ROUND((((c.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        c.current_hhhl,
+                        c.avg_continuity_count,
+                        c.broken_pattern_count,
+                        c.broken_pattern_details,
                         a.overall_signal AS overall_call,
                         ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
                     """
@@ -3573,6 +3594,33 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
                             scanners[tbl] = dict(row)
                 except Exception:
                     pass
+                    
+            hhhl_insight = None
+            try:
+                with conn.transaction():
+                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = %s", (actual_ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        hhhl_insight = dict(row)
+                        # convert dates to string
+                        for date_field in ["history_start_date", "cycle_start_date", "updated_at"]:
+                            if hhhl_insight.get(date_field):
+                                hhhl_insight[date_field] = str(hhhl_insight[date_field])
+            except Exception:
+                pass
+                
+            cup_and_handle = None
+            try:
+                with conn.transaction():
+                    cur.execute("SELECT * FROM cup_and_handle_scanner WHERE ticker = %s", (actual_ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        cup_and_handle = dict(row)
+                        for date_field in ["pattern_start_date", "cup_bottom_date", "handle_start_date", "breakout_date", "last_updated"]:
+                            if cup_and_handle.get(date_field):
+                                cup_and_handle[date_field] = str(cup_and_handle[date_field])
+            except Exception:
+                pass
 
             return {
                 "found": True,
@@ -3580,7 +3628,9 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
                 "meta": meta,
                 "fundamentals": fundamentals,
                 "analysis_summary": analysis_summary,
-                "scanners": scanners
+                "scanners": scanners,
+                "hhhl_insight": hhhl_insight,
+                "cup_and_handle": cup_and_handle
             }
     except Exception as e:
         logger.error(f"Error searching ticker profile for {ticker}: {e}")
@@ -4197,6 +4247,20 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error querying retracement pattern for {actual_ticker}: {e}")
 
+            # Fetch HHHL Insight Data
+            hhhl_insight = None
+            try:
+                with conn.transaction():
+                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = %s", (actual_ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        hhhl_insight = dict(row)
+                        for date_field in ["history_start_date", "cycle_start_date", "updated_at"]:
+                            if hhhl_insight.get(date_field):
+                                hhhl_insight[date_field] = str(hhhl_insight[date_field])
+            except Exception as e:
+                logger.error(f"Error querying hhhl_insight for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
@@ -4213,7 +4277,8 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "mf_holdings": mf_holdings,
                 "opportunities_risk": opportunities_risk,
                 "inst_behavior": inst_behavior,
-                "retracement_pattern": retracement_pattern
+                "retracement_pattern": retracement_pattern,
+                "hhhl_insight": hhhl_insight
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
@@ -4691,11 +4756,35 @@ def delete_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
         raise HTTPException(500, str(e))
 
 
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-
-
-
-
+@app.get("/api/{dataset}/research/cup-and-handle")
+@app.get("/api/research/cup-and-handle")
+def get_cup_and_handle_report(dataset: str = "intelligence"):
+    dsn = get_dsn(dataset)
+    try:
+        with get_connection(dsn) as conn, conn.cursor() as cur:
+            query = """
+                SELECT c.*, t.company_name, t.sector, ans.close
+                FROM cup_and_handle_scanner c
+                LEFT JOIN ticker_master t ON c.ticker = t.ticker
+                LEFT JOIN analysis_summaries ans ON c.ticker = ans.ticker
+                WHERE c.is_active = TRUE
+                ORDER BY c.breakout_date DESC
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            result = []
+            for r in rows:
+                d = dict(r)
+                for date_field in ["pattern_start_date", "cup_bottom_date", "handle_start_date", "breakout_date", "last_updated"]:
+                    if d.get(date_field):
+                        d[date_field] = str(d[date_field])
+                result.append(d)
+                
+            return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"Error fetching cup and handle report: {e}")
+        raise HTTPException(500, f"Error fetching cup and handle report: {e}")
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if (FRONTEND_DIST / "assets").is_dir():

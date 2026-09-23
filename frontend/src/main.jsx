@@ -7,7 +7,7 @@ import {
   Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
-import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport } from './visualizer/index.jsx'
+import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport, CupAndHandleReport } from './visualizer/index.jsx'
 
 
 
@@ -579,6 +579,9 @@ function App() {
                 <button className={`nav-item ${active === 'research:super_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:super_stocks')}>
                   <Star size={14} style={{ color: '#f59e0b' }} /> Super Stocks
                 </button>
+                <button className={`nav-item ${active === 'research:cup_and_handle' ? 'selected' : ''}`} onClick={() => setActive('research:cup_and_handle')}>
+                  <Activity size={14} style={{ color: '#38bdf8' }} /> Cup & Handle
+                </button>
               </div>
             )}
           </section>
@@ -820,7 +823,7 @@ function App() {
           <SectorwiseFollowersPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:retracement_patterns' ? (
           <ChartErrorBoundary>
-            <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleProfileTickerSelect(t)} />
+            <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
           </ChartErrorBoundary>
         ) : active === 'research:watchlist_monitor' ? (
           <WatchlistMonitorPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
@@ -832,8 +835,10 @@ function App() {
           <MFExitReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:super_stocks' ? (
           <SuperStocksReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:cup_and_handle' ? (
+          <CupAndHandleReport onTickerClick={(t) => handleLookupTickerSelect(t)} />
         ) : (
-          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleProfileTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
+          <TableView data={data} loading={loading} error={error} query={query} setQuery={setQuery} onSearch={() => load()} activeTable={active} onSelectFnoTicker={handleFnoTickerSelect} onSelectProfileTicker={handleLookupTickerSelect} dataset={dataset} searchHistory={searchHistory} addSearchHistory={addSearchHistory} />
         )}
 
 
@@ -3685,7 +3690,22 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                         }
                         return (
                           <td key={key}>
-                            <b style={{ color: '#7ec8f0', fontFamily: "'DM Mono'" }}>{cleanT}</b>
+                            <b 
+                              style={{ 
+                                color: '#7ec8f0', 
+                                fontFamily: "'DM Mono'", 
+                                cursor: onSelectProfileTicker ? 'pointer' : 'default',
+                                textDecoration: onSelectProfileTicker ? 'underline' : 'none'
+                              }}
+                              onClick={(e) => {
+                                if (onSelectProfileTicker) {
+                                  e.stopPropagation()
+                                  onSelectProfileTicker(cleanT)
+                                }
+                              }}
+                            >
+                              {cleanT}
+                            </b>
                           </td>
                         )
                       }
@@ -3768,7 +3788,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
 }
 
 // ─── Sector Intelligence Page ─────────────────────────────────────────────────
-const SCAN_TABLES = ['operatorfootprint', 'breakout', 'trend_trading', 'reversal_trading', 'swinger', 'support_resistance', 'quicktrade_timestamp', 'screener_timestamp']
+const SCAN_TABLES = ['operatorfootprint', 'breakout', 'trend_trading', 'reversal_trading', 'swinger', 'support_resistance', 'quicktrade_timestamp', 'screener_timestamp', 'continuous_hh_hl']
 
 function SectorIntelligencePage({ sectorName, data, scanTable, onScanTableChange }) {
   const [sort, setSort] = useState({ key: '', asc: true })

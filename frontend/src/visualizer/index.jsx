@@ -1916,6 +1916,8 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [hhhlHistPage, setHhhlHistPage] = useState(1)
+  const [cupHistPage, setCupHistPage] = useState(1)
 
   // Recent Searches state (Last 20)
   const [recentSearches, setRecentSearches] = useState(['RELIANCE', 'HDFCBANK', 'HDFCLIFE', 'ICICIBANK', 'INFY'])
@@ -2023,6 +2025,8 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   const patternStats = data?.pattern_stats || { total: 0, pass: 0, fail: 0, pass_rate: 0.0 }
   const mfHoldings = data?.mf_holdings || []
   const oppRisk = data?.opportunities_risk || null
+  const hhhlInsight = data?.hhhl_insight || null
+  const cupAndHandle = data?.cup_and_handle || null
 
   // Pagination for Mutual Fund Holdings table
   const [mfPage, setMfPage] = useState(1)
@@ -2352,6 +2356,205 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               </div>
             </div>
           </div>
+
+          {/* 1.45. HHHL Detailed Insight Matrix */}
+          {hhhlInsight && (
+            <div style={{ ...cardStyle, border: '1px solid rgba(14, 165, 233, 0.35)', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 14, 27, 0.95))', marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  📈 Continuous HHHL Advanced Pattern Insight
+                </h3>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 16 }}>
+                <div style={{ ...metricBoxStyle, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                  <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Current Streak</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', marginTop: 4 }}>
+                    {hhhlInsight.current_hhhl} Days
+                  </div>
+                </div>
+                <div style={{ ...metricBoxStyle, background: 'rgba(168, 85, 247, 0.05)', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+                  <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Avg Continuity Count</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', marginTop: 4 }}>
+                    {hhhlInsight.avg_continuity_count ? `${Number(hhhlInsight.avg_continuity_count).toFixed(2)} Days` : '—'}
+                  </div>
+                </div>
+                <div style={{ ...metricBoxStyle, background: 'rgba(234, 179, 8, 0.05)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+                  <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Broken Pattern Count</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', marginTop: 4 }}>
+                    {hhhlInsight.broken_pattern_count} Days
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8, fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+                <div style={{ marginBottom: 6 }}><b style={{ color: '#38bdf8' }}>Cycle Breakdown:</b> {hhhlInsight.broken_pattern_details || 'No active cycle'}</div>
+                <div style={{ marginBottom: 6 }}>
+                  <b style={{ color: '#38bdf8' }}>Cycle Start Date:</b> {hhhlInsight.cycle_start_date ? hhhlInsight.cycle_start_date : 'N/A (No active pattern)'}
+                </div>
+                <div>
+                  <b style={{ color: '#38bdf8' }}>Long-Term Data Scope:</b> Analyzed over <b>{hhhlInsight.history_days_analyzed}</b> trading days since <b>{hhhlInsight.history_start_date}</b>.
+                </div>
+              </div>
+              
+              {hhhlInsight.historical_cycles && Array.isArray(hhhlInsight.historical_cycles) && hhhlInsight.historical_cycles.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <h4 style={{ color: '#94a3b8', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Historical Cycles Timeline</h4>
+                  <div className="table-wrap">
+                    <table style={{ background: 'rgba(0,0,0,0.15)' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Date Range</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Start - End Price</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Total Days</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Max Streak</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Pattern Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hhhlInsight.historical_cycles.slice((hhhlHistPage - 1) * 10, hhhlHistPage * 10).map((cyc, idx) => (
+                          <tr key={idx} style={{ background: cyc.is_active ? 'rgba(56, 189, 248, 0.05)' : 'transparent' }}>
+                            <td style={{ color: cyc.is_active ? '#38bdf8' : '#e2e8f0', fontFamily: "'DM Mono'" }}>
+                              {cyc.start_date} → {cyc.end_date} {cyc.is_active && <span className="badge info" style={{ marginLeft: 6 }}>Active</span>}
+                            </td>
+                            <td style={{ fontFamily: "'DM Mono'", color: '#f8fafc', fontSize: 13 }}>
+                              {cyc.start_price != null ? `₹${Number(cyc.start_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'} 
+                              <span style={{ color: '#64748b', margin: '0 4px' }}>→</span> 
+                              {cyc.end_price != null ? `₹${Number(cyc.end_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                              {cyc.start_price != null && cyc.end_price != null && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: cyc.end_price > cyc.start_price ? '#4ade80' : cyc.end_price < cyc.start_price ? '#ef4444' : '#94a3b8' }}>
+                                  ({((cyc.end_price - cyc.start_price) / cyc.start_price * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{cyc.total_days}</td>
+                            <td style={{ fontWeight: 700, color: '#a855f7' }}>{cyc.max_streak}</td>
+                            <td style={{ fontSize: 12, color: '#94a3b8' }}>{cyc.details || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hhhlInsight.historical_cycles.length > 10 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 12, color: '#64748b' }}>
+                      <div>Showing {(hhhlHistPage - 1) * 10 + 1} to {Math.min(hhhlHistPage * 10, hhhlInsight.historical_cycles.length)} of {hhhlInsight.historical_cycles.length}</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button 
+                          onClick={() => setHhhlHistPage(p => Math.max(1, p - 1))}
+                          disabled={hhhlHistPage === 1}
+                          className="btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: 11 }}
+                        >◄ Prev</button>
+                        <button 
+                          onClick={() => setHhhlHistPage(p => Math.min(Math.ceil(hhhlInsight.historical_cycles.length / 10), p + 1))}
+                          disabled={hhhlHistPage >= Math.ceil(hhhlInsight.historical_cycles.length / 10)}
+                          className="btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: 11 }}
+                        >Next ►</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {/* 1.46. Cup and Handle Insight Matrix */}
+          {cupAndHandle && (
+            <div style={{ ...cardStyle, border: '1px solid rgba(56, 189, 248, 0.35)', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(8, 14, 27, 0.95))', marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  ☕ Cup and Handle Pattern Insight
+                </h3>
+                {cupAndHandle.is_active && (
+                  <span style={{ background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 800 }}>
+                    ACTIVE BREAKOUT
+                  </span>
+                )}
+              </div>
+              
+              {cupAndHandle.is_active && cupAndHandle.details && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Cup Duration</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#f8fafc' }}>
+                      {JSON.parse(cupAndHandle.details).cup_duration} Days
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Cup Depth</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#f87171' }}>
+                      -{JSON.parse(cupAndHandle.details).cup_depth_pct}%
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Handle Retracement</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#f87171' }}>
+                      -{JSON.parse(cupAndHandle.details).handle_retracement_pct}%
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Target Price</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#4ade80' }}>
+                      ₹{cupAndHandle.target_price?.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Historical Cup and Handle Cycles */}
+              {cupAndHandle.historical_patterns && Array.isArray(JSON.parse(cupAndHandle.historical_patterns)) && JSON.parse(cupAndHandle.historical_patterns).length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <TrendingUp size={14} color="#38bdf8" /> Historical Cup and Handle Patterns
+                  </h4>
+                  <div style={{ overflowX: 'auto', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <table className="bsa-table" style={{ margin: 0, width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Breakout Date</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Pattern Start</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Cup Bottom</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Cup Depth</th>
+                          <th style={{ background: 'rgba(15, 23, 42, 0.4)' }}>Target Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {JSON.parse(cupAndHandle.historical_patterns).slice((cupHistPage - 1) * 10, cupHistPage * 10).map((cyc, idx) => (
+                          <tr key={idx}>
+                            <td style={{ color: '#f8fafc', fontWeight: 600 }}>{cyc.breakout_date}</td>
+                            <td style={{ color: '#94a3b8' }}>{cyc.pattern_start_date}</td>
+                            <td style={{ color: '#94a3b8' }}>{cyc.cup_bottom_date}</td>
+                            <td style={{ color: '#f87171' }}>-{cyc.cup_depth_pct}%</td>
+                            <td style={{ color: '#4ade80' }}>₹{cyc.target_price?.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {JSON.parse(cupAndHandle.historical_patterns).length > 10 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 12, color: '#94a3b8' }}>
+                      <div>Showing {(cupHistPage - 1) * 10 + 1} to {Math.min(cupHistPage * 10, JSON.parse(cupAndHandle.historical_patterns).length)} of {JSON.parse(cupAndHandle.historical_patterns).length}</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => setCupHistPage(p => Math.max(1, p - 1))}
+                          disabled={cupHistPage === 1}
+                          className="btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: 11 }}
+                        >◄ Prev</button>
+                        <button
+                          onClick={() => setCupHistPage(p => Math.min(Math.ceil(JSON.parse(cupAndHandle.historical_patterns).length / 10), p + 1))}
+                          disabled={cupHistPage >= Math.ceil(JSON.parse(cupAndHandle.historical_patterns).length / 10)}
+                          className="btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: 11 }}
+                        >Next ►</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 1.5. Broker Recommendations Card (Before Technical Analysis Hub) */}
           <div style={{ ...cardStyle, border: '1px solid rgba(245, 158, 11, 0.35)', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' }}>
@@ -5240,3 +5443,124 @@ export function WatchlistMonitorPage({ apiBase = '/api/intelligence', dataset = 
   )
 }
 
+
+// ─── Cup and Handle Pattern Report ──────────────────────────────────────────
+export function CupAndHandleReport({ onTickerClick }) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    fetch('/api/intelligence/research/cup-and-handle')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch cup and handle data')
+        return res.json()
+      })
+      .then(json => {
+        setData(json.data || [])
+        setLoading(false)
+      })
+      .catch(err => {
+        setError(err.message)
+        setLoading(false)
+      })
+  }, [])
+
+  if (loading) return <div style={{ padding: 24, color: '#94a3b8' }}>Scanning for Cup and Handle breakouts...</div>
+  if (error) return <div style={{ padding: 24, color: '#ef4444' }}>Error: {error}</div>
+
+  const totalPages = Math.ceil(data.length / 10) || 1
+  const paginated = data.slice((page - 1) * 10, page * 10)
+
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#f8fafc', fontSize: 24 }}>Cup and Handle Breakouts</h2>
+          <div style={{ color: '#94a3b8', fontSize: 13, marginTop: 4 }}>
+            Stocks currently exhibiting active Cup and Handle patterns.
+          </div>
+        </div>
+        <div style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '6px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600 }}>
+          {data.length} Active Patterns
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div style={{ padding: 40, textAlign: 'center', background: '#1e293b', borderRadius: 8, color: '#94a3b8' }}>
+          No active Cup and Handle breakouts detected at this time.
+        </div>
+      ) : (
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="bsa-table">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Company</th>
+                  <th>Sector</th>
+                  <th>Cup Duration</th>
+                  <th>Cup Depth</th>
+                  <th>Handle Depth</th>
+                  <th>Breakout Price</th>
+                  <th>Target Price</th>
+                  <th>Stop Loss</th>
+                  <th>Breakout Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map(item => {
+                  const details = typeof item.details === 'string' ? JSON.parse(item.details || '{}') : (item.details || {})
+                  return (
+                    <tr key={item.ticker}>
+                      <td>
+                        <a href="#" onClick={(e) => { e.preventDefault(); onTickerClick(item.ticker); }} style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 600 }}>
+                          {item.ticker}
+                        </a>
+                      </td>
+                      <td style={{ color: '#e2e8f0', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.company_name}>
+                        {item.company_name}
+                      </td>
+                      <td style={{ color: '#94a3b8' }}>{item.sector}</td>
+                      <td style={{ color: '#e2e8f0' }}>{details.cup_duration} Days</td>
+                      <td style={{ color: '#f87171' }}>{details.cup_depth_pct ? `-${details.cup_depth_pct}%` : '—'}</td>
+                      <td style={{ color: '#f87171' }}>{details.handle_retracement_pct ? `-${details.handle_retracement_pct}%` : '—'}</td>
+                      <td style={{ color: '#4ade80', fontWeight: 600 }}>{item.breakout_price ? item.breakout_price.toFixed(2) : '—'}</td>
+                      <td style={{ color: '#38bdf8', fontWeight: 600 }}>{item.target_price ? item.target_price.toFixed(2) : '—'}</td>
+                      <td style={{ color: '#ef4444' }}>{item.stop_loss ? item.stop_loss.toFixed(2) : '—'}</td>
+                      <td style={{ color: '#94a3b8' }}>{item.breakout_date}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+            <div style={{ color: '#94a3b8', fontSize: 13 }}>
+              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, data.length)} of {data.length}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{ background: '#334155', color: page === 1 ? '#64748b' : '#f8fafc', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+              >
+                ◄ Prev
+              </button>
+              <span style={{ color: '#e2e8f0', fontSize: 13, margin: '0 8px' }}>Page {page} of {totalPages}</span>
+              <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{ background: '#334155', color: page === totalPages ? '#64748b' : '#f8fafc', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+              >
+                Next ►
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

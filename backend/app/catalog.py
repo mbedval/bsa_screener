@@ -18,6 +18,7 @@ FIXED_TABLES = {
     "trend_trading": {"label": "Trend trading", "group": "Technical Scanners"},
     "reversal_trading": {"label": "Reversal trading", "group": "Technical Scanners"},
     "support_resistance": {"label": "Support & resistance", "group": "Technical Scanners"},
+    "continuous_hh_hl": {"label": "Continuous HH HL", "group": "Technical Scanners"},
     "cash_flow_summary": {"label": "Cash flow summary", "group": "Fundamental Analysis"},
 
     "price_history": {"label": "Price history", "group": "Fundamental Analysis"},

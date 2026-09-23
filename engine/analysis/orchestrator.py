@@ -11,6 +11,8 @@ from engine.analysis.stocks_respecting_patterns import generate_stocks_respectin
 from engine.analysis.sector_followers import generate_sector_followers_analysis
 from engine.analysis.retracement import generate_retracement_speculator_analysis
 from engine.analysis.patterns import scan_and_store_ticker_patterns
+from engine.analysis.hhhl_scanner import scan_and_store_hhhl
+from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
 
 from engine.utils.logger import setup_logger
 
@@ -72,6 +74,20 @@ def _ensure_tables_exist(cur):
             support DOUBLE PRECISION,
             resistance DOUBLE PRECISION
         );
+        CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+            is_active BOOLEAN DEFAULT False,
+            pattern_start_date DATE,
+            cup_bottom_date DATE,
+            handle_start_date DATE,
+            breakout_date DATE,
+            breakout_price DOUBLE PRECISION,
+            target_price DOUBLE PRECISION,
+            stop_loss DOUBLE PRECISION,
+            details JSONB,
+            historical_patterns JSONB,
+            last_updated TIMESTAMP DEFAULT now()
+        );
     """)
 
 def analyze_and_summarize_ticker(ticker: str) -> bool:
@@ -112,6 +128,16 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
             scan_and_store_ticker_patterns(ticker)
         except Exception as pe:
             logger.error(f"Error scanning chart patterns for {ticker}: {pe}")
+
+        try:
+            scan_and_store_hhhl(ticker)
+        except Exception as he:
+            logger.error(f"Error scanning HHHL for {ticker}: {he}")
+            
+        try:
+            scan_and_store_cup_and_handle(ticker)
+        except Exception as che:
+            logger.error(f"Error scanning Cup and Handle for {ticker}: {che}")
 
         # Compute aggregate scores
         # Behavioral score based on news sentiment and accumulation index
