@@ -551,7 +551,7 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#cbd5e1', marginTop: 4 }}>
-                  <span>Tech: <b>{data.summary.technical_score ?? '—'}</b></span>
+                  <span>Tech: <b>{data.summary.technical_score != null ? getTechScoreLabel(data.summary.technical_score) : '—'}</b></span>
                   <span>Fund: <b>{data.summary.fundamental_score ?? '—'}</b></span>
                   <span>Behav: <b>{data.summary.behavioral_score ?? '—'}</b></span>
                 </div>
@@ -1825,7 +1825,14 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>P/E RATIO</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fund.current_pe != null ? fund.current_pe : '—'}
+                {fundamentals?.pe_metrics?.pe != null ? fundamentals.pe_metrics.pe : (fund?.current_pe ?? '—')}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>SECTOR P/E</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#fbbf24', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fundamentals?.pe_metrics?.sector_pe != null ? fundamentals.pe_metrics.sector_pe : '—'}
               </div>
             </div>
 
@@ -1839,7 +1846,10 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>TECHNICAL SCORE</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#c084fc', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {summary.technical_score != null ? `${summary.technical_score}/100` : '—'}
+                {summary.technical_score != null ? getTechScoreLabel(summary.technical_score) : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                {summary.technical_score != null ? `(${summary.technical_score})` : ''}
               </div>
             </div>
           </div>
@@ -1908,6 +1918,63 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
     </div>
   )
 }
+
+const getTechScoreLabel = (score) => {
+  const s = Number(score);
+  if (isNaN(s)) return '—';
+  if (s >= 0.75) return 'Strong Bullish';
+  if (s >= 0.25) return 'Bullish';
+  if (s >= -0.24) return 'Neutral';
+  if (s >= -0.74) return 'Bearish';
+  return 'Strong Bearish';
+}
+
+const getQuicktradeLabel = (score) => {
+  const s = Number(score);
+  if (isNaN(s)) return '—';
+  if (s >= 80) return 'Strong Bullish';
+  if (s >= 60) return 'Bullish';
+  if (s >= 40) return 'Neutral';
+  if (s >= 20) return 'Bearish';
+  return 'Strong Bearish';
+}
+
+const getHHHLGameStatus = (current, avg, history = []) => {
+  let target = Math.ceil(avg);
+  let label = 'Cautious Day';
+  let color = '#f59e0b';
+  let targetLabel = 'Average';
+
+  if (current === 0) {
+    return { target: target || 1, label: 'No Active Trend', progress: 0, color: '#94a3b8', targetLabel: 'Average' };
+  }
+
+  if (current < avg) {
+    if (avg - current <= 1.5) {
+      label = 'High Confidence';
+      color = '#34d399';
+    } else {
+      label = 'Cautious Day';
+      color = '#f59e0b';
+    }
+  } else {
+    const historicalStreaks = history.map(h => h.max_streak).filter(s => s > current);
+    if (historicalStreaks.length > 0) {
+      target = Math.min(...historicalStreaks);
+      label = 'Momentum Run';
+      color = '#38bdf8';
+      targetLabel = 'Next Target';
+    } else {
+      target = current + 1;
+      label = 'Uncharted Territory';
+      color = '#c084fc';
+      targetLabel = 'Blue Sky';
+    }
+  }
+
+  const progress = Math.min(100, Math.round((current / target) * 100));
+  return { target, label, progress, color, targetLabel };
+};
 
 // ─── Search Detail Page (Ticker Master Dedicated Lookup) ──────────────────────
 export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'intelligence', initialTicker = 'RELIANCE', onNavigate }) {
@@ -2343,6 +2410,13 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             </div>
 
             <div style={cardStyle}>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>SECTOR P/E</span>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#fbbf24', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                {fundamentals?.pe_metrics?.sector_pe != null ? `${Number(fundamentals.pe_metrics.sector_pe).toFixed(2)}` : '—'}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
                 {fundamentals?.pat_metrics?.pat != null ? `${fundamentals.pat_metrics.pat} Cr` : '—'}
@@ -2352,7 +2426,10 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>TECHNICAL SCORE</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#c084fc', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {quicktrade.overall_score != null ? `${Number(quicktrade.overall_score).toFixed(2)}/100` : '—'}
+                {quicktrade.overall_score != null ? getQuicktradeLabel(quicktrade.overall_score) : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                {quicktrade.overall_score != null ? `(${Number(quicktrade.overall_score).toFixed(2)}/100)` : ''}
               </div>
             </div>
           </div>
@@ -2365,6 +2442,41 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   📈 Continuous HHHL Advanced Pattern Insight
                 </h3>
               </div>
+
+              {(() => {
+                const game = getHHHLGameStatus(
+                  hhhlInsight.current_hhhl || 0,
+                  hhhlInsight.avg_continuity_count || 0,
+                  hhhlInsight.historical_cycles || []
+                );
+
+                return (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                          Trend Power Level
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 24, fontWeight: 800, color: game.color }}>
+                            {game.label}
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 700, background: `${game.color}20`, color: game.color, padding: '4px 10px', borderRadius: 6, border: `1px solid ${game.color}40` }}>
+                            {hhhlInsight.current_hhhl || 0} Day / {game.target} {game.targetLabel}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc', fontFamily: "'DM Mono', monospace" }}>
+                        {game.progress}%
+                      </div>
+                    </div>
+                    
+                    <div style={{ width: '100%', height: 14, background: 'rgba(0,0,0,0.5)', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}>
+                      <div style={{ width: `${game.progress}%`, height: '100%', background: game.color, borderRadius: 8, transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: `0 0 12px ${game.color}aa` }}></div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 16 }}>
                 <div style={{ ...metricBoxStyle, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
@@ -2412,7 +2524,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                         </tr>
                       </thead>
                       <tbody>
-                        {hhhlInsight.historical_cycles.slice((hhhlHistPage - 1) * 10, hhhlHistPage * 10).map((cyc, idx) => (
+                        {hhhlInsight.historical_cycles.slice(0, 5).map((cyc, idx) => (
                           <tr key={idx} style={{ background: cyc.is_active ? 'rgba(56, 189, 248, 0.05)' : 'transparent' }}>
                             <td style={{ color: cyc.is_active ? '#38bdf8' : '#e2e8f0', fontFamily: "'DM Mono'" }}>
                               {cyc.start_date} → {cyc.end_date} {cyc.is_active && <span className="badge info" style={{ marginLeft: 6 }}>Active</span>}
@@ -2435,23 +2547,14 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                       </tbody>
                     </table>
                   </div>
-                  {hhhlInsight.historical_cycles.length > 10 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 12, color: '#64748b' }}>
-                      <div>Showing {(hhhlHistPage - 1) * 10 + 1} to {Math.min(hhhlHistPage * 10, hhhlInsight.historical_cycles.length)} of {hhhlInsight.historical_cycles.length}</div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button 
-                          onClick={() => setHhhlHistPage(p => Math.max(1, p - 1))}
-                          disabled={hhhlHistPage === 1}
-                          className="btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: 11 }}
-                        >◄ Prev</button>
-                        <button 
-                          onClick={() => setHhhlHistPage(p => Math.min(Math.ceil(hhhlInsight.historical_cycles.length / 10), p + 1))}
-                          disabled={hhhlHistPage >= Math.ceil(hhhlInsight.historical_cycles.length / 10)}
-                          className="btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: 11 }}
-                        >Next ►</button>
-                      </div>
+                  {hhhlInsight.historical_cycles.length > 5 && (
+                    <div style={{ marginTop: 16, textAlign: 'center' }}>
+                      <button 
+                        onClick={() => onNavigate('research:hhhl_full_report')} 
+                        style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                      >
+                        View Full Pattern History
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2861,7 +2964,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                       </td>
                     </tr>
                   ) : (
-                    patternHistory.map((p, idx) => {
+                    patternHistory.slice(0, 5).map((p, idx) => {
                       const isBull = p.category === 'BULLISH'
                       const isBear = p.category === 'BEARISH'
                       const catBg = isBull ? 'rgba(34, 197, 94, 0.15)' : (isBear ? 'rgba(239, 68, 68, 0.15)' : 'rgba(234, 179, 8, 0.15)')
@@ -2901,6 +3004,16 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 </tbody>
               </table>
             </div>
+            {patternHistory.length > 5 && (
+              <div style={{ marginTop: 16, textAlign: 'center' }}>
+                <button 
+                  onClick={() => onNavigate('research:candlestick_full_report')} 
+                  style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                >
+                  View Full Track Record History
+                </button>
+              </div>
+            )}
           </div>
 
 

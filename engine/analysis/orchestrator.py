@@ -13,6 +13,7 @@ from engine.analysis.retracement import generate_retracement_speculator_analysis
 from engine.analysis.patterns import scan_and_store_ticker_patterns
 from engine.analysis.hhhl_scanner import scan_and_store_hhhl
 from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
+from engine.analysis.elliot import analyze_and_store_elliot
 
 from engine.utils.logger import setup_logger
 
@@ -128,6 +129,11 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
             scan_and_store_ticker_patterns(ticker)
         except Exception as pe:
             logger.error(f"Error scanning chart patterns for {ticker}: {pe}")
+            
+        try:
+            analyze_and_store_elliot(ticker)
+        except Exception as ee:
+            logger.error(f"Error executing Elliot Wave analysis for {ticker}: {ee}")
 
         try:
             scan_and_store_hhhl(ticker)

@@ -8,8 +8,9 @@ import {
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
 import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport, CupAndHandleReport } from './visualizer/index.jsx'
-
-
+import ElliotReport from './reports/ElliotReport.jsx'
+import HHHLFullReportPage from './reports/HHHLFullReportPage.jsx'
+import CandlestickFullReportPage from './reports/CandlestickFullReportPage.jsx'
 
 import './styles.css'
 
@@ -483,7 +484,7 @@ function App() {
     if (path === '' || path === '/') return
     const isMaster = active.startsWith('master:') || active === 'fno_stock_master' || active === 'fno_index_master' || active === 'fno_master' || active === 'ticker_master'
     const isSector = active.startsWith('sector:')
-    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor'].includes(active)
+    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor', 'research:elliot_recommendations', 'research:hhhl_full_report', 'research:candlestick_full_report'].includes(active)
     if (isMaster) {
       setExpandedSection('Master Data')
     } else if (isSector) {
@@ -602,6 +603,15 @@ function App() {
                 </button>
                 <button className={`nav-item ${active === 'research:penny_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:penny_stocks')}>
                   <Zap size={14} /> Penny Stocks
+                </button>
+                <button className={`nav-item ${active === 'research:elliot_recommendations' ? 'selected' : ''}`} onClick={() => setActive('research:elliot_recommendations')}>
+                  <Zap size={14} /> Elliot Recommendations
+                </button>
+                <button className={`nav-item ${active === 'research:hhhl_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:hhhl_full_report')}>
+                  <Activity size={14} /> HHHL Full Report
+                </button>
+                <button className={`nav-item ${active === 'research:candlestick_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:candlestick_full_report')}>
+                  <Activity size={14} /> Candlestick Full Report
                 </button>
                 <button className={`nav-item ${active === 'research:stocks_respecting_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:stocks_respecting_patterns')}>
                   <Target size={14} /> Pattern Respecting Stocks
@@ -817,6 +827,16 @@ function App() {
           <MarketCapWiseReportPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:penny_stocks' ? (
           <PennyStocksDashboard apiBase={apiBase} setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:elliot_recommendations' ? (
+          <ElliotReport apiBase={apiBase} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
+        ) : active === 'research:hhhl_full_report' ? (
+          <ChartErrorBoundary>
+            <HHHLFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+          </ChartErrorBoundary>
+        ) : active === 'research:candlestick_full_report' ? (
+          <ChartErrorBoundary>
+            <CandlestickFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+          </ChartErrorBoundary>
         ) : active === 'research:stocks_respecting_patterns' ? (
           <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:sectorwise_followers' ? (

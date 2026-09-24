@@ -3202,18 +3202,18 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
                         COALESCE(tm.is_fno, false) AS is_fno,
                         CASE 
                             WHEN tm.exchange ILIKE '%%SME%%' OR a.ticker ILIKE '%%-SM%%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
-                            WHEN tm.market_cap_category ILIKE '%%LARGE%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
-                            WHEN tm.market_cap_category ILIKE '%%MID%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
-                            WHEN tm.market_cap_category ILIKE '%%SMALL%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
+                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
+                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
+                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
                             ELSE 'Micro Cap'
                         END AS market_cap,
                         ROW_NUMBER() OVER (
                             PARTITION BY 
                                 CASE 
                                     WHEN tm.exchange ILIKE '%%SME%%' OR a.ticker ILIKE '%%-SM%%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
-                                    WHEN tm.market_cap_category ILIKE '%%LARGE%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
-                                    WHEN tm.market_cap_category ILIKE '%%MID%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
-                                    WHEN tm.market_cap_category ILIKE '%%SMALL%%' OR a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
+                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
+                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
+                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
                                     ELSE 'Micro Cap'
                                 END
                             ORDER BY COALESCE(a.hybrid_score, 0) DESC, COALESCE(o.volume, 0) DESC
@@ -4790,6 +4790,32 @@ FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if (FRONTEND_DIST / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
+
+@app.get("/api/{dataset}/reports/elliot")
+@app.get("/api/reports/elliot")
+def get_elliot_recommendations(dataset: str = "intelligence"):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    e.ticker, t.company_name, t.sector,
+                    e.current_wave, 
+                    e.weekly_probability, 
+                    e.intraday_probability,
+                    o.close, 
+                    o.trade_date,
+                    a.overall_signal, a.technical_score
+                FROM elliot_analysis e
+                JOIN ticker_master t ON e.ticker = t.ticker
+                LEFT JOIN ohlcv_daily o ON e.ticker = o.ticker 
+                   AND o.trade_date = (SELECT max(trade_date) FROM ohlcv_daily WHERE ticker = e.ticker)
+                LEFT JOIN analysis_summaries a ON e.ticker = a.ticker
+                WHERE e.current_wave IN ('W3', 'W5')
+                ORDER BY e.weekly_probability DESC, e.intraday_probability DESC
+                LIMIT 30
+            """)
+            rows = cur.fetchall()
+            return {"data": rows}
 
 @app.get("/{path:path}", include_in_schema=False)
 def portal(path: str):

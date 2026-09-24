@@ -22,7 +22,7 @@ logger = setup_logger("bsa_cli")
 
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
-    parser.add_argument("--mode", choices=["download-spot", "download-fno", "analyze-all", "full-pipeline", "news-analyze", "backup", "mutualfund"], help="Pipeline batch operation mode")
+    parser.add_argument("--mode", choices=["download-spot", "download-fno", "analyze-all", "analyze-elliot", "full-pipeline", "news-analyze", "backup", "mutualfund"], help="Pipeline batch operation mode")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
     parser.add_argument("--report", type=str, help="Generate report for a specific ticker")
     parser.add_argument("--pdf", action="store_true", help="Explicitly opt-in to generate PDF report alongside HTML")
@@ -320,6 +320,20 @@ def main():
     elif args.mode == "analyze-all":
         logger.info("Triggered scoring and analysis engine for all master tickers...")
         run_phase_3()
+    elif args.mode == "analyze-elliot":
+        logger.info("Triggered standalone Elliot Wave analysis for all master tickers...")
+        from engine.analysis.elliot import analyze_and_store_elliot
+        valid_tickers = get_spot_tickers()
+        total = len(valid_tickers)
+        progress, task_id = create_phase_progress(1, "Analyze Elliot", total)
+        with progress:
+            for ticker in valid_tickers:
+                try:
+                    analyze_and_store_elliot(ticker)
+                except Exception as e:
+                    logger.error(f"Error executing Elliot Wave analysis for {ticker}: {e}")
+                progress.update(task_id, advance=1)
+        logger.info("[✓] Standalone Elliot Wave analysis completed!")
     elif args.mode == "full-pipeline":
         logger.info("Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...")
         logger.info("--- Starting Phase 1: Spot Data Download ---")
