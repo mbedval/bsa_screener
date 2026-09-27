@@ -200,7 +200,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
             "top_holders": top_holders
         }
 
-def precalculate_all_mf_behavior():
+def precalculate_all_mf_behavior(tickers: Optional[List[str]] = None):
     import json
     import logging
     
@@ -224,8 +224,11 @@ def precalculate_all_mf_behavior():
                 )
             """)
             
-            cur.execute("SELECT DISTINCT ticker FROM mf_historical_holdings")
-            tickers = [r['ticker'] for r in cur.fetchall()]
+            if tickers is not None:
+                tickers_list = [t.upper().strip() for t in tickers]
+            else:
+                cur.execute("SELECT DISTINCT ticker FROM mf_historical_holdings")
+                tickers_list = [r['ticker'] for r in cur.fetchall()]
             
         conn.commit()
     except Exception as e:
@@ -234,10 +237,10 @@ def precalculate_all_mf_behavior():
         conn.close()
         return
 
-    total = len(tickers)
+    total = len(tickers_list)
     logger.info(f"Pre-calculating MF Behavior for {total} tickers.")
     
-    for i, ticker in enumerate(tickers, 1):
+    for i, ticker in enumerate(tickers_list, 1):
         try:
             res = analyze_mf_behavior(ticker)
             with conn.cursor() as cur:

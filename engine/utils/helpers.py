@@ -132,3 +132,117 @@ def get_fno_tickers() -> list:
             for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
                 fno_set.add(idx)
             return sorted(list(fno_set))
+
+def list_all_watchlists() -> list:
+    """Retrieves all available watchlists and their ticker counts from database."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT w.id, w.name, w.description, COUNT(DISTINCT wi.ticker) AS ticker_count
+                FROM watchlist w
+                LEFT JOIN watchlist_items wi ON wi.watchlist_id = w.id
+                GROUP BY w.id, w.name, w.description
+                ORDER BY w.id ASC
+            """)
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "description": r[2] or "",
+                    "ticker_count": r[3]
+                }
+                for r in rows
+            ]
+
+def get_tickers_for_watchlist(watchlist_inputs: list) -> tuple:
+    """
+    Given watchlist names or IDs from CLI (e.g. ['Default Watchlist'], ['1', '2'], ['Nifty 50,Nifty IT']),
+    queries database `watchlist` and `watchlist_items` tables and returns:
+      (tickers: list[str], matched_watchlists: list[dict])
+    """
+    if not watchlist_inputs:
+        return [], []
+
+    raw_tokens = []
+    for item in watchlist_inputs:
+        if isinstance(item, str):
+            for token in item.split(","):
+                cleaned = token.strip()
+                if cleaned:
+                    raw_tokens.append(cleaned)
+
+    if not raw_tokens:
+        return [], []
+
+    matched_watchlists = []
+    tickers = set()
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            for token in raw_tokens:
+                token_lower = token.lower()
+                query = """
+                    SELECT id, name, description
+                    FROM watchlist
+                    WHERE id::text = %s
+                       OR LOWER(name) = %s
+                       OR LOWER(REPLACE(name, ' ', '_')) = %s
+                       OR LOWER(REPLACE(name, '_', ' ')) = %s
+                """
+                cur.execute(query, (token_lower, token_lower, token_lower, token_lower))
+                rows = cur.fetchall()
+
+                if not rows:
+                    cur.execute(
+                        "SELECT id, name, description FROM watchlist WHERE LOWER(name) LIKE %s",
+                        (f"%{token_lower}%",)
+                    )
+                    rows = cur.fetchall()
+
+                for row in rows:
+                    wl_id, wl_name, wl_desc = row[0], row[1], row[2]
+                    if not any(w['id'] == wl_id for w in matched_watchlists):
+                        cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                        cnt = cur.fetchone()[0]
+                        matched_watchlists.append({
+                            'id': wl_id,
+                            'name': wl_name,
+                            'description': wl_desc,
+                            'ticker_count': cnt
+                        })
+                        cur.execute("SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                        for t_row in cur.fetchall():
+                            if t_row[0]:
+                                tickers.add(t_row[0].upper().strip())
+
+            if not matched_watchlists and len(raw_tokens) > 1:
+                combined = " ".join(raw_tokens).lower()
+                query = """
+                    SELECT id, name, description
+                    FROM watchlist
+                    WHERE LOWER(name) = %s
+                       OR LOWER(REPLACE(name, ' ', '_')) = %s
+                       OR LOWER(REPLACE(name, '_', ' ')) = %s
+                       OR LOWER(name) LIKE %s
+                """
+                cur.execute(query, (combined, combined, combined, f"%{combined}%"))
+                rows = cur.fetchall()
+                for row in rows:
+                    wl_id, wl_name, wl_desc = row[0], row[1], row[2]
+                    if not any(w['id'] == wl_id for w in matched_watchlists):
+                        cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                        cnt = cur.fetchone()[0]
+                        matched_watchlists.append({
+                            'id': wl_id,
+                            'name': wl_name,
+                            'description': wl_desc,
+                            'ticker_count': cnt
+                        })
+                        cur.execute("SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                        for t_row in cur.fetchall():
+                            if t_row[0]:
+                                tickers.add(t_row[0].upper().strip())
+
+    return sorted(list(tickers)), matched_watchlists
+

@@ -187,7 +187,7 @@ def analyze_fii_behavior(ticker: str) -> Dict[str, Any]:
             "top_holders": top_holders
         }
 
-def precalculate_all_fii_behavior():
+def precalculate_all_fii_behavior(tickers: Optional[List[str]] = None):
     import json
     import logging
     
@@ -203,13 +203,16 @@ def precalculate_all_fii_behavior():
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT ticker FROM fii_historical_holdings")
-            tickers = [r[0] for r in cur.fetchall()]
+            if tickers is not None:
+                target_tickers = [t.upper().strip() for t in tickers]
+            else:
+                cur.execute("SELECT DISTINCT ticker FROM fii_historical_holdings")
+                target_tickers = [r[0] for r in cur.fetchall()]
             
-            logger.info(f"Pre-calculating FII Behavior for {len(tickers)} tickers.")
+            logger.info(f"Pre-calculating FII Behavior for {len(target_tickers)} tickers.")
             
             count = 0
-            for t in tickers:
+            for t in target_tickers:
                 try:
                     data = analyze_fii_behavior(t)
                     cur.execute("""

@@ -29,6 +29,7 @@ def main():
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
         "full-pipeline", "news-analyze", "backup", "mutualfund"
     ], help="Pipeline batch operation mode")
+    parser.add_argument("--watchlist", "-w", nargs="*", metavar="WATCHLIST", help="Filter pipeline operations to tickers in specified watchlist(s) by name or ID")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
     parser.add_argument("--report", type=str, help="Generate report for a specific ticker")
     parser.add_argument("--pdf", action="store_true", help="Explicitly opt-in to generate PDF report alongside HTML")
@@ -39,7 +40,7 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.mode and not args.ticker and not args.report:
+    if not args.mode and not args.ticker and not args.report and args.watchlist is None:
         parser.print_help()
         sys.exit(1)
 
@@ -48,7 +49,47 @@ def main():
     from engine.database.connection import get_db_connection
     from engine.utils.progress import create_phase_progress
     from engine.utils.checkpoint import get_completed_tickers, clear_phase_checkpoint
-    from engine.utils.helpers import get_spot_tickers, get_fno_tickers
+    from engine.utils.helpers import get_spot_tickers, get_fno_tickers, get_tickers_for_watchlist, list_all_watchlists
+
+    watchlist_tickers = None
+    if args.watchlist is not None:
+        if len(args.watchlist) == 0 or (len(args.watchlist) == 1 and args.watchlist[0].lower() in ("list", "help")):
+            watchlists = list_all_watchlists()
+            print("\n" + "=" * 80)
+            print("                              AVAILABLE WATCHLISTS                              ")
+            print("=" * 80)
+            print(f"  {'ID':<5} | {'Watchlist Name':<30} | {'Tickers':<8} | {'Description'}")
+            print("-" * 80)
+            for w in watchlists:
+                print(f"  {w['id']:<5} | {w['name']:<30} | {w['ticker_count']:<8} | {w['description']}")
+            print("=" * 80)
+            print("Usage Examples:")
+            print("  python3 -m engine.cli --watchlist \"Default Watchlist\"")
+            print("  python3 -m engine.cli --watchlist 1 --mode analyze-all\n")
+            sys.exit(0)
+
+        wl_tickers, matched_wls = get_tickers_for_watchlist(args.watchlist)
+        if not matched_wls:
+            logger.error(f"No watchlist found matching inputs: {args.watchlist}")
+            watchlists = list_all_watchlists()
+            if watchlists:
+                print("\nAvailable Watchlists in Database:")
+                for w in watchlists:
+                    print(f"  - ID: {w['id']}, Name: '{w['name']}' ({w['ticker_count']} tickers)")
+            sys.exit(1)
+
+        wl_names = ", ".join([f"'{w['name']}' [ID: {w['id']}]" for w in matched_wls])
+        logger.info(f"Watchlist filter active: matched {len(matched_wls)} watchlist(s) ({wl_names}).")
+        logger.info(f"Loaded {len(wl_tickers)} unique ticker(s) for watchlist execution: {wl_tickers}")
+
+        if not wl_tickers:
+            logger.warning("Specified watchlist(s) contain 0 tickers! Exiting.")
+            sys.exit(0)
+
+        watchlist_tickers = wl_tickers
+        if not args.mode and not args.ticker and not args.report:
+            logger.info("No explicit --mode specified with --watchlist. Defaulting to 'full-pipeline' for watchlist tickers.")
+            args.mode = "full-pipeline"
 
     def resolve_resume_flag(phase_name: str, phase_key: str, total_count: int, valid_tickers=None) -> bool:
         if args.fresh or args.force:
@@ -89,7 +130,8 @@ def main():
     def run_phase_1_1():
         p_start = time.time()
         logger.info("=== Phase 1.1: Spot Data Download (Master Price & Fundamentals) ===")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total = len(valid_tickers)
         resume = resolve_resume_flag("Phase 1.1 (Download Spot)", "spot_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("spot_download", valid_tickers=valid_tickers) if resume else set()
@@ -97,12 +139,12 @@ def main():
         if pending_count == 0 and total > 0:
             logger.info(f"All {total} items for Phase 1.1 (Download Spot) are already completed. Use --fresh or --force to re-download.")
         else:
-            progress, task_id = create_phase_progress(1, "Download Spot", pending_count if resume else total)
+            progress, task_id = create_phase_progress("Phase 1.1", "Download Spot", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
-                download_all_tickers(progress_callback=cb, resume=resume, force=args.force)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
         logger.info(f"[✓] Phase 1.1 (Download Spot) completed in {p_elapsed:.2f}s.")
 
@@ -111,21 +153,24 @@ def main():
         logger.info("=== Phase 1.2: Mutual Fund & FII Holdings Download ===")
         from engine.downloaders.mutual_fund import ensure_mf_fii_tables_exist, download_all_fii_holdings
         ensure_mf_fii_tables_exist()
-        total_tickers = len(get_spot_tickers())
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        total_tickers = len(valid_tickers)
         total_items = total_tickers * 2  # MF holdings (total_tickers) + FII holdings (total_tickers)
-        progress, task_id = create_phase_progress(1, "Download MF & FII", total_items)
+        progress, task_id = create_phase_progress("Phase 1.2", "Download MF & FII", total_items, unit="items")
         with progress:
             def cb(current, total, ticker, count):
                 progress.update(task_id, advance=1)
-            download_all_mf_holdings(progress_callback=cb)
-            download_all_fii_holdings(progress_callback=cb)
+            download_all_mf_holdings(progress_callback=cb, tickers=valid_tickers)
+            download_all_fii_holdings(progress_callback=cb, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
         logger.info(f"[✓] Phase 1.2 (Download MF & FII) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_3():
         p_start = time.time()
         logger.info("=== Phase 1.3: F&O Derivatives Download ===")
-        valid_tickers = get_fno_tickers()
+        all_fno = get_fno_tickers()
+        valid_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         total = len(valid_tickers)
         resume = resolve_resume_flag("Phase 1.3 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("fno_download", valid_tickers=valid_tickers) if resume else set()
@@ -133,12 +178,12 @@ def main():
         if pending_count == 0 and total > 0:
             logger.info(f"All {total} items for Phase 1.3 (Download F&O) are already completed. Use --fresh to re-download.")
         else:
-            progress, task_id = create_phase_progress(1, "Download F&O", pending_count if resume else total)
+            progress, task_id = create_phase_progress("Phase 1.3", "Download F&O", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
-                download_all_derivatives(progress_callback=cb, resume=resume)
+                download_all_derivatives(progress_callback=cb, resume=resume, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
         logger.info(f"[✓] Phase 1.3 (Download F&O) completed in {p_elapsed:.2f}s.")
 
@@ -155,12 +200,13 @@ def main():
     def run_phase_2_1():
         p_start = time.time()
         logger.info("[Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.hhhl_scanner import scan_and_store_hhhl
         from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
         from engine.analysis.retracement import generate_retracement_speculator_analysis
         
-        progress, task_id = create_phase_progress(2, "Analyze Technical", len(valid_tickers))
+        progress, task_id = create_phase_progress("Phase 2.1", "Technical Scanners", len(valid_tickers), unit="tickers")
         with progress:
             for t in valid_tickers:
                 try:
@@ -181,9 +227,10 @@ def main():
     def run_phase_2_2():
         p_start = time.time()
         logger.info("[Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.fundamental import analyze_fundamental
-        progress, task_id = create_phase_progress(2, "Analyze Fundamental", len(valid_tickers))
+        progress, task_id = create_phase_progress("Phase 2.2", "Fundamental Analysis", len(valid_tickers), unit="tickers")
         with progress:
             for t in valid_tickers:
                 try:
@@ -197,9 +244,10 @@ def main():
     def run_phase_2_3():
         p_start = time.time()
         logger.info("[Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...")
-        fno_tickers = get_fno_tickers()
+        all_fno = get_fno_tickers()
+        fno_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         from engine.analysis.options import analyze_options_chain
-        progress, task_id = create_phase_progress(2, "Analyze F&O Options", len(fno_tickers))
+        progress, task_id = create_phase_progress("Phase 2.3", "F&O Options Analysis", len(fno_tickers), unit="tickers")
         with progress:
             for t in fno_tickers:
                 try:
@@ -213,10 +261,11 @@ def main():
     def run_phase_2_4():
         p_start = time.time()
         logger.info("[Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.patterns import scan_and_store_ticker_patterns
         from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
-        progress, task_id = create_phase_progress(2, "Analyze Patterns", len(valid_tickers))
+        progress, task_id = create_phase_progress("Phase 2.4", "Chart Pattern Scanning", len(valid_tickers), unit="tickers")
         with progress:
             for t in valid_tickers:
                 try:
@@ -236,12 +285,12 @@ def main():
         logger.info("[Sub-task 2.5/2.8] Starting Mutual Fund & FII Institutional Behavior Analysis...")
         try:
             from engine.analyzers.mf_behavior import precalculate_all_mf_behavior
-            precalculate_all_mf_behavior()
+            precalculate_all_mf_behavior(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error precalculating MF behavior: {e}")
         try:
             from engine.analyzers.fii_behavior import precalculate_all_fii_behavior
-            precalculate_all_fii_behavior()
+            precalculate_all_fii_behavior(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error precalculating FII behavior: {e}")
         p_elapsed = time.time() - p_start
@@ -250,9 +299,10 @@ def main():
     def run_phase_2_6():
         p_start = time.time()
         logger.info("[Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.elliot import analyze_and_store_elliot
-        progress, task_id = create_phase_progress(2, "Analyze Elliot", len(valid_tickers))
+        progress, task_id = create_phase_progress("Phase 2.6", "Elliot Wave Analysis", len(valid_tickers), unit="tickers")
         with progress:
             for t in valid_tickers:
                 try:
@@ -277,19 +327,20 @@ def main():
     def run_phase_2_8():
         p_start = time.time()
         logger.info("[Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...")
-        valid_tickers = get_spot_tickers()
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total = len(valid_tickers)
         resume = resolve_resume_flag("Phase 2.8 (Analyze Summaries)", "analysis", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("analysis", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
 
         if pending_count > 0 or not resume:
-            progress, task_id = create_phase_progress(2, "Analyze Summaries", pending_count if resume else total)
+            progress, task_id = create_phase_progress("Phase 2.8", "Hybrid Synthesis", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
-                analyze_all_tickers(progress_callback=cb, resume=resume)
+                analyze_all_tickers(progress_callback=cb, resume=resume, tickers=valid_tickers)
         else:
             logger.info(f"All {total} tickers already analyzed and synthesized! Use --fresh to re-synthesize.")
         p_elapsed = time.time() - p_start

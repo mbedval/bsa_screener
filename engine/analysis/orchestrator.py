@@ -372,14 +372,17 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
 
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 
-def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bool = True):
-    """Orchestrates analysis sequentially or concurrently for all tickers in database."""
+def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bool = True, tickers: list = None):
+    """Orchestrates analysis sequentially or concurrently for all tickers in database (or specified tickers list)."""
     import time
     all_tickers = []
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT ticker FROM ticker_master")
-            all_tickers = [row[0] for row in cur.fetchall()]
+    if tickers is not None:
+        all_tickers = [t.upper().strip() for t in tickers]
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ticker FROM ticker_master")
+                all_tickers = [row[0] for row in cur.fetchall()]
 
     if not all_tickers:
         logger.warning("No tickers found to analyze.")

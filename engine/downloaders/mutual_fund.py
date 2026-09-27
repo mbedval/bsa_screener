@@ -407,25 +407,28 @@ def download_mf_holdings_for_ticker(ticker: str) -> Tuple[bool, int]:
     return saved, len(holdings)
 
 
-def download_all_mf_holdings(progress_callback=None, ticker_filter: Optional[str] = None) -> int:
+def download_all_mf_holdings(progress_callback=None, ticker_filter: Optional[str] = None, tickers: Optional[List[str]] = None) -> int:
     """
-    Batch download MF holdings for all active tickers in ticker_master.
+    Batch download MF holdings for active tickers in ticker_master (or specified tickers list).
     """
-    tickers = []
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            if ticker_filter:
-                cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s;", (ticker_filter,))
-            else:
-                cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker ASC;")
-            rows = cur.fetchall()
-            tickers = [r[0] for r in rows]
+    if tickers is not None:
+        tickers_list = [t.upper().strip() for t in tickers]
+    else:
+        tickers_list = []
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if ticker_filter:
+                    cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s;", (ticker_filter,))
+                else:
+                    cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker ASC;")
+                rows = cur.fetchall()
+                tickers_list = [r[0] for r in rows]
 
-    total = len(tickers)
+    total = len(tickers_list)
     logger.info(f"Starting Mutual Fund holdings download for {total} tickers...")
     success_count = 0
 
-    for i, t in enumerate(tickers):
+    for i, t in enumerate(tickers_list):
         ok, num_saved = download_mf_holdings_for_ticker(t)
         if ok:
             success_count += 1
@@ -557,13 +560,16 @@ def download_fii_holdings_for_ticker(ticker: str) -> tuple[bool, int]:
     logger.info(f"[{ticker}] Upserted {records_upserted} historical FII holding records.")
     return True, records_upserted
 
-def download_all_fii_holdings(progress_callback=None):
+def download_all_fii_holdings(progress_callback=None, tickers: Optional[List[str]] = None):
     from engine.utils.helpers import get_spot_tickers
-    tickers = get_spot_tickers()
-    if not tickers:
+    if tickers is not None:
+        target_tickers = [t.upper().strip() for t in tickers]
+    else:
+        target_tickers = get_spot_tickers()
+    if not target_tickers:
         return
-    for idx, ticker in enumerate(tickers):
+    for idx, ticker in enumerate(target_tickers):
         ok, count = download_fii_holdings_for_ticker(ticker)
         if progress_callback:
-            progress_callback(idx + 1, len(tickers), ticker, count)
+            progress_callback(idx + 1, len(target_tickers), ticker, count)
 

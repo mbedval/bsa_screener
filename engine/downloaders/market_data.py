@@ -347,18 +347,21 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
 
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 
-def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False):
-    """Download OHLCV and fundamentals for all tickers in the database master list with rate limit protection."""
+def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False, tickers: list = None):
+    """Download OHLCV and fundamentals for tickers in the database master list (or specified tickers list) with rate limit protection."""
     all_tickers = []
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT tm.ticker 
-                FROM ticker_master tm
-                LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
-                WHERE et.ticker IS NULL
-            """)
-            all_tickers = [row[0] for row in cur.fetchall()]
+    if tickers is not None:
+        all_tickers = [t.upper().strip() for t in tickers]
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT tm.ticker 
+                    FROM ticker_master tm
+                    LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
+                    WHERE et.ticker IS NULL
+                """)
+                all_tickers = [row[0] for row in cur.fetchall()]
 
     if not all_tickers:
         logger.warning("No tickers found in ticker_master!")

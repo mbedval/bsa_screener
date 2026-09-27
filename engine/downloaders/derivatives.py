@@ -167,52 +167,55 @@ def download_and_insert_derivatives(ticker: str) -> bool:
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 from engine.utils.fno_seeder import seed_fno_tickers
 
-def download_all_derivatives(progress_callback=None, resume: bool = True):
-    """Download option chain derivatives for all F&O enabled tickers + indices."""
+def download_all_derivatives(progress_callback=None, resume: bool = True, tickers: list = None):
+    """Download option chain derivatives for all F&O enabled tickers + indices (or specified tickers list)."""
     # Automatically seed/sync F&O list from F&O CSVs
     seed_fno_tickers()
 
     all_tickers = []
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            try:
-                cur.execute("""
-                    UPDATE ticker_master
-                    SET is_fno = TRUE
-                    WHERE ticker IN (SELECT symbol FROM fno_stock_master WHERE is_active = TRUE)
-                """)
-                conn.commit()
-            except Exception:
-                conn.rollback()
+    if tickers is not None:
+        all_tickers = [t.upper().strip() for t in tickers]
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                try:
+                    cur.execute("""
+                        UPDATE ticker_master
+                        SET is_fno = TRUE
+                        WHERE ticker IN (SELECT symbol FROM fno_stock_master WHERE is_active = TRUE)
+                    """)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
 
-            try:
-                cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-                all_tickers = [row[0] for row in cur.fetchall()]
-            except Exception:
-                conn.rollback()
+                try:
+                    cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
+                    all_tickers = [row[0] for row in cur.fetchall()]
+                except Exception:
+                    conn.rollback()
 
-            try:
-                cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
-                fno_symbols = [row[0] for row in cur.fetchall()]
-                for s in fno_symbols:
-                    if s not in all_tickers:
-                        all_tickers.append(s)
-            except Exception:
-                conn.rollback()
+                try:
+                    cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
+                    fno_symbols = [row[0] for row in cur.fetchall()]
+                    for s in fno_symbols:
+                        if s not in all_tickers:
+                            all_tickers.append(s)
+                except Exception:
+                    conn.rollback()
 
-            try:
-                cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
-                idx_symbols = [row[0] for row in cur.fetchall()]
-                for s in idx_symbols:
-                    if s not in all_tickers:
-                        all_tickers.append(s)
-            except Exception:
-                conn.rollback()
+                try:
+                    cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
+                    idx_symbols = [row[0] for row in cur.fetchall()]
+                    for s in idx_symbols:
+                        if s not in all_tickers:
+                            all_tickers.append(s)
+                except Exception:
+                    conn.rollback()
 
-    indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]
-    for idx in indices:
-        if idx not in all_tickers:
-            all_tickers.append(idx)
+        indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]
+        for idx in indices:
+            if idx not in all_tickers:
+                all_tickers.append(idx)
 
     completed_set = get_completed_tickers("fno_download", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]

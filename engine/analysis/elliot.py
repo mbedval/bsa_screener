@@ -11,6 +11,17 @@ def analyze_and_store_elliot(ticker: str):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS elliot_analysis (
+                        ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                        current_wave TEXT DEFAULT 'None',
+                        weekly_probability DOUBLE PRECISION DEFAULT 0.0,
+                        intraday_probability DOUBLE PRECISION DEFAULT 0.0,
+                        updated_at TIMESTAMP DEFAULT now()
+                    );
+                """)
+                conn.commit()
+
                 # Fetch recent indicators (up to 10 days) to see momentum trends
                 cur.execute("""
                     SELECT trade_date, rsi14, macd_line, macd_signal, macd_hist, ema12, ema26

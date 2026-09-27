@@ -22,6 +22,26 @@ def scan_and_store_cup_and_handle(ticker: str) -> bool:
     """
     try:
         with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+                        ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                        is_active BOOLEAN DEFAULT False,
+                        pattern_start_date DATE,
+                        cup_bottom_date DATE,
+                        handle_start_date DATE,
+                        breakout_date DATE,
+                        breakout_price DOUBLE PRECISION,
+                        target_price DOUBLE PRECISION,
+                        stop_loss DOUBLE PRECISION,
+                        details JSONB,
+                        historical_patterns JSONB,
+                        last_updated TIMESTAMP DEFAULT now()
+                    );
+                """)
+                conn.commit()
+
+        with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT trade_date, open, high, low, close
