@@ -1026,12 +1026,13 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
     })
   }
 
-  // Load matching pattern occurrences for all selected pattern checkboxes
+  // Load matching pattern occurrences for all selected pattern checkboxes or ticker search
   useEffect(() => {
-    if (!selectedPatterns.length) return
+    if (!selectedPatterns.length && !search.trim()) return
     setLoading(true)
     const codesParam = selectedPatterns.join(',')
-    fetch(`${apiBase}/patterns/list?pattern_code=${encodeURIComponent(codesParam)}&timeframe=${encodeURIComponent(timeframe)}&fno_only=${fnoOnly}&indices_only=${indicesOnly}&limit=200`)
+    const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''
+    fetch(`${apiBase}/patterns/list?pattern_code=${encodeURIComponent(codesParam)}&timeframe=${encodeURIComponent(timeframe)}&days=60&fno_only=${fnoOnly}&indices_only=${indicesOnly}${searchParam}&limit=200`)
       .then(r => r.json())
       .then(d => {
         setPatternData(d.rows || [])
@@ -1043,7 +1044,7 @@ export function PatternViewerTab({ apiBase = '/api/intelligence', dataset = 'int
         }
       })
       .catch(() => setLoading(false))
-  }, [selectedPatterns, timeframe, apiBase, fnoOnly, indicesOnly])
+  }, [selectedPatterns, timeframe, search, apiBase, fnoOnly, indicesOnly])
 
   const filteredRows = useMemo(() => {
     if (!search.trim()) return patternData
@@ -3024,7 +3025,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 ⚡ Volume Spike Dates Only (Volume &gt; 1.3x 20-Day Average)
               </h3>
               <span style={badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.15)')}>
-                {volumeSpikes.length.toFixed(1)} Spike Dates
+                {volumeSpikes.length} Spike Dates
               </span>
             </div>
 
@@ -3042,17 +3043,25 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   </tr>
                 </thead>
                 <tbody>
-                  {volumeSpikes.map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                      <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{row.trade_date}</td>
-                      <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{row.open.toFixed(1)}</td>
-                      <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.high.toFixed(1)}</td>
-                      <td style={{ padding: '10px 12px', color: '#ef4444' }}>{row.low.toFixed(1)}</td>
-                      <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.close.toFixed(1)}</td>
-                      <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{row.volume.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                      <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{renderTruncatedCell(row.vwap_spike_ratio)}</td>
+                  {volumeSpikes.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: '16px 12px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                        No volume spike dates (&gt; 1.3x 20-Day Average) detected for this stock.
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    volumeSpikes.map((row, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                        <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{row.trade_date}</td>
+                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{row.open.toFixed(1)}</td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.high.toFixed(1)}</td>
+                        <td style={{ padding: '10px 12px', color: '#ef4444' }}>{row.low.toFixed(1)}</td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.close.toFixed(1)}</td>
+                        <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{row.volume.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                        <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{renderTruncatedCell(row.vwap_spike_ratio)}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3077,21 +3086,21 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PE</div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {(fundamentals.pe_metrics?.pe || 15.5).toFixed(1)}
+                      {(fundamentals.pe_metrics?.pe ?? 0).toFixed(1)}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>AVERAGE PE</div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {(fundamentals.pe_metrics?.average_pe || 20.0).toFixed(1)}
+                      {(fundamentals.pe_metrics?.average_pe ?? 0).toFixed(1)}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SECTOR PE</div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {(fundamentals.pe_metrics?.sector_pe || 21.4).toFixed(1)}
+                      {(fundamentals.pe_metrics?.sector_pe ?? 0).toFixed(1)}
                     </div>
                   </div>
                 </div>
@@ -3106,21 +3115,21 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.pat || '20,946.0')}
+                      {renderTruncatedCell(fundamentals.pat_metrics?.pat || 'N/A')}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>AVERAGE PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.average_pat || '205,926,000,000.0')}
+                      {renderTruncatedCell(fundamentals.pat_metrics?.average_pat || 'N/A')}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SECTOR PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.sector_pat || '18,200.0')}
+                      {renderTruncatedCell(fundamentals.pat_metrics?.sector_pat || 'N/A')}
                     </div>
                   </div>
                 </div>
@@ -3135,14 +3144,14 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>CASH FLOW</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.cash_flow_metrics?.cash_flow || '14,200.0')}
+                      {renderTruncatedCell(fundamentals.cash_flow_metrics?.cash_flow || 'N/A')}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>AVERAGE CASH FLOW</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.cash_flow_metrics?.average_cash_flow || '13,500.0')}
+                      {renderTruncatedCell(fundamentals.cash_flow_metrics?.average_cash_flow || 'N/A')}
                     </div>
                   </div>
                 </div>

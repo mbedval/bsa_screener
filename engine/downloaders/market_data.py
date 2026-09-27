@@ -249,12 +249,12 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
         # 3. Fundamentals
         download_fundamental_data(ticker_clean, formatted, tk)
 
-        # 4. Auto-analyze and summarize immediately
+        # 4. Analyze ticker immediately alongside Phase 1 download
         try:
             from engine.analysis.orchestrator import analyze_and_summarize_ticker
             analyze_and_summarize_ticker(ticker_clean)
         except Exception as e:
-            logger.error(f"Error auto-analyzing after download for {ticker_clean}: {e}")
+            logger.error(f"Error analyzing {ticker_clean} during Phase 1 download: {e}")
 
         return True
 

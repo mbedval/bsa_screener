@@ -25,6 +25,31 @@ DEFAULT_HEADERS = {
 
 _screener_ticker_cache: dict = {}
 _screener_cache_loaded: bool = False
+_screener_company_id_cache: dict = {}
+
+
+def screener_safe_request(url: str, max_retries: int = 3, timeout: int = 10) -> Optional[requests.Response]:
+    """Execute Screener API HTTP request with retry, backoff, and connection error handling."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
+            if res.status_code == 200:
+                return res
+            elif res.status_code in (429, 502, 503, 504):
+                sleep_time = attempt * 2.0
+                logger.warning(f"Screener HTTP {res.status_code} for {url}. Retrying in {sleep_time}s (attempt {attempt}/{max_retries})...")
+                time.sleep(sleep_time)
+            else:
+                logger.warning(f"Screener API returned HTTP {res.status_code} for {url}")
+                return None
+        except (requests.exceptions.RequestException, Exception) as err:
+            sleep_time = attempt * 2.0
+            if attempt < max_retries:
+                logger.warning(f"Screener connection error ({err}). Retrying in {sleep_time}s (attempt {attempt}/{max_retries})...")
+                time.sleep(sleep_time)
+            else:
+                logger.warning(f"Failed connecting to Screener ({url}) after {max_retries} attempts: {err}")
+    return None
 
 
 def _load_screener_ticker_mappings() -> dict:
@@ -55,8 +80,9 @@ def _load_screener_ticker_mappings() -> dict:
 
 def reload_screener_ticker_mappings():
     """Force reload the screener ticker mapping cache from DB (call after UI updates)."""
-    global _screener_cache_loaded
+    global _screener_cache_loaded, _screener_company_id_cache
     _screener_cache_loaded = False
+    _screener_company_id_cache.clear()
     return _load_screener_ticker_mappings()
 
 
@@ -65,6 +91,7 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
     Search Screener.in for ticker and return internal company ID integer.
 
     Fallback logic:
+      0. Check in-memory resolved ID cache.
       1. Check screener_ticker_mappings table:
          a. If screener_company_id is set → use it directly (no search needed).
          b. If only screener_ticker is set → use it as the search query.
@@ -73,6 +100,10 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
     """
     cleaned = ticker.replace(".NS", "").replace(".BO", "").strip().upper()
 
+    # Step 0: Check in-memory cache first
+    if cleaned in _screener_company_id_cache:
+        return _screener_company_id_cache[cleaned]
+
     # Step 1: Check DB mapping for this ticker
     mappings = _load_screener_ticker_mappings()
     mapping = mappings.get(cleaned)
@@ -80,6 +111,7 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
         # Direct company ID override — skip search entirely
         if mapping.get('screener_company_id'):
             direct_id = mapping['screener_company_id']
+            _screener_company_id_cache[cleaned] = direct_id
             logger.info(f"Screener direct ID override: {cleaned} → company_id={direct_id}")
             return direct_id
         search_name = mapping['screener_ticker']
@@ -89,20 +121,24 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
         search_name = cleaned
 
     search_url = f"https://www.screener.in/api/company/search/?q={search_name}"
-    try:
-        res = requests.get(search_url, headers=DEFAULT_HEADERS, timeout=10)
-        if res.status_code == 200:
+    res = screener_safe_request(search_url, max_retries=3, timeout=10)
+    if res and res.status_code == 200:
+        try:
             results = res.json()
+            company_id = None
             for item in results:
-                # Match exact ticker in url e.g. /company/HDFCBANK/
                 url = item.get("url", "")
                 if f"/company/{search_name}/" in url or item.get("name", "").upper() == search_name:
-                    return item.get("id")
-            # If no exact URL match, pick first result if available
-            if results and isinstance(results, list):
-                return results[0].get("id")
-    except Exception as err:
-        logger.warning(f"Error resolving Screener company ID for {ticker}: {err}")
+                    company_id = item.get("id")
+                    break
+            if not company_id and results and isinstance(results, list):
+                company_id = results[0].get("id")
+
+            if company_id:
+                _screener_company_id_cache[cleaned] = company_id
+                return company_id
+        except Exception as err:
+            logger.warning(f"Error parsing Screener search result for {ticker}: {err}")
     return None
 
 
@@ -111,14 +147,12 @@ def fetch_mf_holdings_from_screener(company_id: int) -> Optional[Dict]:
     Fetch DII / Mutual Fund quarterly shareholder data from Screener API.
     """
     api_url = f"https://www.screener.in/api/3/{company_id}/investors/domestic_institutions/quarterly/"
-    try:
-        res = requests.get(api_url, headers=DEFAULT_HEADERS, timeout=12)
-        if res.status_code == 200:
+    res = screener_safe_request(api_url, max_retries=3, timeout=12)
+    if res and res.status_code == 200:
+        try:
             return res.json()
-        else:
-            logger.warning(f"Screener API returned HTTP {res.status_code} for company ID {company_id}")
-    except Exception as err:
-        logger.warning(f"Failed fetching Screener shareholders for company ID {company_id}: {err}")
+        except Exception:
+            pass
     return None
 
 
@@ -183,6 +217,88 @@ def quarter_str_to_date(q_str: str) -> str:
         pass
     return "2000-01-01"
 
+def ensure_mf_fii_tables_exist(cur=None):
+    """Ensure all required Mutual Fund and FII tables exist in PostgreSQL database."""
+    ddl = """
+        CREATE TABLE IF NOT EXISTS mf_amc (
+            id SERIAL PRIMARY KEY,
+            amc_name TEXT UNIQUE NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS mf_scheme (
+            id SERIAL PRIMARY KEY,
+            amc_id INTEGER REFERENCES mf_amc(id),
+            scheme_code TEXT,
+            scheme_name TEXT NOT NULL,
+            UNIQUE(amc_id, scheme_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS mf_holdings (
+            id SERIAL PRIMARY KEY,
+            ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+            fund_name TEXT NOT NULL,
+            holding_pct DOUBLE PRECISION DEFAULT 0.0,
+            shares_held BIGINT DEFAULT 0,
+            rank INTEGER DEFAULT 0,
+            disclosure_date TEXT,
+            downloaded_at TEXT,
+            UNIQUE (ticker, fund_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
+
+        CREATE TABLE IF NOT EXISTS mf_historical_holdings (
+            id SERIAL PRIMARY KEY,
+            snapshot_date DATE NOT NULL,
+            scheme_id INTEGER REFERENCES mf_scheme(id),
+            ticker TEXT REFERENCES ticker_master(ticker),
+            isin TEXT,
+            shares BIGINT,
+            market_value DOUBLE PRECISION,
+            portfolio_weight_pct DOUBLE PRECISION,
+            source TEXT,
+            source_date DATE,
+            retrieved_at TIMESTAMP DEFAULT now(),
+            UNIQUE(snapshot_date, scheme_id, ticker)
+        );
+        CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
+
+        CREATE TABLE IF NOT EXISTS fii_investor (
+            id SERIAL PRIMARY KEY,
+            investor_name TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS fii_historical_holdings (
+            id SERIAL PRIMARY KEY,
+            snapshot_date DATE NOT NULL,
+            investor_id INTEGER REFERENCES fii_investor(id),
+            ticker TEXT REFERENCES ticker_master(ticker),
+            portfolio_weight_pct DOUBLE PRECISION,
+            retrieved_at TIMESTAMP DEFAULT now(),
+            UNIQUE(snapshot_date, investor_id, ticker)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fii_hist_ticker_date ON fii_historical_holdings(ticker, snapshot_date);
+
+        CREATE TABLE IF NOT EXISTS mf_behavior (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
+            data JSONB,
+            updated_at TIMESTAMP DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS fii_behavior (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
+            data JSONB NOT NULL,
+            updated_at TIMESTAMP DEFAULT now()
+        );
+    """
+    if cur:
+        cur.execute(ddl)
+    else:
+        with get_db_connection() as conn:
+            with conn.cursor() as c:
+                c.execute(ddl)
+                conn.commit()
+
+
 def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
     """
     Save parsed holdings to the DB (current snapshot and historical).
@@ -191,27 +307,10 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Ensure current table exists
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS mf_holdings (
-                        id SERIAL PRIMARY KEY,
-                        ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-                        fund_name TEXT NOT NULL,
-                        holding_pct DOUBLE PRECISION DEFAULT 0.0,
-                        shares_held BIGINT DEFAULT 0,
-                        rank INTEGER DEFAULT 0,
-                        disclosure_date TEXT,
-                        downloaded_at TEXT,
-                        UNIQUE (ticker, fund_name)
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
-                """)
-                
-                # We assume mf_historical_holdings exists via schema.sql
+                ensure_mf_fii_tables_exist(cur)
 
                 # Delete old holdings for clean refresh
                 cur.execute("DELETE FROM mf_holdings WHERE ticker = %s;", (ticker,))
-                # cur.execute("DELETE FROM mf_historical_holdings WHERE ticker = %s;", (ticker,))
 
                 if holdings:
                     query = """
@@ -247,7 +346,7 @@ def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:
                         # 2. Save historical snapshots
                         if "historical" in h:
                             # resolve scheme_id
-                            cur.execute("SELECT id FROM mf_scheme WHERE scheme_name = %s", (h["fund_name"],))
+                            cur.execute("SELECT id FROM mf_scheme WHERE scheme_name = %s LIMIT 1", (h["fund_name"],))
                             res = cur.fetchone()
                             if res:
                                 scheme_id = res[0]
@@ -288,6 +387,23 @@ def download_mf_holdings_for_ticker(ticker: str) -> Tuple[bool, int]:
 
     holdings = parse_and_rank_mf_holdings(raw_data)
     saved = save_mf_holdings_to_db(cleaned, holdings)
+
+    if saved:
+        try:
+            from engine.analyzers.mf_behavior import analyze_mf_behavior
+            res = analyze_mf_behavior(cleaned)
+            if res and "error" not in res:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO mf_behavior (ticker, data, updated_at)
+                            VALUES (%s, %s, now())
+                            ON CONFLICT (ticker) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+                        """, (cleaned, json.dumps(res)))
+                        conn.commit()
+        except Exception as e:
+            logger.error(f"Error analyzing MF behavior for {cleaned} during download: {e}")
+
     return saved, len(holdings)
 
 
@@ -325,14 +441,12 @@ def fetch_fii_holdings_from_screener(company_id: int) -> Optional[Dict]:
     Fetch FII / Foreign Institution quarterly shareholder data from Screener API.
     """
     api_url = f"https://www.screener.in/api/3/{company_id}/investors/foreign_institutions/quarterly/"
-    try:
-        res = requests.get(api_url, headers=DEFAULT_HEADERS, timeout=12)
-        if res.status_code == 200:
+    res = screener_safe_request(api_url, max_retries=3, timeout=12)
+    if res and res.status_code == 200:
+        try:
             return res.json()
-        else:
-            logger.warning(f"Screener API returned HTTP {res.status_code} for company ID {company_id} (FII)")
-    except Exception as err:
-        logger.warning(f"Failed fetching Screener FII shareholders for company ID {company_id}: {err}")
+        except Exception:
+            pass
     return None
 
 def parse_and_rank_fii_holdings(raw_data: Dict) -> List[Dict]:
@@ -407,6 +521,7 @@ def download_fii_holdings_for_ticker(ticker: str) -> tuple[bool, int]:
     
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            ensure_mf_fii_tables_exist(cur)
             for item in parsed_data:
                 investor_name = item['fund_name']
                 
@@ -443,7 +558,7 @@ def download_fii_holdings_for_ticker(ticker: str) -> tuple[bool, int]:
     return True, records_upserted
 
 def download_all_fii_holdings(progress_callback=None):
-    from engine.cli import get_spot_tickers
+    from engine.utils.helpers import get_spot_tickers
     tickers = get_spot_tickers()
     if not tickers:
         return

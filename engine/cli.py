@@ -2,6 +2,7 @@
 import sys
 import argparse
 import logging
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -22,7 +23,12 @@ logger = setup_logger("bsa_cli")
 
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
-    parser.add_argument("--mode", choices=["download-spot", "download-fno", "analyze-all", "analyze-elliot", "full-pipeline", "news-analyze", "backup", "mutualfund"], help="Pipeline batch operation mode")
+    parser.add_argument("--mode", choices=[
+        "download-all", "download-spot", "download-mf", "download-fno",
+        "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
+        "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
+        "full-pipeline", "news-analyze", "backup", "mutualfund"
+    ], help="Pipeline batch operation mode")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
     parser.add_argument("--report", type=str, help="Generate report for a specific ticker")
     parser.add_argument("--pdf", action="store_true", help="Explicitly opt-in to generate PDF report alongside HTML")
@@ -42,38 +48,7 @@ def main():
     from engine.database.connection import get_db_connection
     from engine.utils.progress import create_phase_progress
     from engine.utils.checkpoint import get_completed_tickers, clear_phase_checkpoint
-
-    def get_spot_tickers():
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT ticker FROM ticker_master")
-                return [row[0] for row in cur.fetchall()]
-
-    def get_fno_tickers():
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                fno_set = set()
-                try:
-                    cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-                    for row in cur.fetchall():
-                        fno_set.add(row[0])
-                except Exception:
-                    conn.rollback()
-                try:
-                    cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
-                    for row in cur.fetchall():
-                        fno_set.add(row[0])
-                except Exception:
-                    conn.rollback()
-                try:
-                    cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
-                    for row in cur.fetchall():
-                        fno_set.add(row[0])
-                except Exception:
-                    conn.rollback()
-                for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
-                    fno_set.add(idx)
-                return list(fno_set)
+    from engine.utils.helpers import get_spot_tickers, get_fno_tickers
 
     def resolve_resume_flag(phase_name: str, phase_key: str, total_count: int, valid_tickers=None) -> bool:
         if args.fresh or args.force:
@@ -110,81 +85,229 @@ def main():
         clear_phase_checkpoint(phase_key)
         return False
 
-    def run_phase_1():
+    # ── Phase 1: Raw Data Ingestion Sub-Runners ──────────────────────────────
+    def run_phase_1_1():
+        p_start = time.time()
+        logger.info("=== Phase 1.1: Spot Data Download (Master Price & Fundamentals) ===")
         valid_tickers = get_spot_tickers()
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 1 (Download Spot)", "spot_download", total, valid_tickers=valid_tickers)
+        resume = resolve_resume_flag("Phase 1.1 (Download Spot)", "spot_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("spot_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 1 (Download Spot) are already completed. Use --fresh or --force to re-download.")
-            return
-        progress, task_id = create_phase_progress(1, "Download Spot", pending_count if resume else total)
-        with progress:
-            def cb(ticker, status, advance=1):
-                if ticker is not None:
-                    progress.update(task_id, advance=advance)
-            download_all_tickers(progress_callback=cb, resume=resume, force=args.force)
+            logger.info(f"All {total} items for Phase 1.1 (Download Spot) are already completed. Use --fresh or --force to re-download.")
+        else:
+            progress, task_id = create_phase_progress(1, "Download Spot", pending_count if resume else total)
+            with progress:
+                def cb(ticker, status, advance=1):
+                    if ticker is not None:
+                        progress.update(task_id, advance=advance)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1.1 (Download Spot) completed in {p_elapsed:.2f}s.")
 
-    def run_phase_2():
+    def run_phase_1_2():
+        p_start = time.time()
+        logger.info("=== Phase 1.2: Mutual Fund & FII Holdings Download ===")
+        from engine.downloaders.mutual_fund import ensure_mf_fii_tables_exist, download_all_fii_holdings
+        ensure_mf_fii_tables_exist()
+        total_tickers = len(get_spot_tickers())
+        total_items = total_tickers * 2  # MF holdings (total_tickers) + FII holdings (total_tickers)
+        progress, task_id = create_phase_progress(1, "Download MF & FII", total_items)
+        with progress:
+            def cb(current, total, ticker, count):
+                progress.update(task_id, advance=1)
+            download_all_mf_holdings(progress_callback=cb)
+            download_all_fii_holdings(progress_callback=cb)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1.2 (Download MF & FII) completed in {p_elapsed:.2f}s.")
+
+    def run_phase_1_3():
+        p_start = time.time()
+        logger.info("=== Phase 1.3: F&O Derivatives Download ===")
         valid_tickers = get_fno_tickers()
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 2 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
+        resume = resolve_resume_flag("Phase 1.3 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("fno_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 2 (Download F&O) are already completed. Use --fresh to re-download.")
-            return
-        progress, task_id = create_phase_progress(2, "Download F&O", pending_count if resume else total)
-        with progress:
-            def cb(ticker, status, advance=1):
-                if ticker is not None:
-                    progress.update(task_id, advance=advance)
-            download_all_derivatives(progress_callback=cb, resume=resume)
+            logger.info(f"All {total} items for Phase 1.3 (Download F&O) are already completed. Use --fresh to re-download.")
+        else:
+            progress, task_id = create_phase_progress(1, "Download F&O", pending_count if resume else total)
+            with progress:
+                def cb(ticker, status, advance=1):
+                    if ticker is not None:
+                        progress.update(task_id, advance=advance)
+                download_all_derivatives(progress_callback=cb, resume=resume)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1.3 (Download F&O) completed in {p_elapsed:.2f}s.")
 
-    def run_phase_3():
+    def run_phase_1():
+        p_start = time.time()
+        logger.info("=== Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===")
+        run_phase_1_1()
+        run_phase_1_2()
+        run_phase_1_3()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1 (Raw Data Ingestion) fully completed in {p_elapsed:.2f}s.")
+
+    # ── Phase 2: Multi-Factor Scoring & Analysis Sub-Runners ────────────────
+    def run_phase_2_1():
+        p_start = time.time()
+        logger.info("[Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...")
         valid_tickers = get_spot_tickers()
-        total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 3 (Analyze All)", "analysis", total, valid_tickers=valid_tickers)
-        completed = get_completed_tickers("analysis", valid_tickers=valid_tickers) if resume else set()
-        pending_count = max(total - len(completed), 0)
-        if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 3 (Analyze All) are already completed. Use --fresh to re-analyze.")
-            return
-        progress, task_id = create_phase_progress(3, "Analyze All", pending_count if resume else total)
-        with progress:
-            def cb(ticker, status, advance=1):
-                if ticker is not None:
-                    progress.update(task_id, advance=advance)
-            analyze_all_tickers(progress_callback=cb, resume=resume)
+        from engine.analysis.hhhl_scanner import scan_and_store_hhhl
+        from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
+        from engine.analysis.retracement import generate_retracement_speculator_analysis
         
-        # Pre-calculate Stocks Respecting Chart Patterns for database
+        progress, task_id = create_phase_progress(2, "Analyze Technical", len(valid_tickers))
+        with progress:
+            for t in valid_tickers:
+                try:
+                    scan_and_store_hhhl(t)
+                    scan_and_store_cup_and_handle(t)
+                except Exception as e:
+                    logger.error(f"Error in technical scanning for {t}: {e}")
+                progress.update(task_id, advance=1)
+        
         try:
-            from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+            generate_retracement_speculator_analysis()
+        except Exception as e:
+            logger.error(f"Error running Retracement Speculator Analysis: {e}")
+            
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.1/2.8] Technical Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_2():
+        p_start = time.time()
+        logger.info("[Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...")
+        valid_tickers = get_spot_tickers()
+        from engine.analysis.fundamental import analyze_fundamental
+        progress, task_id = create_phase_progress(2, "Analyze Fundamental", len(valid_tickers))
+        with progress:
+            for t in valid_tickers:
+                try:
+                    analyze_fundamental(t)
+                except Exception as e:
+                    logger.error(f"Error in fundamental analysis for {t}: {e}")
+                progress.update(task_id, advance=1)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.2/2.8] Fundamental Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_3():
+        p_start = time.time()
+        logger.info("[Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...")
+        fno_tickers = get_fno_tickers()
+        from engine.analysis.options import analyze_options_chain
+        progress, task_id = create_phase_progress(2, "Analyze F&O Options", len(fno_tickers))
+        with progress:
+            for t in fno_tickers:
+                try:
+                    analyze_options_chain(t)
+                except Exception as e:
+                    logger.error(f"Error analyzing F&O options for {t}: {e}")
+                progress.update(task_id, advance=1)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_4():
+        p_start = time.time()
+        logger.info("[Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...")
+        valid_tickers = get_spot_tickers()
+        from engine.analysis.patterns import scan_and_store_ticker_patterns
+        from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+        progress, task_id = create_phase_progress(2, "Analyze Patterns", len(valid_tickers))
+        with progress:
+            for t in valid_tickers:
+                try:
+                    scan_and_store_ticker_patterns(t)
+                except Exception as e:
+                    logger.error(f"Error scanning chart patterns for {t}: {e}")
+                progress.update(task_id, advance=1)
+        try:
             generate_stocks_respecting_patterns()
         except Exception as e:
-            logger.error(f"Error running pre-calculation for stocks respecting patterns: {e}")
+            logger.error(f"Error running Stocks Respecting Patterns: {e}")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.4/2.8] Chart Pattern Analysis completed in {p_elapsed:.2f}s.")
 
-        # Pre-calculate Sectorwise Lead-Follow Relationship Groups for database
-        try:
-            from engine.analysis.sector_followers import generate_sector_followers_analysis
-            generate_sector_followers_analysis()
-        except Exception as e:
-            logger.error(f"Error running pre-calculation for sectorwise followers: {e}")
-
-        # Pre-calculate Mutual Fund Behavior for database
+    def run_phase_2_5():
+        p_start = time.time()
+        logger.info("[Sub-task 2.5/2.8] Starting Mutual Fund & FII Institutional Behavior Analysis...")
         try:
             from engine.analyzers.mf_behavior import precalculate_all_mf_behavior
             precalculate_all_mf_behavior()
         except Exception as e:
-            logger.error(f"Error running pre-calculation for MF behavior: {e}")
-
-        # Pre-calculate FII Behavior for database
+            logger.error(f"Error precalculating MF behavior: {e}")
         try:
             from engine.analyzers.fii_behavior import precalculate_all_fii_behavior
             precalculate_all_fii_behavior()
         except Exception as e:
-            logger.error(f"Error running pre-calculation for FII behavior: {e}")
+            logger.error(f"Error precalculating FII behavior: {e}")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.5/2.8] Mutual Fund & FII Behavior Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_6():
+        p_start = time.time()
+        logger.info("[Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...")
+        valid_tickers = get_spot_tickers()
+        from engine.analysis.elliot import analyze_and_store_elliot
+        progress, task_id = create_phase_progress(2, "Analyze Elliot", len(valid_tickers))
+        with progress:
+            for t in valid_tickers:
+                try:
+                    analyze_and_store_elliot(t)
+                except Exception as e:
+                    logger.error(f"Error executing Elliot Wave analysis for {t}: {e}")
+                progress.update(task_id, advance=1)
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.6/2.8] Elliot Wave Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_7():
+        p_start = time.time()
+        logger.info("[Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...")
+        try:
+            from engine.analysis.sector_followers import generate_sector_followers_analysis
+            generate_sector_followers_analysis()
+        except Exception as e:
+            logger.error(f"Error running Sectorwise Followers Analysis: {e}")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2_8():
+        p_start = time.time()
+        logger.info("[Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...")
+        valid_tickers = get_spot_tickers()
+        total = len(valid_tickers)
+        resume = resolve_resume_flag("Phase 2.8 (Analyze Summaries)", "analysis", total, valid_tickers=valid_tickers)
+        completed = get_completed_tickers("analysis", valid_tickers=valid_tickers) if resume else set()
+        pending_count = max(total - len(completed), 0)
+
+        if pending_count > 0 or not resume:
+            progress, task_id = create_phase_progress(2, "Analyze Summaries", pending_count if resume else total)
+            with progress:
+                def cb(ticker, status, advance=1):
+                    if ticker is not None:
+                        progress.update(task_id, advance=advance)
+                analyze_all_tickers(progress_callback=cb, resume=resume)
+        else:
+            logger.info(f"All {total} tickers already analyzed and synthesized! Use --fresh to re-synthesize.")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in {p_elapsed:.2f}s.")
+
+    def run_phase_2():
+        phase2_start = time.time()
+        logger.info("=== Starting Phase 2: Consolidated Scoring, Scanners & Analysis Engine (--mode analyze-all) ===")
+        run_phase_2_1()
+        run_phase_2_2()
+        run_phase_2_3()
+        run_phase_2_4()
+        run_phase_2_5()
+        run_phase_2_6()
+        run_phase_2_7()
+        run_phase_2_8()
+        phase2_elapsed = time.time() - phase2_start
+        logger.info(f"[✓] Phase 2 (Analyze All) fully completed in {phase2_elapsed:.2f}s.")
 
     def backup_historical_calls():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")
@@ -310,45 +433,15 @@ def main():
                     
                 logger.info(f"[✓] Backup complete! Synchronized {copied} new historical call records to 'historical_call_bkp' table and saved backup to {bkp_csv_path}.")
 
-    # Batch Operations
-    if args.mode == "download-spot":
-        logger.info("Triggered downloading spot data for all master tickers...")
+    # ── Batch Operations Dispatcher ──────────────────────────────────────────
+    if args.mode == "download-all":
+        logger.info("Triggered Phase 1: Full Raw Data Ingestion Pipeline...")
         run_phase_1()
-    elif args.mode == "download-fno":
-        logger.info("Triggered downloading F&O option chain data...")
-        run_phase_2()
-    elif args.mode == "analyze-all":
-        logger.info("Triggered scoring and analysis engine for all master tickers...")
-        run_phase_3()
-    elif args.mode == "analyze-elliot":
-        logger.info("Triggered standalone Elliot Wave analysis for all master tickers...")
-        from engine.analysis.elliot import analyze_and_store_elliot
-        valid_tickers = get_spot_tickers()
-        total = len(valid_tickers)
-        progress, task_id = create_phase_progress(1, "Analyze Elliot", total)
-        with progress:
-            for ticker in valid_tickers:
-                try:
-                    analyze_and_store_elliot(ticker)
-                except Exception as e:
-                    logger.error(f"Error executing Elliot Wave analysis for {ticker}: {e}")
-                progress.update(task_id, advance=1)
-        logger.info("[✓] Standalone Elliot Wave analysis completed!")
-    elif args.mode == "full-pipeline":
-        logger.info("Triggered Full End-to-End Pipeline (Spot Download -> F&O Download -> Scoring & Analysis -> Backup)...")
-        logger.info("--- Starting Phase 1: Spot Data Download ---")
-        run_phase_1()
-        logger.info("--- Starting Phase 2: F&O Derivatives Download ---")
-        run_phase_2()
-        logger.info("--- Starting Phase 3: Technical & Fundamental Scoring & Analysis ---")
-        run_phase_3()
-        logger.info("--- Starting Backup: Retaining Historical Calls ---")
-        backup_historical_calls()
-        logger.info("[✓] Full pipeline execution completed successfully!")
-    elif args.mode == "backup":
-        backup_historical_calls()
-    elif args.mode == "mutualfund":
-        logger.info("Triggered downloading Mutual Fund & FII holdings from Screener.in...")
+    elif args.mode == "download-spot":
+        logger.info("Triggered Phase 1.1: Spot Data Download...")
+        run_phase_1_1()
+    elif args.mode in ("download-mf", "mutualfund"):
+        logger.info("Triggered Phase 1.2: Mutual Fund & FII Holdings Download...")
         if args.ticker:
             ticker = args.ticker.upper().strip()
             from engine.downloaders.mutual_fund import download_fii_holdings_for_ticker
@@ -356,15 +449,45 @@ def main():
             ok_fii, count_fii = download_fii_holdings_for_ticker(ticker)
             logger.info(f"MF/FII download for {ticker}: MF(ok={ok}, saved={count}), FII(ok={ok_fii}, saved={count_fii}).")
         else:
-            total_tickers = len(get_spot_tickers())
-            progress, task_id = create_phase_progress(1, "Mutual Fund & FII Holdings", total_tickers)
-            from engine.downloaders.mutual_fund import download_all_fii_holdings
-            with progress:
-                def cb(current, total, ticker, count):
-                    progress.update(task_id, advance=1)
-                download_all_mf_holdings(progress_callback=cb)
-                download_all_fii_holdings(progress_callback=cb)
-            logger.info("[✓] Mutual Fund & FII holdings download completed!")
+            run_phase_1_2()
+    elif args.mode == "download-fno":
+        logger.info("Triggered Phase 1.3: F&O Derivatives Download...")
+        run_phase_1_3()
+    elif args.mode == "analyze-all":
+        logger.info("Triggered Phase 2: Consolidated Scoring & Analysis Engine...")
+        run_phase_2()
+    elif args.mode == "analyze-technical":
+        logger.info("Triggered Phase 2.1: Technical Analysis & Scanners...")
+        run_phase_2_1()
+    elif args.mode == "analyze-fundamental":
+        logger.info("Triggered Phase 2.2: Fundamental Analysis...")
+        run_phase_2_2()
+    elif args.mode == "analyze-fo":
+        logger.info("Triggered Phase 2.3: F&O Derivative Options Analysis...")
+        run_phase_2_3()
+    elif args.mode == "analyze-patterns":
+        logger.info("Triggered Phase 2.4: Candlestick Chart Pattern Analysis...")
+        run_phase_2_4()
+    elif args.mode == "analyze-mf":
+        logger.info("Triggered Phase 2.5: Mutual Fund & FII Behavior Analysis...")
+        run_phase_2_5()
+    elif args.mode == "analyze-elliot":
+        logger.info("Triggered Phase 2.6: Elliot Wave Analysis...")
+        run_phase_2_6()
+    elif args.mode == "analyze-sector":
+        logger.info("Triggered Phase 2.7: Sector Followers Analysis...")
+        run_phase_2_7()
+    elif args.mode == "analyze-summaries":
+        logger.info("Triggered Phase 2.8: Multi-Factor Hybrid Synthesis...")
+        run_phase_2_8()
+    elif args.mode == "full-pipeline":
+        logger.info("Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...")
+        run_phase_1()
+        run_phase_2()
+        backup_historical_calls()
+        logger.info("[✓] Full pipeline execution completed successfully!")
+    elif args.mode == "backup":
+        backup_historical_calls()
     elif args.mode == "news-analyze":
         if not args.ticker:
             logger.error("--ticker argument is required when running --mode news-analyze (e.g. --mode news-analyze --ticker CROMPTON)")

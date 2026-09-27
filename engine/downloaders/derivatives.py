@@ -151,6 +151,14 @@ def download_and_insert_derivatives(ticker: str) -> bool:
                     """, (ticker_clean, strike, "PE", active_expiry, pe_volume, pe_ltp, spot, now_str))
 
                 conn.commit()
+
+        # Analyze F&O option chain immediately alongside derivative download
+        try:
+            from engine.analysis.options import analyze_options_chain
+            analyze_options_chain(ticker_clean)
+        except Exception as e:
+            logger.error(f"Error analyzing F&O options for {ticker_clean} during download: {e}")
+
         return True
     except Exception as e:
         logger.error(f"Error inserting derivative data for {ticker_clean}: {e}")

@@ -13,9 +13,8 @@ def analyze_and_store_elliot(ticker: str):
             with conn.cursor() as cur:
                 # Fetch recent indicators (up to 10 days) to see momentum trends
                 cur.execute("""
-                    SELECT trade_date, rsi14, macd_line, macd_signal, macd_hist, ema12, ema26, close
-                    FROM indicators_daily i
-                    JOIN ohlcv_daily o USING(ticker, trade_date)
+                    SELECT trade_date, rsi14, macd_line, macd_signal, macd_hist, ema12, ema26
+                    FROM indicators_daily
                     WHERE ticker = %s
                     ORDER BY trade_date DESC LIMIT 10
                 """, (ticker,))

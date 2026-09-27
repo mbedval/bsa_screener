@@ -98,3 +98,37 @@ def get_system_config(key: str, default: str = "") -> str:
     except Exception as e:
         logger.warning(f"Failed to query system_config for '{key}': {e}")
     return default
+
+def get_spot_tickers() -> list:
+    """Retrieve all spot master tickers from database."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker ASC")
+            return [row[0] for row in cur.fetchall()]
+
+def get_fno_tickers() -> list:
+    """Retrieve all F&O stock and index master tickers from database."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            fno_set = set()
+            try:
+                cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
+                for row in cur.fetchall():
+                    fno_set.add(row[0])
+            except Exception:
+                conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
+                for row in cur.fetchall():
+                    fno_set.add(row[0])
+            except Exception:
+                conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
+                for row in cur.fetchall():
+                    fno_set.add(row[0])
+            except Exception:
+                conn.rollback()
+            for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
+                fno_set.add(idx)
+            return sorted(list(fno_set))
