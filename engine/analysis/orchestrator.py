@@ -399,17 +399,21 @@ def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bo
         return
 
     success_count = len(completed_set)
-    for i, ticker in enumerate(pending_tickers, 1):
-        res = analyze_and_summarize_ticker(ticker)
-        if res:
-            success_count += 1
-            mark_ticker_completed("analysis", ticker)
-        if progress_callback:
-            logger.debug(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
-            progress_callback(ticker, res)
-        else:
-            logger.info(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
-        
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(analyze_and_summarize_ticker, ticker): ticker for ticker in pending_tickers}
+        for i, future in enumerate(as_completed(futures), 1):
+            t = futures[future]
+            res = future.result()
+            if res:
+                success_count += 1
+                mark_ticker_completed("analysis", t)
+            if progress_callback:
+                progress_callback(t, res)
+            else:
+                logger.debug(f"[{i}/{len(pending_tickers)}] Analyzed {t}: {'Success' if res else 'Failed'}")
+
     elapsed = time.time() - start_time
     failed_count = len(all_tickers) - success_count
     logger.info(f"Core Ticker Analysis completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")

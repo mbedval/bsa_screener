@@ -185,55 +185,35 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
         company_name = info.get("longName", info.get("shortName", ticker_clean))
         sector = info.get("sector", "Unknown")
         exchange = "BO" if formatted.endswith(".BO") else "NS"
-        has_options = bool(yfinance_safe_call(lambda: tk.options)) if hasattr(tk, "options") else False
+
+        from psycopg2.extras import execute_values
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Upsert ticker_master metadata while preserving/updating is_fno
+                # Upsert ticker_master metadata
                 cur.execute("""
-                    INSERT INTO ticker_master (ticker, company_name, is_fno, sector, exchange, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (ticker) DO UPDATE SET
                         company_name = EXCLUDED.company_name,
-                        is_fno = CASE WHEN EXCLUDED.is_fno = TRUE THEN TRUE ELSE ticker_master.is_fno END,
                         sector = EXCLUDED.sector,
                         exchange = EXCLUDED.exchange,
                         updated_at = EXCLUDED.updated_at
-                """, (ticker_clean, company_name, has_options, sector, exchange, now_str))
+                """, (ticker_clean, company_name, sector, exchange, now_str))
 
-                # Upsert OHLCV and Indicators
+                # Batch upsert OHLCV and Indicators
+                ohlcv_records = []
+                indicators_records = []
                 for idx, row in enriched.iterrows():
                     date_str = idx.strftime("%Y-%m-%d")
-                    
-                    cur.execute("""
-                        INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                            open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
-                            close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
-                            downloaded_at = EXCLUDED.downloaded_at
-                    """, (
+                    ohlcv_records.append((
                         ticker_clean, date_str,
                         _safe_float(row["Open"]), _safe_float(row["High"]),
                         _safe_float(row["Low"]), _safe_float(row["Close"]),
                         _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
                         now_str
                     ))
-
-                    cur.execute("""
-                        INSERT INTO indicators_daily (
-                            ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
-                            macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
-                            atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                            rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
-                            ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
-                            macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
-                            bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
-                            atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
-                            span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
-                    """, (
+                    indicators_records.append((
                         ticker_clean, date_str,
                         _safe_float(row.get("RSI14")), _safe_float(row.get("SMA20")),
                         _safe_float(row.get("SMA50")), _safe_float(row.get("EMA12")),
@@ -244,17 +224,37 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
                         _safe_float(row.get("Tenkan_sen")), _safe_float(row.get("Kijun_sen")),
                         _safe_float(row.get("Span_A")), _safe_float(row.get("Span_B")), now_str
                     ))
+
+                if ohlcv_records:
+                    execute_values(cur, """
+                        INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
+                        VALUES %s
+                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                            open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                            close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
+                            downloaded_at = EXCLUDED.downloaded_at
+                    """, ohlcv_records, page_size=500)
+
+                if indicators_records:
+                    execute_values(cur, """
+                        INSERT INTO indicators_daily (
+                            ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
+                            macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
+                            atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
+                        ) VALUES %s
+                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                            rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
+                            ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
+                            macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
+                            bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
+                            atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
+                            span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
+                    """, indicators_records, page_size=500)
+
                 conn.commit()
 
-        # 3. Fundamentals
-        download_fundamental_data(ticker_clean, formatted, tk)
-
-        # 4. Analyze ticker immediately alongside Phase 1 download
-        try:
-            from engine.analysis.orchestrator import analyze_and_summarize_ticker
-            analyze_and_summarize_ticker(ticker_clean)
-        except Exception as e:
-            logger.error(f"Error analyzing {ticker_clean} during Phase 1 download: {e}")
+        # 3. Fundamentals (reusing info dictionary)
+        download_fundamental_data(ticker_clean, formatted, tk, cached_info=info)
 
         return True
 
@@ -262,7 +262,7 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
         logger.error(f"Error downloading market data for {ticker_clean}: {e}")
         return False
 
-def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=None) -> bool:
+def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=None, cached_info: dict = None) -> bool:
     """Download quarterly financials and current PE ratios from yfinance and save to DB."""
     try:
         tk = yf_ticker_obj or yf.Ticker(formatted)
@@ -296,8 +296,8 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
 
         is_other_income_ok = int(abs(avg_other_inc) <= (0.05 * avg_pat)) if avg_pat > 0 else int(abs(avg_other_inc) == 0.0)
 
-        # PE, Debt, and Market Cap
-        info = yfinance_safe_call(lambda: tk.info) or {}
+        # PE, Debt, and Market Cap (reusing cached_info)
+        info = cached_info if cached_info is not None else (yfinance_safe_call(lambda: tk.info) or {})
         raw_mcap = info.get('marketCap') or info.get('totalAssets')
         market_cap = _safe_float(raw_mcap) or 0.0
 
@@ -389,10 +389,6 @@ def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callba
                 progress_callback(t, res)
             else:
                 logger.info(f"[{i}/{len(pending_tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
-            
-            # Batch sleep every 10 tickers to avoid triggering Yahoo Finance rate limit blocks
-            if i % 10 == 0 and i < len(pending_tickers):
-                time.sleep(1.0)
                 
     failed_count = len(all_tickers) - success_count
     logger.info(f"Pipeline completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}")

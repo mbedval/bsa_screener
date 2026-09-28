@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,15 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
         with active_conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE retracement_speculator_patterns;")
             
+            cur.execute("SELECT MAX(trade_date::date) FROM ohlcv_daily;")
+            max_row = cur.fetchone()
+            if not max_row or not max_row[0]:
+                logger.warning("No daily OHLCV rows found to compute retracement patterns.")
+                return False
+            max_date = max_row[0]
+            cutoff_365 = (max_date - timedelta(days=365)).strftime("%Y-%m-%d")
+            cutoff_180 = (max_date - timedelta(days=180)).strftime("%Y-%m-%d")
+            
             # Fetch tickers with OHLCV data over the last 365 days
             cur.execute("""
                 SELECT 
@@ -79,12 +88,12 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
                     COALESCE(MAX(a.technical_score), 50.0) AS tech_score,
                     COALESCE(MAX(a.fundamental_score), 50.0) AS fund_score
                 FROM ohlcv_daily o
-                LEFT JOIN ticker_master m ON UPPER(o.ticker) = UPPER(m.ticker)
-                LEFT JOIN analysis_summaries a ON UPPER(o.ticker) = UPPER(a.ticker)
-                WHERE o.trade_date::date >= (SELECT MAX(trade_date::date) FROM ohlcv_daily) - INTERVAL '365 days'
+                LEFT JOIN ticker_master m ON o.ticker = m.ticker
+                LEFT JOIN analysis_summaries a ON o.ticker = a.ticker
+                WHERE o.trade_date >= %s
                 GROUP BY o.ticker, m.company_name, m.sector
                 HAVING COUNT(o.trade_date) >= 30 AND MAX(o.high) > MIN(o.low)
-            """)
+            """, (cutoff_365,))
 
             rows = cur.fetchall()
             if not rows:
@@ -95,9 +104,9 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
             cur.execute("""
                 SELECT ticker, trade_date::date, high, low, close, volume
                 FROM ohlcv_daily
-                WHERE trade_date::date >= (SELECT MAX(trade_date::date) FROM ohlcv_daily) - INTERVAL '180 days'
+                WHERE trade_date >= %s
                 ORDER BY ticker, trade_date ASC;
-            """)
+            """, (cutoff_180,))
             all_ohlcv = cur.fetchall()
 
             ticker_ohlcv_map = {}

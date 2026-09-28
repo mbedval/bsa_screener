@@ -27,7 +27,7 @@ def main():
         "download-all", "download-spot", "download-mf", "download-fno",
         "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
-        "full-pipeline", "news-analyze", "backup", "mutualfund"
+        "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund"
     ], help="Pipeline batch operation mode")
     parser.add_argument("--watchlist", "-w", nargs="*", metavar="WATCHLIST", help="Filter pipeline operations to tickers in specified watchlist(s) by name or ID")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
@@ -205,16 +205,21 @@ def main():
         from engine.analysis.hhhl_scanner import scan_and_store_hhhl
         from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
         from engine.analysis.retracement import generate_retracement_speculator_analysis
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
+        def _worker_2_1(t):
+            try:
+                scan_and_store_hhhl(t)
+                scan_and_store_cup_and_handle(t)
+            except Exception as e:
+                logger.error(f"Error in technical scanning for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.1", "Technical Scanners", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    scan_and_store_hhhl(t)
-                    scan_and_store_cup_and_handle(t)
-                except Exception as e:
-                    logger.error(f"Error in technical scanning for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_1, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         
         try:
             generate_retracement_speculator_analysis()
@@ -230,14 +235,20 @@ def main():
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.fundamental import analyze_fundamental
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_2(t):
+            try:
+                analyze_fundamental(t)
+            except Exception as e:
+                logger.error(f"Error in fundamental analysis for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.2", "Fundamental Analysis", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    analyze_fundamental(t)
-                except Exception as e:
-                    logger.error(f"Error in fundamental analysis for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_2, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.2/2.8] Fundamental Analysis completed in {p_elapsed:.2f}s.")
 
@@ -247,14 +258,20 @@ def main():
         all_fno = get_fno_tickers()
         fno_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         from engine.analysis.options import analyze_options_chain
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_3(t):
+            try:
+                analyze_options_chain(t)
+            except Exception as e:
+                logger.error(f"Error analyzing F&O options for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.3", "F&O Options Analysis", len(fno_tickers), unit="tickers")
         with progress:
-            for t in fno_tickers:
-                try:
-                    analyze_options_chain(t)
-                except Exception as e:
-                    logger.error(f"Error analyzing F&O options for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_3, t) for t in fno_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in {p_elapsed:.2f}s.")
 
@@ -265,14 +282,20 @@ def main():
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.patterns import scan_and_store_ticker_patterns
         from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_4(t):
+            try:
+                scan_and_store_ticker_patterns(t)
+            except Exception as e:
+                logger.error(f"Error scanning chart patterns for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.4", "Chart Pattern Scanning", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    scan_and_store_ticker_patterns(t)
-                except Exception as e:
-                    logger.error(f"Error scanning chart patterns for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_4, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         try:
             generate_stocks_respecting_patterns()
         except Exception as e:
@@ -302,14 +325,20 @@ def main():
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.elliot import analyze_and_store_elliot
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_6(t):
+            try:
+                analyze_and_store_elliot(t)
+            except Exception as e:
+                logger.error(f"Error executing Elliot Wave analysis for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.6", "Elliot Wave Analysis", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    analyze_and_store_elliot(t)
-                except Exception as e:
-                    logger.error(f"Error executing Elliot Wave analysis for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_6, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.6/2.8] Elliot Wave Analysis completed in {p_elapsed:.2f}s.")
 
@@ -537,6 +566,27 @@ def main():
         run_phase_2()
         backup_historical_calls()
         logger.info("[✓] Full pipeline execution completed successfully!")
+    elif args.mode == "spot-pipeline":
+        logger.info("Triggered Spot Stocks Pipeline (download-spot -> download-fno -> analyze-technical -> analyze-fundamental -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
+        p_start = time.time()
+        run_phase_1_1()
+        run_phase_1_3()
+        run_phase_2_1()
+        run_phase_2_2()
+        run_phase_2_3()
+        run_phase_2_4()
+        run_phase_2_6()
+        run_phase_2_7()
+        run_phase_2_8()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Spot pipeline execution completed successfully in {p_elapsed:.2f}s!")
+    elif args.mode == "mf-pipeline":
+        logger.info("Triggered Mutual Fund & FII Pipeline (download-mf -> analyze-mf)...")
+        p_start = time.time()
+        run_phase_1_2()
+        run_phase_2_5()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Mutual Fund & FII pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "backup":
         backup_historical_calls()
     elif args.mode == "news-analyze":
