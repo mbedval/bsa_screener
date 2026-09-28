@@ -39,11 +39,11 @@ def ensure_retracement_table(conn):
         """)
         conn.commit()
 
-def generate_retracement_speculator_analysis(conn=None) -> bool:
+def generate_retracement_speculator_analysis(conn=None, tickers=None) -> bool:
     """
     Computes 52-week Fibonacci Retracement levels, quarterly speculator buy/dump volume ratios,
     financial year tax-cycle biases, consolidation period (days spent in tight rest range before breakout),
-    and speculator behavior scores across all active tickers.
+    and speculator behavior scores across active tickers.
     Saves pre-calculated results into PostgreSQL table.
     """
     def _run_with_conn(active_conn):
@@ -51,7 +51,11 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
         logger.info("Generating Retracement Pattern & Speculator Behavior analysis with Consolidation Days for database...")
 
         with active_conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE retracement_speculator_patterns;")
+            ticker_list = list(tickers) if tickers is not None else None
+            if ticker_list:
+                cur.execute("DELETE FROM retracement_speculator_patterns WHERE ticker = ANY(%s);", (ticker_list,))
+            else:
+                cur.execute("TRUNCATE TABLE retracement_speculator_patterns;")
             
             cur.execute("SELECT MAX(trade_date::date) FROM ohlcv_daily;")
             max_row = cur.fetchone()
@@ -63,37 +67,60 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
             cutoff_180 = (max_date - timedelta(days=180)).strftime("%Y-%m-%d")
             
             # Fetch tickers with OHLCV data over the last 365 days
-            cur.execute("""
-                SELECT 
-                    o.ticker,
-                    COALESCE(m.company_name, o.ticker) AS company_name,
-                    COALESCE(m.sector, 'General') AS sector,
-                    MAX(o.high) AS swing_high,
-                    MIN(o.low) AS swing_low,
-                    (ARRAY_AGG(o.close ORDER BY o.trade_date DESC))[1] AS cmp,
-                    COUNT(o.trade_date) AS total_days,
-                    -- Q1: Apr-Jun
-                    COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
-                             NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q1_ratio,
-                    -- Q2: Jul-Sep
-                    COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
-                             NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q2_ratio,
-                    -- Q3: Oct-Dec
-                    COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
-                             NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q3_ratio,
-                    -- Q4: Jan-Mar (Tax Loss / Financial Year-End Profit Taking)
-                    COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
-                             NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q4_ratio,
-                    -- Tech & Fund scores
-                    COALESCE(MAX(a.technical_score), 50.0) AS tech_score,
-                    COALESCE(MAX(a.fundamental_score), 50.0) AS fund_score
-                FROM ohlcv_daily o
-                LEFT JOIN ticker_master m ON o.ticker = m.ticker
-                LEFT JOIN analysis_summaries a ON o.ticker = a.ticker
-                WHERE o.trade_date >= %s
-                GROUP BY o.ticker, m.company_name, m.sector
-                HAVING COUNT(o.trade_date) >= 30 AND MAX(o.high) > MIN(o.low)
-            """, (cutoff_365,))
+            if ticker_list:
+                cur.execute("""
+                    SELECT 
+                        o.ticker,
+                        COALESCE(m.company_name, o.ticker) AS company_name,
+                        COALESCE(m.sector, 'General') AS sector,
+                        MAX(o.high) AS swing_high,
+                        MIN(o.low) AS swing_low,
+                        MAX(o.close) AS cmp,
+                        COUNT(o.trade_date) AS total_days,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q1_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q2_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q3_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q4_ratio,
+                        COALESCE(MAX(a.technical_score), 50.0) AS tech_score,
+                        COALESCE(MAX(a.fundamental_score), 50.0) AS fund_score
+                    FROM ohlcv_daily o
+                    LEFT JOIN ticker_master m ON o.ticker = m.ticker
+                    LEFT JOIN analysis_summaries a ON o.ticker = a.ticker
+                    WHERE o.trade_date >= %s AND o.ticker = ANY(%s)
+                    GROUP BY o.ticker, m.company_name, m.sector
+                    HAVING COUNT(o.trade_date) >= 30 AND MAX(o.high) > MIN(o.low)
+                """, (cutoff_365, ticker_list))
+            else:
+                cur.execute("""
+                    SELECT 
+                        o.ticker,
+                        COALESCE(m.company_name, o.ticker) AS company_name,
+                        COALESCE(m.sector, 'General') AS sector,
+                        MAX(o.high) AS swing_high,
+                        MIN(o.low) AS swing_low,
+                        MAX(o.close) AS cmp,
+                        COUNT(o.trade_date) AS total_days,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (4,5,6) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q1_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (7,8,9) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q2_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (10,11,12) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q3_ratio,
+                        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close >= o.open THEN o.volume ELSE 0 END)::float / 
+                                 NULLIF(SUM(CASE WHEN EXTRACT(MONTH FROM o.trade_date::date) IN (1,2,3) AND o.close < o.open THEN o.volume ELSE 0 END), 0), 1.0) AS q4_ratio,
+                        COALESCE(MAX(a.technical_score), 50.0) AS tech_score,
+                        COALESCE(MAX(a.fundamental_score), 50.0) AS fund_score
+                    FROM ohlcv_daily o
+                    LEFT JOIN ticker_master m ON o.ticker = m.ticker
+                    LEFT JOIN analysis_summaries a ON o.ticker = a.ticker
+                    WHERE o.trade_date >= %s
+                    GROUP BY o.ticker, m.company_name, m.sector
+                    HAVING COUNT(o.trade_date) >= 30 AND MAX(o.high) > MIN(o.low)
+                """, (cutoff_365,))
 
             rows = cur.fetchall()
             if not rows:
@@ -101,12 +128,20 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
                 return False
 
             # Query detailed daily price history per ticker to calculate exact Consolidation Days
-            cur.execute("""
-                SELECT ticker, trade_date::date, high, low, close, volume
-                FROM ohlcv_daily
-                WHERE trade_date >= %s
-                ORDER BY ticker, trade_date ASC;
-            """, (cutoff_180,))
+            if ticker_list:
+                cur.execute("""
+                    SELECT ticker, trade_date::date, high, low, close, volume
+                    FROM ohlcv_daily
+                    WHERE trade_date >= %s AND ticker = ANY(%s)
+                    ORDER BY ticker, trade_date ASC;
+                """, (cutoff_180, ticker_list))
+            else:
+                cur.execute("""
+                    SELECT ticker, trade_date::date, high, low, close, volume
+                    FROM ohlcv_daily
+                    WHERE trade_date >= %s
+                    ORDER BY ticker, trade_date ASC;
+                """, (cutoff_180,))
             all_ohlcv = cur.fetchall()
 
             ticker_ohlcv_map = {}
@@ -211,13 +246,14 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
                     tax_cycle_bias, consolidation_days, breakout_stage, speculator_score, insight
                 ))
 
-            cur.executemany("""
+            from psycopg2.extras import execute_values
+            execute_values(cur, """
                 INSERT INTO retracement_speculator_patterns (
                     ticker, company_name, sector, cap_type, cmp, swing_high, swing_low,
                     fib_retracement_level, fib_retracement_pct, q1_buy_dump_ratio, q2_buy_dump_ratio,
                     q3_buy_dump_ratio, q4_buy_dump_ratio, financial_year_tax_cycle_bias,
                     consolidation_days, breakout_stage, speculator_behavior_score, behavioral_insight
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES %s
                 ON CONFLICT (ticker) DO UPDATE SET
                     cmp = EXCLUDED.cmp,
                     swing_high = EXCLUDED.swing_high,
@@ -233,8 +269,8 @@ def generate_retracement_speculator_analysis(conn=None) -> bool:
                     breakout_stage = EXCLUDED.breakout_stage,
                     speculator_behavior_score = EXCLUDED.speculator_behavior_score,
                     behavioral_insight = EXCLUDED.behavioral_insight,
-                    analyzed_at = CURRENT_TIMESTAMP;
-            """, records_to_insert)
+                    analyzed_at = CURRENT_TIMESTAMP
+            """, records_to_insert, page_size=500)
 
             active_conn.commit()
             logger.info(f"Successfully generated {len(records_to_insert)} Retracement & Consolidation Days records.")

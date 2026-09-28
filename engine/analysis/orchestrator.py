@@ -91,35 +91,25 @@ def _ensure_tables_exist(cur):
         );
     """)
 
-def analyze_and_summarize_ticker(ticker: str) -> bool:
+def analyze_and_summarize_ticker(ticker: str, context=None) -> bool:
     """
     Executes full analysis (Technical, Fundamental, Options, Footprint, Projections)
     for a single ticker and saves the summarized statistical outputs to database.
     Enforces deduplication rules.
     """
     try:
-        # Get latest close price
-        close = 0.0
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                _ensure_tables_exist(cur)
-                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 1", (ticker,))
-                row = cur.fetchone()
-                if row and row[0] is not None:
-                    close = float(row[0])
-                
-                # Check F&O eligibility
-                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
-                fno_row = cur.fetchone()
-                is_fno = fno_row[0] if fno_row else False
+        from engine.analysis.context import TickerContext
+        ctx = context if context is not None else TickerContext.load(ticker)
+        close = ctx.latest_close
+        is_fno = ctx.is_fno
 
         if close <= 0.0:
             logger.warning(f"No price data available for {ticker}, skipping analysis.")
             return False
 
-        # Run analysis modules
-        tech_res = analyze_technical(ticker)
-        fund_res = analyze_fundamental(ticker)
+        # Run analysis modules using pre-loaded context
+        tech_res = analyze_technical(ticker, context=ctx)
+        fund_res = analyze_fundamental(ticker, context=ctx)
         foot_res = analyze_footprint_and_news(ticker)
         
         opt_res = analyze_options_chain(ticker)
@@ -136,7 +126,7 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
             logger.error(f"Error executing Elliot Wave analysis for {ticker}: {ee}")
 
         try:
-            scan_and_store_hhhl(ticker)
+            scan_and_store_hhhl(ticker, context=ctx)
         except Exception as he:
             logger.error(f"Error scanning HHHL for {ticker}: {he}")
             

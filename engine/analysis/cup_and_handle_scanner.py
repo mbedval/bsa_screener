@@ -8,74 +8,80 @@ from engine.database.connection import get_db_connection
 logger = logging.getLogger("bsa_cup_handle")
 logger.setLevel(logging.INFO)
 
-def scan_and_store_cup_and_handle(ticker: str) -> bool:
+_table_created = False
+
+def ensure_cup_and_handle_table(cur):
+    global _table_created
+    if _table_created:
+        return
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+            is_active BOOLEAN DEFAULT False,
+            pattern_start_date DATE,
+            cup_bottom_date DATE,
+            handle_start_date DATE,
+            breakout_date DATE,
+            breakout_price DOUBLE PRECISION,
+            target_price DOUBLE PRECISION,
+            stop_loss DOUBLE PRECISION,
+            details JSONB,
+            historical_patterns JSONB,
+            last_updated TIMESTAMP DEFAULT now()
+        );
+    """)
+    _table_created = True
+
+def scan_and_store_cup_and_handle(ticker: str, context=None) -> bool:
     """
     Scans for Cup and Handle patterns over the stock's entire history and saves
     active and historical patterns to `cup_and_handle_scanner` table.
-    
-    Mathematical Definition:
-    1. Cup Duration: 20 to 130 trading days.
-    2. Cup Depth: Bottom between 10% and 40% lower than left lip.
-    3. Handle Duration: 5 to 20 days.
-    4. Handle Depth: Retraces between 10% and 50% of cup depth.
-    5. Breakout: Price closes above handle's peak resistance.
     """
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
-                        ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-                        is_active BOOLEAN DEFAULT False,
-                        pattern_start_date DATE,
-                        cup_bottom_date DATE,
-                        handle_start_date DATE,
-                        breakout_date DATE,
-                        breakout_price DOUBLE PRECISION,
-                        target_price DOUBLE PRECISION,
-                        stop_loss DOUBLE PRECISION,
-                        details JSONB,
-                        historical_patterns JSONB,
-                        last_updated TIMESTAMP DEFAULT now()
-                    );
-                """)
-                conn.commit()
+        df = None
+        if context and context.df_ohlcv is not None and not context.df_ohlcv.empty:
+            df = context.df_ohlcv[['trade_date', 'open', 'high', 'low', 'close']].copy()
+            for col in ["open", "high", "low", "close"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        else:
+            with get_db_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    ensure_cup_and_handle_table(cur)
+                    cur.execute("""
+                        SELECT trade_date, open, high, low, close
+                        FROM ohlcv_daily
+                        WHERE ticker = %s AND close > 0
+                        ORDER BY trade_date ASC
+                    """, (ticker,))
+                    rows = cur.fetchall()
 
-        with get_db_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT trade_date, open, high, low, close
-                    FROM ohlcv_daily
-                    WHERE ticker = %s AND close > 0
-                    ORDER BY trade_date ASC
-                """, (ticker,))
-                rows = cur.fetchall()
+            if not rows or len(rows) < 30:
+                return False
 
-        if not rows or len(rows) < 30:
-            return False
-
-        df = pd.DataFrame(rows)
-        for col in ["open", "high", "low", "close"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df = pd.DataFrame(rows)
+            for col in ["open", "high", "low", "close"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
             
         df['trade_date'] = df['trade_date'].astype(str)
 
         all_patterns = []
         n = len(df)
+        dates = df['trade_date'].values
+        highs = df['high'].values
+        lows = df['low'].values
+        closes = df['close'].values
         
-        # We need to iterate over history to find valid C&H formations.
+        # Iterate over history to find valid C&H formations using fast C-level NumPy arrays
         for i in range(25, n):
-            breakout_day = df.iloc[i]
-            breakout_price = breakout_day['close']
+            breakout_price = closes[i]
             
             for h_len in range(5, 21):
                 h_start_idx = i - h_len
                 if h_start_idx < 1:
                     continue
                 
-                handle_start_day = df.iloc[h_start_idx]
-                handle_peak_price = df.iloc[h_start_idx:i]['high'].max()
-                handle_low_price = df.iloc[h_start_idx:i]['low'].min()
+                handle_peak_price = highs[h_start_idx:i].max()
+                handle_low_price = lows[h_start_idx:i].min()
                 
                 if breakout_price <= handle_peak_price:
                     continue
@@ -85,17 +91,16 @@ def scan_and_store_cup_and_handle(ticker: str) -> bool:
                     if c_start_idx < 0:
                         break
                         
-                    cup_start_day = df.iloc[c_start_idx]
-                    left_lip_price = cup_start_day['high']
-                    
+                    left_lip_price = highs[c_start_idx]
                     right_lip_price = handle_peak_price
                     lip_diff = abs(left_lip_price - right_lip_price) / max(left_lip_price, right_lip_price)
                     if lip_diff > 0.15:
                         continue
                         
-                    cup_bottom_price = df.iloc[c_start_idx:h_start_idx]['low'].min()
-                    cup_bottom_idx = df.iloc[c_start_idx:h_start_idx]['low'].idxmin()
-                    cup_bottom_date = str(df.iloc[cup_bottom_idx]['trade_date'])
+                    cup_low_slice = lows[c_start_idx:h_start_idx]
+                    cup_bottom_price = cup_low_slice.min()
+                    cup_bottom_offset = cup_low_slice.argmin()
+                    cup_bottom_date = str(dates[c_start_idx + cup_bottom_offset])
                     
                     avg_lip = (left_lip_price + right_lip_price) / 2
                     cup_depth_pct = (avg_lip - cup_bottom_price) / avg_lip
@@ -118,10 +123,10 @@ def scan_and_store_cup_and_handle(ticker: str) -> bool:
                     stop_loss = handle_low_price
                     
                     all_patterns.append({
-                        "pattern_start_date": str(cup_start_day['trade_date']),
+                        "pattern_start_date": str(dates[c_start_idx]),
                         "cup_bottom_date": cup_bottom_date,
-                        "handle_start_date": str(handle_start_day['trade_date']),
-                        "breakout_date": str(breakout_day['trade_date']),
+                        "handle_start_date": str(dates[h_start_idx]),
+                        "breakout_date": str(dates[i]),
                         "breakout_price": round(float(breakout_price), 2),
                         "target_price": round(float(target_price), 2),
                         "stop_loss": round(float(stop_loss), 2),
@@ -141,14 +146,15 @@ def scan_and_store_cup_and_handle(ticker: str) -> bool:
         if all_patterns:
             most_recent = all_patterns[0]
             latest_idx = df.index[-1]
-            breakout_idx = df[df['trade_date'] == most_recent['breakout_date']].index[0]
-            
-            if (latest_idx - breakout_idx) <= 10:
-                curr_price = df.iloc[-1]['close']
-                if most_recent['stop_loss'] < curr_price < most_recent['target_price']:
-                    is_active = True
-                    all_patterns[0]['is_active'] = True
-                    active_pattern_data = all_patterns[0]
+            match_indices = df[df['trade_date'] == most_recent['breakout_date']].index
+            if len(match_indices) > 0:
+                breakout_idx = match_indices[0]
+                if (latest_idx - breakout_idx) <= 10:
+                    curr_price = df.iloc[-1]['close']
+                    if most_recent['stop_loss'] < curr_price < most_recent['target_price']:
+                        is_active = True
+                        all_patterns[0]['is_active'] = True
+                        active_pattern_data = all_patterns[0]
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:

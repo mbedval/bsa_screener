@@ -37,8 +37,8 @@ def get_psycopg2_pool():
 
         import psycopg2.pool
         dsn = get_postgres_url()
-        min_conn = int(os.environ.get("POOL_MIN", 2))
-        max_conn = int(os.environ.get("POOL_MAX", 15))
+        min_conn = int(os.environ.get("POOL_MIN", 5))
+        max_conn = int(os.environ.get("POOL_MAX", 50))
 
         try:
             _psycopg2_pool = psycopg2.pool.ThreadedConnectionPool(min_conn, max_conn, dsn)

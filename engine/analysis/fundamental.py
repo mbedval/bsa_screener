@@ -3,14 +3,32 @@ from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_fundamental_analysis")
 
-def analyze_fundamental(ticker: str) -> dict:
+def analyze_fundamental(ticker: str, context=None) -> dict:
     """
-    Retrieves fundamental score and details from DB for a given ticker.
+    Retrieves fundamental score and details from DB (or context) for a given ticker.
     Returns:
         dict: {"score": float, "reasons": list of str}
     """
     reasons = []
     try:
+        if context and context.fundamentals:
+            f = context.fundamentals
+            pe = f.get("pe_ratio")
+            de = f.get("debt_to_equity")
+            pat_grow = f.get("pat_growth")
+            score = 0.5
+            if pat_grow and float(pat_grow) > 0:
+                score += 0.25
+                reasons.append("PAT growth is positive")
+            else:
+                reasons.append("PAT growth is slowing/flat")
+            if pe and float(pe) < 35:
+                score += 0.25
+                reasons.append(f"PE ratio (current: {pe}) is reasonable")
+            else:
+                reasons.append(f"PE ratio (current: {pe}) is high")
+            return {"score": min(1.0, score), "reasons": reasons}
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""

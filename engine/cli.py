@@ -202,15 +202,27 @@ def main():
         logger.info("[Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...")
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
-        from engine.analysis.hhhl_scanner import scan_and_store_hhhl
-        from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
+        from engine.analysis.context import TickerContext
+        from engine.analysis.hhhl_scanner import scan_and_store_hhhl, ensure_hhhl_table_exists
+        from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle, ensure_cup_and_handle_table
         from engine.analysis.retracement import generate_retracement_speculator_analysis
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from psycopg2.extras import RealDictCursor
+
+        # Pre-initialize scanner tables once to prevent DDL lock contention under multi-threading
+        try:
+            ensure_hhhl_table_exists()
+            with get_db_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    ensure_cup_and_handle_table(cur)
+        except Exception as e:
+            logger.warning(f"DDL pre-init warning in Phase 2.1: {e}")
         
         def _worker_2_1(t):
             try:
-                scan_and_store_hhhl(t)
-                scan_and_store_cup_and_handle(t)
+                ctx = TickerContext(t)
+                scan_and_store_hhhl(t, context=ctx)
+                scan_and_store_cup_and_handle(t, context=ctx)
             except Exception as e:
                 logger.error(f"Error in technical scanning for {t}: {e}")
 
@@ -222,7 +234,7 @@ def main():
                     progress.update(task_id, advance=1)
         
         try:
-            generate_retracement_speculator_analysis()
+            generate_retracement_speculator_analysis(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error running Retracement Speculator Analysis: {e}")
             
@@ -297,7 +309,7 @@ def main():
                 for _ in as_completed(futures):
                     progress.update(task_id, advance=1)
         try:
-            generate_stocks_respecting_patterns()
+            generate_stocks_respecting_patterns(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error running Stocks Respecting Patterns: {e}")
         p_elapsed = time.time() - p_start

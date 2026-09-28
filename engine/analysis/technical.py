@@ -1,9 +1,10 @@
 import logging
+import pandas as pd
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_technical_analysis")
 
-def analyze_technical(ticker: str) -> dict:
+def analyze_technical(ticker: str, context=None) -> dict:
     """
     Computes technical score between -1.0 and 1.0 based on latest daily indicators.
     Returns:
@@ -13,33 +14,48 @@ def analyze_technical(ticker: str) -> dict:
     score = 0.0
     
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Get the latest indicators
-                cur.execute("""
-                    SELECT rsi14, sma20, sma50, ema12, ema26, macd_line, macd_signal, 
-                           bb_upper, bb_mid, bb_lower, tenkan_sen, kijun_sen, span_a, span_b
-                    FROM indicators_daily
-                    WHERE ticker = %s
-                    ORDER BY trade_date DESC LIMIT 1
-                """, (ticker,))
-                ind_row = cur.fetchone()
+        ind_row = None
+        close = None
+
+        if context and context.df_indicators is not None and not context.df_indicators.empty and context.df_ohlcv is not None and not context.df_ohlcv.empty:
+            last_ind = context.df_indicators.iloc[-1]
+            ind_row = (
+                last_ind.get('rsi14'), last_ind.get('sma20'), last_ind.get('sma50'),
+                last_ind.get('ema12'), last_ind.get('ema26'), last_ind.get('macd_line'),
+                last_ind.get('macd_signal'), last_ind.get('bb_upper'), last_ind.get('bb_mid'),
+                last_ind.get('bb_lower'), last_ind.get('tenkan_sen'), last_ind.get('kijun_sen'),
+                last_ind.get('span_a'), last_ind.get('span_b')
+            )
+            close = context.latest_close
+        else:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    # Get the latest indicators
+                    cur.execute("""
+                        SELECT rsi14, sma20, sma50, ema12, ema26, macd_line, macd_signal, 
+                               bb_upper, bb_mid, bb_lower, tenkan_sen, kijun_sen, span_a, span_b
+                        FROM indicators_daily
+                        WHERE ticker = %s
+                        ORDER BY trade_date DESC LIMIT 1
+                    """, (ticker,))
+                    ind_row = cur.fetchone()
+                    
+                    # Get the latest price
+                    cur.execute("""
+                        SELECT close
+                        FROM ohlcv_daily
+                        WHERE ticker = %s
+                        ORDER BY trade_date DESC LIMIT 1
+                    """, (ticker,))
+                    price_row = cur.fetchone()
+                    if price_row and price_row[0] is not None:
+                        close = float(price_row[0])
                 
-                # Get the latest price
-                cur.execute("""
-                    SELECT close
-                    FROM ohlcv_daily
-                    WHERE ticker = %s
-                    ORDER BY trade_date DESC LIMIT 1
-                """, (ticker,))
-                price_row = cur.fetchone()
-                
-        if not ind_row or not price_row:
+        if not ind_row or close is None or close <= 0.0:
             return {"score": 0.0, "reasons": ["No technical data available"]}
             
-        close = float(price_row[0])
         rsi, sma20, sma50, ema12, ema26, macd_l, macd_s, bb_u, bb_m, bb_l, tenkan, kijun, span_a, span_b = [
-            float(x) if x is not None else None for x in ind_row
+            float(x) if x is not None and not (isinstance(x, float) and pd.isna(x)) else None for x in ind_row
         ]
         
         # RSI Check
