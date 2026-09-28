@@ -1840,7 +1840,7 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fund.last_pat ? `${fund.last_pat} Cr` : '—'}
+                {fund.last_pat != null ? `${typeof fund.last_pat === 'number' && Math.abs(fund.last_pat) >= 10000 ? (fund.last_pat / 1e7).toFixed(2) : fund.last_pat} Cr` : '—'}
               </div>
             </div>
 
@@ -2420,7 +2420,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fundamentals?.pat_metrics?.pat != null ? `${fundamentals.pat_metrics.pat} Cr` : '—'}
+                {fundamentals?.pat_metrics?.pat != null ? `${typeof fundamentals.pat_metrics.pat === 'number' && Math.abs(fundamentals.pat_metrics.pat) >= 10000 ? (fundamentals.pat_metrics.pat / 1e7).toFixed(2) : fundamentals.pat_metrics.pat} Cr` : '—'}
               </div>
             </div>
 
@@ -3115,21 +3115,42 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.pat || 'N/A')}
+                      {(() => {
+                        const v = fundamentals.pat_metrics?.pat
+                        if (v == null || v === 'N/A' || v === '—') return 'N/A'
+                        const num = Number(v)
+                        if (isNaN(num)) return renderTruncatedCell(v)
+                        const valCr = Math.abs(num) >= 10000 ? num / 1e7 : num
+                        return `${valCr >= 0 ? '+' : ''}${valCr.toFixed(2)} Cr`
+                      })()}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>AVERAGE PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.average_pat || 'N/A')}
+                      {(() => {
+                        const v = fundamentals.pat_metrics?.average_pat
+                        if (v == null || v === 'N/A' || v === '—') return 'N/A'
+                        const num = Number(v)
+                        if (isNaN(num)) return renderTruncatedCell(v)
+                        const valCr = Math.abs(num) >= 10000 ? num / 1e7 : num
+                        return `${valCr >= 0 ? '+' : ''}${valCr.toFixed(2)} Cr`
+                      })()}
                     </div>
                   </div>
 
                   <div style={metricBoxStyle}>
                     <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SECTOR PAT</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                      {renderTruncatedCell(fundamentals.pat_metrics?.sector_pat || 'N/A')}
+                      {(() => {
+                        const v = fundamentals.pat_metrics?.sector_pat
+                        if (v == null || v === 'N/A' || v === '—') return 'N/A'
+                        const num = Number(v)
+                        if (isNaN(num)) return renderTruncatedCell(v)
+                        const valCr = Math.abs(num) >= 10000 ? num / 1e7 : num
+                        return `${valCr >= 0 ? '+' : ''}${valCr.toFixed(2)} Cr`
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -4088,13 +4109,13 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
   const summaryStats = useMemo(() => {
     if (!rawList.length) return { topLeader: '—', topRate: '0.0%', totalPatterns: 0, avgReturn: '0.00%' }
     const topLeader = rawList[0]?.ticker || '—'
-    const maxPassRate = Math.max(...rawList.map(r => Number(r.pass_rate) || 0)).toFixed(1)
+    const topRate = (Number(rawList[0]?.pass_rate) || 0).toFixed(1)
     const totalPatterns = rawList.reduce((acc, r) => acc + (Number(r.total_patterns) || 0), 0)
     const avgRet = (rawList.reduce((acc, r) => acc + (Number(r.avg_return_pct) || 0), 0) / rawList.length).toFixed(2)
 
     return {
       topLeader,
-      topRate: `${maxPassRate}%`,
+      topRate: `${topRate}%`,
       totalPatterns,
       avgReturn: `${avgRet >= 0 ? '+' : ''}${avgRet}%`
     }
@@ -4120,6 +4141,9 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
             <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: 13 }}>
               Top ranking stocks with the highest empirical pattern success (PASS) rate based on theoretical direction expectation vs practical market price move.
             </p>
+            <div style={{ marginTop: 10, padding: '6px 12px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 6, fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <b style={{ color: '#38bdf8' }}>Ranking Hierarchy:</b> Ranked by <b>Pass Hits (Total Wins)</b> ↓ first, then <b>Pass Rate %</b> ↓, then <b>Total Patterns</b> ↓.
+            </div>
           </div>
 
           {/* Timeframe Dropdown */}
@@ -4166,9 +4190,9 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
             </div>
 
             <div style={{ ...cardStyle, background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Highest Pass Rate %</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Top Leader Pass Rate %</div>
               <div style={{ fontSize: 20, fontWeight: 900, color: '#4ade80', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{summaryStats.topRate}</div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Maximum pattern direction accuracy</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Pattern accuracy for #1 leader</div>
             </div>
 
             <div style={{ ...cardStyle, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.2)' }}>
@@ -4208,6 +4232,7 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
                     <th style={{ padding: '12px 16px' }}>Ticker</th>
                     <th style={{ padding: '12px 16px' }}>Sector</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Patterns</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Pass Hits (Win/Loss)</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right' }}>Pass Rate (%)</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right' }}>Avg Return (%)</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', width: 100 }}>Actions</th>
@@ -4216,7 +4241,7 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
                 <tbody>
                   {filteredList.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                      <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
                         No stocks match your search criteria for {labels[selectedTimeframe] || selectedTimeframe} History.
                       </td>
                     </tr>
@@ -4238,6 +4263,11 @@ export function StocksRespectingPatternsPage({ apiBase = '/api/intelligence', da
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#e2e8f0' }}>
                             {Number(r.total_patterns).toFixed(1)}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>
+                            <span style={{ color: '#4ade80' }}>{r.pass_count ?? 0}</span>
+                            <span style={{ color: '#64748b', margin: '0 4px' }}>/</span>
+                            <span style={{ color: '#f87171' }}>{r.fail_count ?? 0}</span>
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, fontFamily: "'DM Mono', monospace", color: rateColor }}>
                             {passRate.toFixed(1)}%
@@ -4285,7 +4315,7 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [selectedSector, setSelectedSector] = useState('ALL')
+  const [selectedSector, setSelectedSector] = useState('')
   const [search, setSearch] = useState('')
   const [activeChartTicker, setActiveChartTicker] = useState(null)
 
@@ -4303,7 +4333,13 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
       })
       .then(res => {
         setData(res)
-        if (res.current_sector) setSelectedSector(res.current_sector)
+        const secList = res.sectors || []
+        if (secList.length > 0) {
+          const initial = (res.current_sector && res.current_sector !== 'ALL' && secList.includes(res.current_sector))
+            ? res.current_sector
+            : secList[0]
+          setSelectedSector(initial)
+        }
       })
       .catch(e => setError(e.message || 'Failed to fetch data from backend server.'))
       .finally(() => setLoading(false))
@@ -4311,29 +4347,26 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
 
   const sectors = data?.sectors || []
   const sectorData = data?.sector_data || {}
+  const activeSector = selectedSector || (sectors.length ? sectors[0] : '')
 
-  // Consolidate rows based on sector selection
+  // Consolidate rows based on active sector selection
   const rawList = useMemo(() => {
-    if (selectedSector === 'ALL') {
-      return Object.values(sectorData).flat()
-    }
-    return sectorData[selectedSector] || []
-  }, [sectorData, selectedSector])
+    if (!activeSector) return []
+    return sectorData[activeSector] || []
+  }, [sectorData, activeSector])
 
   // Selected Sector Detail Info
   const selectedSectorDetail = useMemo(() => {
-    if (selectedSector === 'ALL') {
-      return { name: 'All Sectors Summary', count: sectors.length, description: 'Overview of lead-follow rally structures across all market sectors.' }
-    }
-    const list = sectorData[selectedSector] || []
+    if (!activeSector) return { name: '—', count: 0, leader: '—', description: 'Select a sector.' }
+    const list = sectorData[activeSector] || []
     const leader = list.find(r => r.role === 'FRONT_RUNNER')?.ticker || '—'
     return {
-      name: selectedSector,
+      name: activeSector,
       count: list.length,
       leader,
-      description: `Sector analysis for ${selectedSector}. Primary Front-Runner: ${leader}.`
+      description: `Sector analysis for ${activeSector}. Primary Front-Runner: ${leader}.`
     }
-  }, [selectedSector, sectorData, sectors])
+  }, [activeSector, sectorData])
 
   // Client-side search filter
   const filteredList = useMemo(() => {
@@ -4383,6 +4416,9 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
             <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: 13 }}>
               Identifies Sector Front-Runners (Tier 1 leaders) vs Secondary Followers (Tier 2 &amp; Tier 3), capturing high-probability catch-up surge trades when sector leaders move.
             </p>
+            <div style={{ marginTop: 10, padding: '6px 12px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 6, fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <b style={{ color: '#38bdf8' }}>Ranking Hierarchy:</b> Grouped by <b>Rally Tier (Tier 1 Leader → Tier 2 Follower → Tier 3 Follower)</b> ↓ first, then <b>Catch-Up Success %</b> ↓, then <b>Correlation</b> ↓.
+            </div>
           </div>
 
           {/* Sector Dropdown */}
@@ -4391,11 +4427,10 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
               Select Sector:
             </label>
             <select
-              value={selectedSector}
+              value={activeSector}
               onChange={e => setSelectedSector(e.target.value)}
               style={{ ...inpStyle, cursor: 'pointer', minWidth: 200, fontWeight: 700, color: '#38bdf8', border: '1px solid #38bdf8' }}
             >
-              <option value="ALL" style={{ background: '#0d1117', color: '#e2e8f0' }}>All Sectors ({sectors.length})</option>
               {sectors.map(sec => (
                 <option key={sec} value={sec} style={{ background: '#0d1117', color: '#e2e8f0' }}>
                   {sec} ({sectorData[sec]?.length || 0})
@@ -4424,7 +4459,7 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
             <div style={{ ...cardStyle, background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
               <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Active Surge Opportunities</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#4ade80', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{summaryStats.surgeCount.toFixed(1)} Setups</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#4ade80', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{summaryStats.surgeCount.toFixed(0)} Setups</div>
               <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Ready for catch-up breakout</div>
             </div>
 
@@ -4450,7 +4485,7 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
           {/* Search Bar & Table Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ fontSize: 13, color: '#94a3b8' }}>
-              Showing <b style={{ color: '#38bdf8' }}>{filteredList.length}</b> tickers in <b style={{ color: '#f8fafc' }}>{selectedSector === 'ALL' ? 'All Sectors' : selectedSector}</b>
+              Showing <b style={{ color: '#38bdf8' }}>{filteredList.length}</b> tickers in <b style={{ color: '#f8fafc' }}>{activeSector}</b>
             </div>
             <input
               type="text"
@@ -4469,11 +4504,12 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
                   <tr style={{ background: '#0d131f', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     <th style={{ padding: '12px 16px', width: 60, textAlign: 'center' }}>Rank</th>
                     <th style={{ padding: '12px 16px' }}>Ticker</th>
-                    <th style={{ padding: '12px 16px' }}>Rally Order</th>
+                    <th style={{ padding: '12px 16px' }}>Rally Tier</th>
+                    <th style={{ padding: '12px 16px' }}>Lead Ticker</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right' }}>Correlation</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Success %</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Technical Score</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Fundamental Score</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Catch-Up Success %</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Tech Score</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Fund Score</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center' }}>Current Status</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', width: 100 }}>Actions</th>
                   </tr>
@@ -4481,8 +4517,8 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
                 <tbody>
                   {filteredList.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
-                        No tickers match your search in {selectedSector}.
+                      <td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                        No tickers match your search in {activeSector}.
                       </td>
                     </tr>
                   ) : (
@@ -4511,8 +4547,15 @@ export function SectorwiseFollowersPage({ apiBase = '/api/intelligence', dataset
                               color: isLeader ? '#38bdf8' : (isWave2 ? '#c084fc' : '#cbd5e1'),
                               fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, display: 'inline-block'
                             }}>
-                              {isLeader ? 'Tier 1' : (isWave2 ? 'Tier 2' : 'Tier 3')}
+                              {isLeader ? 'Tier 1 (Leader)' : (isWave2 ? 'Tier 2 (Wave 2)' : 'Tier 3 (Wave 3)')}
                             </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
+                            {isLeader ? (
+                              <span style={{ color: '#38bdf8', fontWeight: 700 }}>👑 Leader</span>
+                            ) : (
+                              <span style={{ color: '#c084fc', fontWeight: 700 }}>🎯 {r.lead_ticker || '—'}</span>
+                            )}
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#38bdf8' }}>
                             {Number(r.correlation_score).toFixed(2)}
@@ -5507,7 +5550,11 @@ export function WatchlistMonitorPage({ apiBase = '/api/intelligence', dataset = 
                           <td style={{ padding: '9px 12px', fontFamily: "'DM Mono', monospace", color: '#64748b' }}>{fmtVol(t.latest_volume)}</td>
                           <td style={{ padding: '9px 12px', fontFamily: "'DM Mono', monospace", color: '#94a3b8' }}>{fmtNum(t.pe, 1)}</td>
                           <td style={{ padding: '9px 12px', fontFamily: "'DM Mono', monospace", color: t.pat > 0 ? '#4ade80' : t.pat < 0 ? '#f87171' : '#94a3b8' }}>
-                            {t.pat != null && t.pat !== 0 ? `${t.pat > 0 ? '+' : ''}${Number(t.pat).toFixed(2)}` : '—'}
+                            {t.pat != null && t.pat !== 0 ? (() => {
+                              const p = Number(t.pat)
+                              const pCr = Math.abs(p) >= 10000 ? p / 1e7 : p
+                              return `${pCr > 0 ? '+' : ''}${pCr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            })() : '—'}
                           </td>
 
                           <td style={{ padding: '9px 12px' }}>

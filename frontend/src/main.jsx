@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, ChevronDown, ChevronRight,
+  Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, CheckCircle, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, PieChart, Plus,
-  RefreshCw, Search, Settings2, Share2, Shield, TableProperties, Tag,
+  RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, Sliders, TableProperties, Tag,
   Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
@@ -108,14 +108,76 @@ const maskHost = (hostStr) => {
   return str
 }
 
+const formatDateOnly = val => {
+  if (val === null || val === undefined || val === '') return '—'
+  let s = String(val).trim()
+  
+  // Match YYYY-MM-DD or YYYY/MM/DD or YYYY-MM-DDTHH:MM:SS
+  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
+    const parts = s.split(/[-T /]/)
+    if (parts.length >= 3) {
+      const yyyy = parts[0]
+      const mm = parts[1].padStart(2, '0')
+      const dd = parts[2].padStart(2, '0')
+      return `${yyyy}-${dd}-${mm}`
+    }
+  }
+
+  // Match DD/MM/YYYY or DD-MM-YYYY
+  if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(s)) {
+    const parts = s.split(/[-/]/)
+    if (parts.length >= 3) {
+      const dd = parts[0].padStart(2, '0')
+      const mm = parts[1].padStart(2, '0')
+      const yyyy = parts[2]
+      return `${yyyy}-${dd}-${mm}`
+    }
+  }
+
+  // Compact timestamp format like 260925 or 20260925 or 260925143000
+  if (/^\d{12}$/.test(s) || /^\d{6}$/.test(s)) {
+    const yy = s.slice(0, 2), mm = s.slice(2, 4), dd = s.slice(4, 6)
+    const yyyy = yy.length === 2 ? `20${yy}` : yy
+    return `${yyyy}-${dd}-${mm}`
+  }
+
+  // Epoch millisecond or second timestamps
+  if (/^\d{10,}$/.test(s)) {
+    const d = new Date(Number(s) * (s.length === 10 ? 1000 : 1))
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0')
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const yyyy = String(d.getFullYear())
+      return `${yyyy}-${dd}-${mm}`
+    }
+  }
+
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, '0')
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const yyyy = String(d.getFullYear())
+    return `${yyyy}-${dd}-${mm}`
+  }
+  return s
+}
+
 const format = (value, key = '') => {
   if (value === null || value === undefined) return '—'
-  if (key === 'ticker' || key === 'symbol') return cleanTicker(value)
+  const k = key.toLowerCase()
+  if (k === 'ticker' || k === 'symbol') return cleanTicker(value)
   if (Array.isArray(value)) return value.map(cleanTicker).join(', ') || '—'
   if (typeof value === 'boolean') return value ? '✓ Yes' : '✗ No'
+  if (/date|updated|time|timestamp|created|analysed|fetched|record_id/i.test(key) && key !== 'holding_duration') {
+    return formatDateOnly(value)
+  }
   if (typeof value === 'number') {
-    if (key.includes('market_cap')) return `${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)} Cr`
-    return key.includes('ratio') || key.includes('confidence') || key.includes('change') || key.includes('deviation')
+    if (k.includes('market_cap') || k.includes('fcf') || k.includes('pat') || k.includes('cash_flow') || k.includes('net_profit') || k.includes('other_income')) {
+      const valCr = Math.abs(value) >= 10000 ? value / 1e7 : value
+      const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(valCr)
+      return k.endsWith('_cr') || k.includes('cr') || k === 'last_pat' || k === 'avg_pat' || k === 'pat' ? formatted : `${formatted} Cr`
+    }
+    return k.includes('ratio') || k.includes('confidence') || k.includes('change') || k.includes('deviation')
       ? `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
       : value.toLocaleString('en-IN')
   }
@@ -406,7 +468,7 @@ function App() {
     setError('')
     try {
       const q = search ? `&search=${encodeURIComponent(search)}` : ''
-      const res = await api.get(`${apiBase}/tables/${tableName}?limit=500${q}`)
+      const res = await api.get(`${apiBase}/tables/${tableName}?limit=5000${q}`)
       setData(res)
     } catch (e) {
       setError(e.message)
@@ -3186,6 +3248,13 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   const [sort, setSort] = useState({ key: '', asc: true })
   const [selectedSignal, setSelectedSignal] = useState('ALL')
   const [selectedSector, setSelectedSector] = useState('ALL')
+  const [insightFilter, setInsightFilter] = useState('ALL')
+  const [dynamicSignalFilters, setDynamicSignalFilters] = useState({})
+  const [patGrowingFilter, setPatGrowingFilter] = useState('ALL')
+  const [otherIncomeFilter, setOtherIncomeFilter] = useState('ALL')
+  const [peFilter, setPeFilter] = useState('ALL')
+  const [debtEquityFilter, setDebtEquityFilter] = useState('ALL')
+  const [passedFilter, setPassedFilter] = useState('ALL')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [detailTicker, setDetailTicker] = useState(null)
@@ -3232,12 +3301,91 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     return Array.from(sectors).sort()
   }, [data?.rows])
 
+  // Extract distinct insights available in dataset (e.g. delivery_spikes)
+  const availableInsights = useMemo(() => {
+    if (!data?.rows) return []
+    const insights = new Set()
+    data.rows.forEach(r => {
+      if (r.insight && typeof r.insight === 'string' && r.insight.trim()) {
+        insights.add(r.insight.trim())
+      }
+    })
+    return Array.from(insights).sort()
+  }, [data?.rows])
+
+  // Discover all technical signal columns in dataset and extract distinct non-empty values
+  const availableSignalColumns = useMemo(() => {
+    if (!data?.rows || !displayColumns) return {}
+    const signalCols = displayColumns.filter(col => {
+      if (col === 'record_id' || col === 'ticker' || col === 'symbol' || col === 'sector' || col === 'stock_name' || col === 'company_name') return false
+      const k = col.toLowerCase()
+      return (
+        k.endsWith('_signal') ||
+        k.endsWith('_call') ||
+        k.endsWith('_cross') ||
+        k.endsWith('_candle') ||
+        k.endsWith('_surge') ||
+        k === 'phase' ||
+        k === 'overall_signal' ||
+        k === 'overall_call' ||
+        k === 'breakout_signal' ||
+        k === 'volume_surge' ||
+        k === 'adx_signal' ||
+        k === 'supertrend_signal' ||
+        k === 'ema_signal' ||
+        k === 'vwap_signal' ||
+        k === 'proximity_signal'
+      )
+    })
+
+    const map = {}
+    signalCols.forEach(col => {
+      const valuesSet = new Set()
+      data.rows.forEach(row => {
+        const val = row[col]
+        if (val !== null && val !== undefined && String(val).trim() !== '' && String(val).trim() !== '—') {
+          valuesSet.add(String(val).trim())
+        }
+      })
+      if (valuesSet.size > 0) {
+        map[col] = Array.from(valuesSet).sort()
+      }
+    })
+    return map
+  }, [data?.rows, displayColumns])
+
   // Reset filters on table view / dataset switch
   useEffect(() => {
     setSelectedSignal('ALL')
     setSelectedSector('ALL')
+    setInsightFilter('ALL')
+    setDynamicSignalFilters({})
+    setPatGrowingFilter('ALL')
+    setOtherIncomeFilter('ALL')
+    setPeFilter('ALL')
+    setDebtEquityFilter('ALL')
+    setPassedFilter('ALL')
     setPage(1)
   }, [data?.table, query])
+
+  const hasAnyActiveFilter = patGrowingFilter !== 'ALL' || otherIncomeFilter !== 'ALL' || peFilter !== 'ALL' || debtEquityFilter !== 'ALL' || passedFilter !== 'ALL' || selectedSector !== 'ALL' || insightFilter !== 'ALL' || selectedSignal !== 'ALL' || Object.values(dynamicSignalFilters).some(v => v && v !== 'ALL') || (query && query.trim() !== '')
+
+  const resetAllFilters = () => {
+    setPatGrowingFilter('ALL')
+    setOtherIncomeFilter('ALL')
+    setPeFilter('ALL')
+    setDebtEquityFilter('ALL')
+    setPassedFilter('ALL')
+    setSelectedSector('ALL')
+    setInsightFilter('ALL')
+    setDynamicSignalFilters({})
+    setSelectedSignal('ALL')
+    setPage(1)
+    if (query) {
+      setQuery('')
+      onSearch('')
+    }
+  }
 
   const isCashFlowTable = data?.table === 'cash_flow_summary'
 
@@ -3248,6 +3396,25 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
       asc: prev.key === origKey ? !prev.asc : true,
     }))
   }
+
+const matchesRuleFilter = (rowVal, filterVal) => {
+  if (filterVal === 'ALL') return true
+  if (rowVal === null || rowVal === undefined) return false
+  const num = Number(rowVal)
+  const targetNum = Number(filterVal)
+  if (!isNaN(num) && !isNaN(targetNum)) {
+    return num === targetNum
+  }
+  const str = String(rowVal).trim().toUpperCase()
+  const target = String(filterVal).trim().toUpperCase()
+  if (target === '1' || target === 'YES' || target === 'PASSED' || target === 'OK') {
+    return str === '1' || str === 'YES' || str === 'PASSED' || str === 'OK' || str === 'TRUE'
+  }
+  if (target === '0' || target === 'NO' || target === 'FAILED' || target === 'HIGH') {
+    return str === '0' || str === 'NO' || str === 'FAILED' || str === 'HIGH' || str === 'FALSE'
+  }
+  return str === target
+}
 
   const rows = useMemo(() => {
     if (!data) return []
@@ -3273,6 +3440,31 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     if (selectedSector && selectedSector !== 'ALL') {
       list = list.filter(row => String(row.sector ?? '').trim().toLowerCase() === selectedSector.toLowerCase())
     }
+    if (insightFilter && insightFilter !== 'ALL') {
+      list = list.filter(row => String(row.insight ?? '').trim().toLowerCase() === insightFilter.toLowerCase())
+    }
+    if (dynamicSignalFilters && Object.keys(dynamicSignalFilters).length > 0) {
+      Object.entries(dynamicSignalFilters).forEach(([colKey, filterVal]) => {
+        if (filterVal && filterVal !== 'ALL') {
+          list = list.filter(row => String(row[colKey] ?? '').trim().toLowerCase() === filterVal.toLowerCase())
+        }
+      })
+    }
+    if (patGrowingFilter !== 'ALL') {
+      list = list.filter(row => matchesRuleFilter(row.is_pat_growing ?? row.pat_growing ?? row.is_pat_ok, patGrowingFilter))
+    }
+    if (otherIncomeFilter !== 'ALL') {
+      list = list.filter(row => matchesRuleFilter(row.is_other_income_ok ?? row.other_income_ok, otherIncomeFilter))
+    }
+    if (peFilter !== 'ALL') {
+      list = list.filter(row => matchesRuleFilter(row.is_pe_ok ?? row.pe_ok, peFilter))
+    }
+    if (debtEquityFilter !== 'ALL') {
+      list = list.filter(row => matchesRuleFilter(row.is_debt_equity_ok ?? row.debt_equity_ok, debtEquityFilter))
+    }
+    if (passedFilter !== 'ALL') {
+      list = list.filter(row => matchesRuleFilter(row.passed ?? row.is_passed, passedFilter))
+    }
     if (sort.key) {
       list.sort((a, b) => {
         const valA = a[sort.key] ?? ''
@@ -3284,7 +3476,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
       })
     }
     return list
-  }, [data, sort, selectedSignal, selectedSector, displayColumns])
+  }, [data, sort, selectedSignal, selectedSector, insightFilter, dynamicSignalFilters, displayColumns, patGrowingFilter, otherIncomeFilter, peFilter, debtEquityFilter, passedFilter])
 
   const pagedRows = useMemo(() => {
     if (pageSize === 0) return rows
@@ -3599,6 +3791,35 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
             </div>
           )}
 
+          {availableInsights.length > 0 && (
+            <div className="insight-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Filter size={15} style={{ color: '#38bdf8' }} />
+              <select
+                className="insight-select"
+                value={insightFilter}
+                onChange={e => { setInsightFilter(e.target.value); setPage(1); }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#e1e6ed',
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="ALL" style={{ background: '#1a202c', color: '#fff' }}>All Insights ({availableInsights.length})</option>
+                {availableInsights.map(ins => (
+                  <option key={ins} value={ins} style={{ background: '#1a202c', color: '#fff' }}>
+                    {ins}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {hasSignalCol && (
             <div className="filter-bar">
               <button className={`filter-btn ${selectedSignal === 'ALL' ? 'active' : ''}`} onClick={() => { setSelectedSignal('ALL'); setPage(1); }}>All</button>
@@ -3618,6 +3839,156 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                 </>
               )}
             </div>
+          )}
+
+          {Object.keys(availableSignalColumns).length > 0 && (
+            <div className="signals-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(56, 189, 248, 0.06)', padding: '5px 10px', borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+              <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Sliders size={14} /> Signals Filter:
+              </span>
+              {Object.entries(availableSignalColumns).map(([colKey, options]) => {
+                const rawName = colKey.replaceAll('_', ' ').replace(/\bsignal\b/i, '').trim()
+                const colLabel = rawName ? rawName.toUpperCase() : colKey.toUpperCase()
+                return (
+                  <select
+                    key={colKey}
+                    className="signal-select"
+                    value={dynamicSignalFilters[colKey] || 'ALL'}
+                    onChange={e => {
+                      const val = e.target.value
+                      setDynamicSignalFilters(prev => ({ ...prev, [colKey]: val }))
+                      setPage(1)
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#e2e8f0',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="ALL" style={{ background: '#1a202c', color: '#fff' }}>{colLabel}: All ({options.length})</option>
+                    {options.map(opt => (
+                      <option key={opt} value={opt} style={{ background: '#1a202c', color: '#fff' }}>
+                        {colLabel}: {opt}
+                      </option>
+                    ))}
+                  </select>
+                )
+              })}
+            </div>
+          )}
+
+          {displayColumns.some(c => /is_pat_growing|is_other_income_ok|is_pe_ok|is_debt_equity_ok|passed/i.test(c)) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(56, 189, 248, 0.06)', padding: '5px 10px', borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+              <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <CheckCircle size={14} /> Rules Filter:
+              </span>
+              {displayColumns.includes('is_pat_growing') && (
+                <select
+                  value={patGrowingFilter}
+                  onChange={e => { setPatGrowingFilter(e.target.value); setPage(1); }}
+                  style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">PAT Growing: All</option>
+                  <option value="1">PAT Growing: ✓ Yes (1)</option>
+                  <option value="0">PAT Growing: ✗ No (0)</option>
+                </select>
+              )}
+              {displayColumns.includes('is_other_income_ok') && (
+                <select
+                  value={otherIncomeFilter}
+                  onChange={e => { setOtherIncomeFilter(e.target.value); setPage(1); }}
+                  style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">Other Income: All</option>
+                  <option value="1">Other Income: ✓ OK (1)</option>
+                  <option value="0">Other Income: ✗ High (0)</option>
+                </select>
+              )}
+              {displayColumns.includes('is_pe_ok') && (
+                <select
+                  value={peFilter}
+                  onChange={e => { setPeFilter(e.target.value); setPage(1); }}
+                  style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">PE: All</option>
+                  <option value="1">PE: ✓ Reasonable (1)</option>
+                  <option value="0">PE: ✗ High (0)</option>
+                </select>
+              )}
+              {displayColumns.includes('is_debt_equity_ok') && (
+                <select
+                  value={debtEquityFilter}
+                  onChange={e => { setDebtEquityFilter(e.target.value); setPage(1); }}
+                  style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">Debt/Equity: All</option>
+                  <option value="1">Debt/Equity: ✓ Safe (1)</option>
+                  <option value="0">Debt/Equity: ✗ High (0)</option>
+                </select>
+              )}
+              {displayColumns.includes('passed') && (
+                <select
+                  value={passedFilter}
+                  onChange={e => { setPassedFilter(e.target.value); setPage(1); }}
+                  style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">Rule Status: All</option>
+                  <option value="1">Rule Status: ✓ Passed (1)</option>
+                  <option value="0">Rule Status: ✗ Failed (0)</option>
+                </select>
+              )}
+              {hasAnyActiveFilter && (
+                <button
+                  onClick={resetAllFilters}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.16)',
+                    border: '1px solid rgba(239, 68, 68, 0.45)',
+                    color: '#f87171',
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    marginLeft: 4,
+                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)'
+                  }}
+                  title="Reset all filters to default (ALL)"
+                >
+                  <RotateCcw size={13} /> Reset Filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {!displayColumns.some(c => /is_pat_growing|is_other_income_ok|is_pe_ok|is_debt_equity_ok|passed/i.test(c)) && hasAnyActiveFilter && (
+            <button
+              onClick={resetAllFilters}
+              style={{
+                background: 'rgba(239, 68, 68, 0.16)',
+                border: '1px solid rgba(239, 68, 68, 0.45)',
+                color: '#f87171',
+                borderRadius: 6,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)'
+              }}
+              title="Reset all filters to default (ALL)"
+            >
+              <RotateCcw size={13} /> Reset Filters
+            </button>
           )}
 
         </div>
@@ -3644,7 +4015,39 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                 {displayColumns.map(key => {
                   const origKey = (key === 'record_id') ? (data?.columns?.includes('uniqueid') ? 'uniqueid' : data?.columns?.includes('run_time') ? 'run_time' : 'id') : key
                   let headerLabel = key.replaceAll('_', ' ')
-                  if (activeTable === 'historical_calls') {
+                  const kLower = key.toLowerCase()
+                  if (kLower === 'is_pat_growing') {
+                    headerLabel = 'PAT Growing'
+                  } else if (kLower === 'is_other_income_ok') {
+                    headerLabel = 'Other Income OK'
+                  } else if (kLower === 'is_pe_ok') {
+                    headerLabel = 'PE OK'
+                  } else if (kLower === 'is_debt_equity_ok') {
+                    headerLabel = 'Debt/Equity OK'
+                  } else if (kLower === 'fundamental_score') {
+                    headerLabel = 'Score'
+                  } else if (kLower === 'passed') {
+                    headerLabel = 'Rule Passed'
+                  } else if (kLower === 'last_pat_cr' || kLower === 'last_pat') {
+                    headerLabel = 'Last PAT (Cr)'
+                  } else if (kLower === 'avg_pat_cr' || kLower === 'avg_pat') {
+                    headerLabel = 'Avg PAT (Cr)'
+                  } else if (kLower === 'last_other_income_cr' || kLower === 'last_other_income') {
+                    headerLabel = 'Last Other Inc (Cr)'
+                  } else if (kLower === 'avg_other_income_cr' || kLower === 'avg_other_income') {
+                    headerLabel = 'Avg Other Inc (Cr)'
+                  } else if (kLower === 'curr_fcf_cr' || kLower === 'curr_fcf') {
+                    headerLabel = 'Current FCF (Cr)'
+                  } else if (kLower === 'avg_fcf_cr' || kLower === 'avg_fcf') {
+                    headerLabel = 'Avg FCF (Cr)'
+                  } else if (kLower === 'max_fcf_cr' || kLower === 'max_fcf') {
+                    headerLabel = 'Max FCF (Cr)'
+                  } else if (kLower === 'market_cap' || kLower === 'market_cap_cr') {
+                    headerLabel = 'Market Cap (Cr)'
+                  } else if (kLower.endsWith('_cr')) {
+                    const baseKey = key.slice(0, -3).replaceAll('_', ' ')
+                    headerLabel = `${baseKey} (Cr)`
+                  } else if (activeTable === 'historical_calls') {
                     if (key === 'current_price' || key === 'cmp') {
                       headerLabel = 'Call CMP'
                     } else if (key === 'call_status' || key === 'outcome') {
@@ -3739,8 +4142,85 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
                           </td>
                         )
                       }
-                      if (key === 'record_id') {
-                        return <td key={key}>{formatRecordIdDate(value)}</td>
+                      if (key === 'record_id' || (/date|updated|time|timestamp|created|analysed|fetched/i.test(key) && key !== 'holding_duration')) {
+                        return <td key={key}>{formatDateOnly(value)}</td>
+                      }
+                      const isMarkingField = /is_pat_growing|is_other_income_ok|is_pe_ok|is_debt_equity_ok|passed|is_pat_ok/i.test(key)
+                      if (isMarkingField) {
+                        if (value === null || value === undefined || value === 'N/A') {
+                          return (
+                            <td key={key} style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  background: 'rgba(148, 163, 184, 0.12)',
+                                  border: '1px solid rgba(148, 163, 184, 0.25)',
+                                  color: '#94a3b8',
+                                  padding: '3px 10px',
+                                  borderRadius: 6,
+                                  fontWeight: 600,
+                                  fontSize: 11,
+                                  fontFamily: "'DM Mono'",
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                N/A
+                              </span>
+                            </td>
+                          )
+                        }
+                        const numVal = Number(value)
+                        const isPos = value != null && (numVal === 1 || value === true || String(value).toUpperCase() === 'YES' || String(value).toUpperCase() === 'PASSED' || String(value).toUpperCase() === 'OK')
+                        const isNeg = value != null && (numVal === 0 || value === false || String(value).toUpperCase() === 'NO' || String(value).toUpperCase() === 'FAILED')
+                        
+                        if (isPos) {
+                          return (
+                            <td key={key} style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  background: 'rgba(34, 197, 94, 0.22)',
+                                  border: '1px solid rgba(34, 197, 94, 0.45)',
+                                  color: '#4ade80',
+                                  padding: '3px 10px',
+                                  borderRadius: 6,
+                                  fontWeight: 700,
+                                  fontSize: 11,
+                                  fontFamily: "'DM Mono'",
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  boxShadow: '0 2px 8px rgba(34, 197, 94, 0.15)'
+                                }}
+                              >
+                                ✓ YES (1)
+                              </span>
+                            </td>
+                          )
+                        }
+                        if (isNeg) {
+                          return (
+                            <td key={key} style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.22)',
+                                  border: '1px solid rgba(239, 68, 68, 0.45)',
+                                  color: '#f87171',
+                                  padding: '3px 10px',
+                                  borderRadius: 6,
+                                  fontWeight: 700,
+                                  fontSize: 11,
+                                  fontFamily: "'DM Mono'",
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)'
+                                }}
+                              >
+                                ✗ NO (0)
+                              </span>
+                            </td>
+                          )
+                        }
                       }
                       return <td key={key}>{badge ? <span className={`badge ${signalTone(value)}`}>{format(value, key)}</span> : format(value, key)}</td>
                     })}

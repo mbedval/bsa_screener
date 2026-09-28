@@ -170,6 +170,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name.startswith("master:"):
         table_name = table_name.split("master:", 1)[1]
 
+    limit = max(limit, 5000)
+
     if table_name in ANALYSIS_REPORT_TABLE_NAMES and not is_analysis_executed(dsn):
         cols = get_columns_for_virtual_table(table_name)
         return {
@@ -304,8 +306,6 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
         return table_data_for(dsn, "fno_index_master", limit, offset, search, ticker)
     if table_name == "price_history":
         return table_data_for(dsn, "ohlcv_daily", limit, offset, search, ticker)
-    if table_name == "raw_fundamentals":
-        return table_data_for(dsn, "fundamentals", limit, offset, search, ticker)
     if table_name == "delivery_history":
         return table_data_for(dsn, "ohlcv_daily", limit, offset, search, ticker)
 
@@ -702,7 +702,7 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name in ("cash_flow_summary", "fundamental_hub", "fundamental-hub"):
         try:
             with get_connection(dsn) as conn, conn.cursor() as cur:
-                cols = ["ticker", "stock_name", "sector", "avg_fcf", "max_fcf", "curr_fcf", "status", "last_updated"]
+                cols = ["ticker", "stock_name", "sector", "curr_fcf_cr", "avg_fcf_cr", "max_fcf_cr", "status", "last_updated"]
                 conditions, params = [], []
                 if ticker:
                     conditions.append(sql.SQL("t.ticker ILIKE %s")); params.append(f"%{ticker}%")
@@ -714,7 +714,7 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
 
                 base_from = """
                 FROM ticker_master t
-                JOIN (
+                LEFT JOIN (
                     SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
                 ) f ON t.ticker = f.ticker
                 """
@@ -727,20 +727,84 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     t.ticker,
                     t.company_name AS stock_name,
                     COALESCE(t.sector, 'General') AS sector,
-                    COALESCE(f.avg_pat, 0) AS avg_fcf,
-                    COALESCE(f.last_pat, 0) AS max_fcf,
-                    COALESCE(f.last_pat, 0) AS curr_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0)::numeric, 2) END AS curr_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS avg_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS max_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0)::numeric, 2) END AS curr_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS avg_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS max_fcf,
                     CASE 
-                        WHEN COALESCE(f.last_pat, 0) < 0 THEN 'NEGATIVE' 
-                        WHEN f.is_pat_growing = 1 THEN 'POSITIVE' 
+                        WHEN f.ticker IS NULL THEN 'N/A'
+                        WHEN (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) < 0 THEN 'NEGATIVE' 
+                        WHEN (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) >= (COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) AND (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) > 0 THEN 'POSITIVE' 
                         ELSE 'MIXED' 
                     END AS status,
-                    f.fetched_date AS last_updated
+                    COALESCE(f.fetched_date, 'N/A') AS last_updated
                 """
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY curr_fcf DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
+        except OperationalError as error:
+            raise database_error(error)
+
+    # 8. Fundamentals & Raw Fundamentals
+    if table_name in ("fundamentals", "raw_fundamentals", "raw-fundamentals"):
+        try:
+            with get_connection(dsn) as conn, conn.cursor() as cur:
+                cols = [
+                    "ticker", "stock_name", "sector", "market_cap_cr",
+                    "current_pe", "avg_pe", "last_pat_cr", "avg_pat_cr",
+                    "last_other_income_cr", "avg_other_income_cr", "debt_to_equity",
+                    "is_pat_growing", "is_other_income_ok", "is_pe_ok", "is_debt_equity_ok",
+                    "fundamental_score", "passed", "last_updated"
+                ]
+                conditions, params = [], []
+                if ticker:
+                    conditions.append(sql.SQL("t.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                if search:
+                    searchable = ["t.ticker", "t.company_name", "t.sector"]
+                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    params.extend([f"%{search}%"] * len(searchable))
+
+                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+
+                base_from = """
+                FROM ticker_master t
+                LEFT JOIN (
+                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                ) f ON t.ticker = f.ticker
+                """
+                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                cur.execute(count_sql, params)
+                total = cur.fetchone()["total"]
+
+                select_sql = """
+                SELECT 
+                    t.ticker,
+                    t.company_name AS stock_name,
+                    COALESCE(t.sector, 'General') AS sector,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.market_cap, 0.0) / 10000000.0)::numeric, 2) END AS market_cap_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.current_pe, 0.0)::numeric, 2) END AS current_pe,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.avg_pe, 0.0)::numeric, 2) END AS avg_pe,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_pat, 0.0) / 10000000.0)::numeric, 2) END AS last_pat_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_pat, 0.0) / 10000000.0)::numeric, 2) END AS avg_pat_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_other_income, 0.0) / 10000000.0)::numeric, 2) END AS last_other_income_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_other_income, 0.0) / 10000000.0)::numeric, 2) END AS avg_other_income_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.debt_to_equity, 0.0)::numeric, 2) END AS debt_to_equity,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_pat_growing END AS is_pat_growing,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_other_income_ok END AS is_other_income_ok,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_pe_ok END AS is_pe_ok,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_debt_equity_ok END AS is_debt_equity_ok,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.fundamental_score END AS fundamental_score,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE f.passed END AS passed,
+                    COALESCE(f.fetched_date, 'N/A') AS last_updated
+                """
+                effective_limit = max(limit, 5000)
+                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY f.fundamental_score DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
+                cur.execute(data_sql, [*params, effective_limit, offset])
+                rows = cur.fetchall()
+                return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": effective_limit, "offset": offset}
         except OperationalError as error:
             raise database_error(error)
 
@@ -781,10 +845,11 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
             where = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
             order_column = next((c for c in ("run_time", "timestamp", "analysed_at", "last_updated", "latest_date", "trade_date", "date", "updated_at") if c in columns), columns[0])
             
-            # For analysis/scanner/master tables with a 'ticker' or 'symbol' column, deduplicate to show latest state per ticker
+            # For analysis/scanner/fundamental/technical tables with a 'ticker' or 'symbol' column,
+            # when no specific single ticker is requested, deduplicate to keep the latest unique record per ticker/symbol.
             distinct_col = "ticker" if "ticker" in columns else ("symbol" if "symbol" in columns else None)
             
-            if distinct_col and table_name not in ("ohlcv_daily", "indicators_daily", "raw_fno_derivatives"):
+            if distinct_col and not ticker and table_name != "raw_fno_derivatives":
                 base_cte = sql.SQL("""
                     WITH distinct_rows AS (
                         SELECT DISTINCT ON ({}) *
@@ -2338,7 +2403,7 @@ def overview(dataset: str) -> dict[str, Any]:
 def table_data(
     dataset: str,
     table_name: str,
-    limit: int = Query(500, ge=1, le=2000),
+    limit: int = Query(5000, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     search: str | None = None,
     ticker: str | None = None,
