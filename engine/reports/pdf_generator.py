@@ -186,31 +186,52 @@ def generate_pdf_report(ticker: str) -> str:
             pdf.cell(90, 7, val, 1, 1, 'C')
         pdf.ln(10)
 
-        # --- Page 3: DERIVATIVES & 22-DAY PROJECTION ---
+        # --- Page 3: DERIVATIVES & PROJECTION / PRICE PROJECTION ---
         pdf.add_page()
         
+        is_fno_stock = opt_data.get("is_fno", False) if isinstance(opt_data, dict) else False
+
         pdf.set_font('Arial', 'B', 14)
         pdf.set_fill_color(241, 245, 249)
-        pdf.cell(0, 8, "  DERIVATIVE & PROJECTION ENGINE", 0, 1, 'L', True)
+        if is_fno_stock:
+            pdf.cell(0, 8, "  DERIVATIVE & PROJECTION ENGINE", 0, 1, 'L', True)
+        else:
+            pdf.cell(0, 8, "  PRICE PROJECTION ENGINE", 0, 1, 'L', True)
         pdf.ln(4)
         
         pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 6, "Options Chain Metrics:", 0, 1)
-        pdf.ln(2)
-        
-        opt_metrics = [
-            ("ATM Strike", f"Rs. {opt_data.get('atm_strike', 0.0)}"),
-            ("Immediate Support Line", f"Rs. {opt_data.get('support', 0.0)}"),
-            ("Immediate Resistance Line", f"Rs. {opt_data.get('resistance', 0.0)}"),
-            ("Put-Call Ratio (PCR)", str(opt_data.get('pcr', 1.0))),
-            ("Open Interest Buildup", opt_data.get('buildup', 'Neutral'))
-        ]
-        
-        pdf.set_font('Arial', '', 10)
-        for label, val in opt_metrics:
-            pdf.cell(90, 6, f"{label}:", 0, 0)
-            pdf.cell(0, 6, val, 0, 1)
-        pdf.ln(10)
+        if is_fno_stock:
+            pdf.cell(0, 6, "Options Chain Metrics:", 0, 1)
+            pdf.ln(2)
+            
+            opt_metrics = [
+                ("ATM Strike", f"Rs. {opt_data.get('atm_strike', 0.0):.1f}" if opt_data.get('atm_strike') is not None else "N/A"),
+                ("Immediate Support Line", f"Rs. {opt_data.get('support', 0.0):.1f}" if opt_data.get('support') is not None else "N/A"),
+                ("Immediate Resistance Line", f"Rs. {opt_data.get('resistance', 0.0):.1f}" if opt_data.get('resistance') is not None else "N/A"),
+                ("Put-Call Ratio (PCR)", str(opt_data.get('pcr', 'N/A')) if opt_data.get('pcr') is not None else "N/A"),
+                ("Open Interest Buildup", str(opt_data.get('buildup', 'N/A')))
+            ]
+            
+            pdf.set_font('Arial', '', 10)
+            for label, val in opt_metrics:
+                pdf.cell(90, 6, f"{label}:", 0, 0)
+                pdf.cell(0, 6, val, 0, 1)
+            pdf.ln(10)
+        else:
+            pdf.cell(0, 6, "Market Segment & Derivative Status:", 0, 1)
+            pdf.ln(2)
+            
+            pdf.set_font('Arial', '', 10)
+            pdf.cell(90, 6, "Derivatives Status:", 0, 0)
+            pdf.cell(0, 6, "Non-F&O Stock (Cash Segment Only)", 0, 1)
+            pdf.cell(90, 6, "Options Chain Analysis:", 0, 0)
+            pdf.cell(0, 6, "Not Applicable", 0, 1)
+            pdf.ln(4)
+            pdf.set_font('Arial', 'I', 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.multi_cell(0, 5, f"Note: {ticker} is traded exclusively in the cash equity segment and is not listed in F&O derivatives. Price forecasts below are generated using price structure, technical momentum, and historical volatility modeling.")
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(8)
         
         # Projection Table (Row-based with Target, Range, and Expected Move)
         pdf.set_font('Arial', 'B', 12)

@@ -1,4 +1,5 @@
 import logging
+import os
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_helpers")
@@ -6,6 +7,11 @@ logger = logging.getLogger("bsa_helpers")
 # Cache for mappings and configurations to reduce database calls
 _ticker_mappings = None
 _system_config = {}
+
+def clear_system_config_cache():
+    """Clear the system config in-memory cache."""
+    global _system_config
+    _system_config = {}
 
 def load_ticker_mappings_from_db():
     """Load ticker mappings from the database `ticker_mappings` table."""
@@ -82,9 +88,9 @@ def clean_ticker(ticker: str) -> str:
     return ticker.upper().split(".")[0]
 
 def get_system_config(key: str, default: str = "") -> str:
-    """Get system configuration value from database `system_config` table."""
+    """Get system configuration value from database `system_config` table with fallback to environment variables."""
     global _system_config
-    if key in _system_config:
+    if key in _system_config and _system_config[key]:
         return _system_config[key]
 
     try:
@@ -92,11 +98,18 @@ def get_system_config(key: str, default: str = "") -> str:
             with conn.cursor() as cur:
                 cur.execute("SELECT value FROM system_config WHERE key = %s", (key,))
                 row = cur.fetchone()
-                if row:
-                    _system_config[key] = row[0]
-                    return row[0]
+                if row and row[0] and str(row[0]).strip():
+                    val = str(row[0]).strip()
+                    _system_config[key] = val
+                    return val
     except Exception as e:
         logger.warning(f"Failed to query system_config for '{key}': {e}")
+
+    # Fallback to environment variables (e.g., GMAIL_USER, GMAIL_APP_PASSWORD, SMTP_USER, etc.)
+    env_val = os.getenv(key.upper()) or os.getenv(key)
+    if env_val:
+        return env_val
+
     return default
 
 def get_spot_tickers() -> list:

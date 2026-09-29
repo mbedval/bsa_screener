@@ -175,3 +175,10 @@ export const screenerTickerMappings = {
   remove: (id)        => _req('DELETE', `${BASE}/screener-ticker-mappings/${id}`),
 }
 
+// ── System Config ─────────────────────────────────────────────────────────────
+export const systemConfig = {
+  list: (dataset) => _req('GET', `${BASE}/system-config${dataset ? '?dataset=' + dataset : ''}`),
+  update: (key, value, dataset) => _req('PUT', `${BASE}/system-config/${key}${dataset ? '?dataset=' + dataset : ''}`, { value }),
+}
+
+

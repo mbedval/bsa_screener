@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, CheckCircle, ChevronDown, ChevronRight,
-  Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, LayoutDashboard, Layers, PieChart, Plus,
+  Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, Key, LayoutDashboard, Layers, PieChart, Plus,
   RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, Sliders, TableProperties, Tag,
   Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
 } from 'lucide-react'
@@ -203,7 +203,7 @@ const signalTone = value => {
 }
 
 // Master page identifiers
-const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations', 'master:opportunities', 'master:references', 'master:reference_pages', 'master:screener_mappings']
+const MASTER_PAGES = ['master:sectors', 'master:tickers', 'master:watchlists', 'master:users', 'master:aliases', 'master:excluded', 'master:recommendations', 'master:opportunities', 'master:references', 'master:reference_pages', 'master:screener_mappings', 'master:system_config', 'master:config']
 
 const parseResp = async (r) => {
   const ct = r.headers.get('content-type') || ''
@@ -725,6 +725,7 @@ function App() {
                         <button className={`nav-item ${active === 'master:excluded' ? 'selected' : ''}`} onClick={() => setActive('master:excluded')}><Ban /> Excluded Tickers</button>
                         <button className={`nav-item ${active === 'master:references' ? 'selected' : ''}`} onClick={() => setActive('master:references')}><Globe /> Reference Pages</button>
                         <button className={`nav-item ${active === 'master:screener_mappings' ? 'selected' : ''}`} onClick={() => setActive('master:screener_mappings')}><ArrowRight /> Screener Mappings</button>
+                        <button className={`nav-item ${active === 'master:system_config' ? 'selected' : ''}`} onClick={() => setActive('master:system_config')}><Key /> System Config</button>
                       </div>
                     )}
                   </section>

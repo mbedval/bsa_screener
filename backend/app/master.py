@@ -1545,10 +1545,15 @@ def send_user_newsletter(email: str):
     </html>
     """
     
-    sent = send_email_with_attachment(subject, body, pdf_paths, [email])
+    sent_result = send_email_with_attachment(subject, body, pdf_paths, [email], return_detail=True)
+    if isinstance(sent_result, tuple):
+        sent, err_detail = sent_result
+    else:
+        sent, err_detail = sent_result, "Failed to deliver newsletter email via SMTP server."
+
     if not sent:
-        raise HTTPException(500, "Failed to deliver newsletter email via SMTP server.")
-        
+        raise HTTPException(500, err_detail)
+
     return {"status": "success", "detail": f"Sent {len(pdf_paths)} reports to {email}"}
 
 
@@ -1749,4 +1754,32 @@ def list_master_recommendations() -> list[dict]:
     with rawdata_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM broker_recommendations ORDER BY id DESC LIMIT 500")
         return cur.fetchall()
+
+
+# ── System Config CRUD ──────────────────────────────────────────────────────────
+
+class SystemConfigUpdate(BaseModel):
+    value: str
+
+@router.get("/system-config")
+def list_system_config(dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("SELECT key, value, updated_at::text FROM system_config ORDER BY key ASC")
+        return cur.fetchall()
+
+@router.put("/system-config/{key}")
+def update_system_config(key: str, data: SystemConfigUpdate, dataset: Optional[str] = None):
+    from engine.utils.helpers import clear_system_config_cache
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO system_config (key, value, updated_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+            RETURNING key, value, updated_at::text
+        """, (key, data.value))
+        row = cur.fetchone()
+        conn.commit()
+        clear_system_config_cache()
+        return row
+
 
