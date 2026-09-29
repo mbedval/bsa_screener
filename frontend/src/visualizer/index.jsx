@@ -1840,7 +1840,7 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fund.last_pat != null ? `${typeof fund.last_pat === 'number' && Math.abs(fund.last_pat) >= 10000 ? (fund.last_pat / 1e7).toFixed(2) : fund.last_pat} Cr` : '—'}
+                {fund.last_pat != null ? (typeof fund.last_pat === 'number' ? `${(Math.abs(fund.last_pat) >= 10000 ? fund.last_pat / 1e7 : fund.last_pat).toFixed(2)} Cr` : (String(fund.last_pat).includes('Cr') ? fund.last_pat : `${fund.last_pat} Cr`)) : '—'}
               </div>
             </div>
 
@@ -2103,39 +2103,29 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   // Selected Recommendation Detail Modal state
   const [selectedRecModal, setSelectedRecModal] = useState(null)
 
-  // Direct PDF Download Handler (html2pdf.js)
+  // Server-Side Vector PDF Download Handler
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const handleDownloadPdf = async () => {
-    const element = document.getElementById('ticker-full-report-container')
-    if (!element) return
-
-    setDownloadingPdf(true)
     const symbol = master.ticker || searchedSymbol || 'TICKER'
-    const fileName = `BSA_Market_Intelligence_Report_${symbol}.pdf`
-
-    // Dynamically detect current active theme background color from DOM stylesheet
-    const computedStyle = window.getComputedStyle(document.body)
-    const activeBgColor = computedStyle.backgroundColor || '#09111f'
-
-    const opt = {
-      margin:       [8, 8, 10, 8],
-      filename:     fileName,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: activeBgColor, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-    }
-
+    setDownloadingPdf(true)
     try {
-      if (window.html2pdf) {
-        await window.html2pdf().set(opt).from(element).save()
-      } else {
-        window.print()
+      const response = await fetch(`/api/reports/pdf/${encodeURIComponent(symbol)}`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to generate PDF report`)
       }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `BSA_Stock_Analysis_Report_${symbol}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error('PDF Generation Error:', err)
-      window.print()
+      alert(`Could not download PDF report: ${err.message}`)
     } finally {
       setDownloadingPdf(false)
     }
@@ -2420,7 +2410,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             <div style={cardStyle}>
               <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fundamentals?.pat_metrics?.pat != null ? `${typeof fundamentals.pat_metrics.pat === 'number' && Math.abs(fundamentals.pat_metrics.pat) >= 10000 ? (fundamentals.pat_metrics.pat / 1e7).toFixed(2) : fundamentals.pat_metrics.pat} Cr` : '—'}
+                {fundamentals?.pat_metrics?.pat != null ? (typeof fundamentals.pat_metrics.pat === 'number' ? `${(Math.abs(fundamentals.pat_metrics.pat) >= 10000 ? fundamentals.pat_metrics.pat / 1e7 : fundamentals.pat_metrics.pat).toFixed(2)} Cr` : (String(fundamentals.pat_metrics.pat).includes('Cr') ? fundamentals.pat_metrics.pat : `${fundamentals.pat_metrics.pat} Cr`)) : '—'}
               </div>
             </div>
 

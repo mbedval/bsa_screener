@@ -1,3 +1,4 @@
+import math
 import os
 import logging
 import json
@@ -7,6 +8,19 @@ from fpdf import FPDF
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_pdf_generator")
+
+def format_crores(val, prefix: str = "Rs. ") -> str:
+    """Format monetary value into Crores (1 Cr = 10,000,000 = 1e7)."""
+    if val is None:
+        return "N/A"
+    try:
+        v = float(val)
+        if math.isnan(v) or math.isinf(v) or v == 0.0:
+            return "N/A"
+        v_cr = v / 1e7 if abs(v) >= 1e7 else v
+        return f"{prefix}{v_cr:,.2f} Cr"
+    except Exception:
+        return str(val)
 
 class BSAPDF(FPDF):
     def __init__(self, ticker: str, company_name: str, timestamp_str: str):
@@ -44,7 +58,7 @@ class BSAPDF(FPDF):
 
 def generate_pdf_report(ticker: str) -> str:
     """
-    Generate a PDF report for a specific ticker based on analysis summaries in PostgreSQL.
+    Generate a professional multi-page vector PDF report for a specific ticker based on analysis summaries in PostgreSQL.
     Saves file under output/pdf/ and returns the absolute path.
     """
     output_dir = Path("output/pdf")
@@ -54,23 +68,37 @@ def generate_pdf_report(ticker: str) -> str:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Query analysis details
+                # Query analysis details & ticker master metadata
                 cur.execute("""
                     SELECT a.close, a.technical_score, a.fundamental_score, a.behavioral_score,
                            a.hybrid_score, a.overall_signal, a.confidence, a.reasons, 
                            a.projection_22d, a.option_insights, a.news_footprint, a.updated_at,
-                           m.company_name, m.sector, m.exchange
+                           m.company_name, m.sector, m.exchange, m.is_fno
                     FROM analysis_summaries a
                     JOIN ticker_master m ON a.ticker = m.ticker
                     WHERE a.ticker = %s
                 """, (ticker,))
                 row = cur.fetchone()
 
+                # Fetch fundamentals metrics
+                cur.execute("""
+                    SELECT current_pe, avg_pe, debt_to_equity, last_pat, avg_pat, market_cap
+                    FROM fundamentals WHERE ticker = %s ORDER BY fetched_date DESC LIMIT 1
+                """, (ticker,))
+                fund_row = cur.fetchone()
+
+                # Fetch technical indicators
+                cur.execute("""
+                    SELECT rsi14, sma20, sma50, macd_line, macd_signal, bb_upper, bb_lower
+                    FROM indicators_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1
+                """, (ticker,))
+                ind_row = cur.fetchone()
+
         if not row:
             logger.warning(f"No analysis summary record found for {ticker}. Cannot generate PDF report.")
             return ""
 
-        close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange = row
+        close, tech_s, fund_s, beh_s, hyb_s, signal, conf, reasons, proj_raw, opt_raw, foot_raw, updated, name, sector, exchange, is_fno_master = row
         
         # Parse JSON
         proj_list = json.loads(proj_raw) if proj_raw else []
@@ -100,24 +128,29 @@ def generate_pdf_report(ticker: str) -> str:
         
         # --- Page 1: COVER PAGE ---
         pdf.add_page()
-        pdf.set_y(50)
+        pdf.set_y(45)
         pdf.set_font('Arial', 'B', 26)
         pdf.cell(0, 10, "Stock Analysis Report", 0, 1, 'C')
-        pdf.ln(10)
+        pdf.ln(8)
         
         pdf.set_font('Arial', 'B', 16)
         pdf.cell(0, 10, f"{name} ({ticker})", 0, 1, 'C')
-        pdf.ln(20)
+        pdf.ln(16)
         
         # Metadata Block
         pdf.set_font('Arial', 'B', 12)
         pdf.set_fill_color(241, 245, 249)
         pdf.cell(0, 8, "  REPORT METADATA", 0, 1, 'L', True)
         pdf.ln(4)
-        
+
+        mcap_val = fund_row[5] if fund_row and len(fund_row) > 5 and fund_row[5] is not None else None
+        mcap_str = format_crores(mcap_val, prefix="Rs. ")
+
         metadata = [
-            ("Sector", sector),
-            ("Exchange", exchange),
+            ("Sector", sector or "General"),
+            ("Exchange", exchange or "NS"),
+            ("Market Segment", "EQUITY / F&O DERIVATIVES" if is_fno_master else "EQUITY (CASH SEGMENT ONLY)"),
+            ("Market Cap", mcap_str),
             ("Current Close Price", f"Rs. {close:.2f}"),
             ("Generation Date", timestamp_str),
             ("Analysis Engine", "BSA Core Redesign Engine")
@@ -127,14 +160,14 @@ def generate_pdf_report(ticker: str) -> str:
             pdf.set_font('Arial', 'B', 10)
             pdf.cell(50, 6, f" {k}:", 0, 0)
             pdf.set_font('Arial', '', 10)
-            pdf.cell(0, 6, v, 0, 1)
-        pdf.ln(20)
+            pdf.cell(0, 6, str(v), 0, 1)
+        pdf.ln(16)
         
         pdf.set_font('Arial', 'I', 9)
         pdf.set_text_color(100, 116, 139)
         pdf.multi_cell(0, 5, "CONFIDENTIALITY NOTICE: The information contained in this report is intended solely for analysis. It does not constitute investment advice. Trading in equities and derivatives involves substantial risk.")
         
-        # --- Page 2: DETAILED ANALYSIS ---
+        # --- Page 2: EXECUTIVE SUMMARY & FINANCIAL/TECHNICAL SNAPSHOT ---
         pdf.add_page()
         pdf.set_text_color(0, 0, 0)
         
@@ -162,7 +195,7 @@ def generate_pdf_report(ticker: str) -> str:
             if reason.strip():
                 pdf.cell(5, 5, "-", 0, 0)
                 pdf.multi_cell(0, 5, reason.strip())
-        pdf.ln(10)
+        pdf.ln(8)
         
         # Scoring Metrics Table
         pdf.set_font('Arial', 'B', 12)
@@ -184,12 +217,51 @@ def generate_pdf_report(ticker: str) -> str:
         for label, val in scores:
             pdf.cell(90, 7, label, 1, 0, 'L')
             pdf.cell(90, 7, val, 1, 1, 'C')
-        pdf.ln(10)
+        pdf.ln(8)
+
+        # Technical & Fundamental Financial Snapshot
+        if fund_row or ind_row:
+            pdf.set_font('Arial', 'B', 12)
+            pdf.cell(0, 6, "Fundamental & Technical Key Indicators:", 0, 1)
+            pdf.ln(2)
+            
+            pdf.set_font('Arial', 'B', 9)
+            pdf.set_fill_color(241, 245, 249)
+            pdf.cell(45, 6, "Metric", 1, 0, 'L', True)
+            pdf.cell(45, 6, "Value", 1, 0, 'C', True)
+            pdf.cell(45, 6, "Metric", 1, 0, 'L', True)
+            pdf.cell(45, 6, "Value", 1, 1, 'C', True)
+
+            pe_val = f"{float(fund_row[0]):.2f}" if fund_row and fund_row[0] is not None else "N/A"
+            avg_pe_val = f"{float(fund_row[1]):.2f}" if fund_row and fund_row[1] is not None else "N/A"
+            de_val = f"{float(fund_row[2]):.2f}" if fund_row and fund_row[2] is not None else "N/A"
+            pat_val = format_crores(fund_row[3], prefix="Rs. ") if fund_row and len(fund_row) > 3 and fund_row[3] is not None else "N/A"
+            avg_pat_val = format_crores(fund_row[4], prefix="Rs. ") if fund_row and len(fund_row) > 4 and fund_row[4] is not None else "N/A"
+
+            rsi_val = f"{float(ind_row[0]):.1f}" if ind_row and ind_row[0] is not None else "N/A"
+            sma20_val = f"Rs. {float(ind_row[1]):.2f}" if ind_row and ind_row[1] is not None else "N/A"
+            sma50_val = f"Rs. {float(ind_row[2]):.2f}" if ind_row and ind_row[2] is not None else "N/A"
+            macd_val = f"{float(ind_row[3]):.2f}" if ind_row and ind_row[3] is not None else "N/A"
+
+            snapshot_rows = [
+                ("Current P/E Ratio", pe_val, "RSI (14)", rsi_val),
+                ("Avg Historical P/E", avg_pe_val, "20-Day SMA", sma20_val),
+                ("Debt to Equity", de_val, "50-Day SMA", sma50_val),
+                ("Last Quarter PAT", pat_val, "MACD Line", macd_val),
+                ("Avg Quarterly PAT", avg_pat_val, "Market Cap", mcap_str),
+            ]
+
+            pdf.set_font('Arial', '', 9)
+            for m1, v1, m2, v2 in snapshot_rows:
+                pdf.cell(45, 6, m1, 1, 0, 'L')
+                pdf.cell(45, 6, v1, 1, 0, 'C')
+                pdf.cell(45, 6, m2, 1, 0, 'L')
+                pdf.cell(45, 6, v2, 1, 1, 'C')
 
         # --- Page 3: DERIVATIVES & PROJECTION / PRICE PROJECTION ---
         pdf.add_page()
         
-        is_fno_stock = opt_data.get("is_fno", False) if isinstance(opt_data, dict) else False
+        is_fno_stock = opt_data.get("is_fno", is_fno_master) if isinstance(opt_data, dict) else is_fno_master
 
         pdf.set_font('Arial', 'B', 14)
         pdf.set_fill_color(241, 245, 249)
