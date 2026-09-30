@@ -124,6 +124,33 @@ export const watchlists = {
   remove: (id)             => _req('DELETE', `${BASE}/watchlists/${id}`),
   removeBatch: (ids)       => _req('POST',   `${BASE}/watchlists/batch-delete`, { ids }),
   setTickers: (id, tickers) => _req('POST',  `${BASE}/watchlists/${id}/tickers`, { tickers }),
+  downloadCSV: async () => {
+    const r = await fetch(`${BASE}/watchlists/download-csv`)
+    if (!r.ok) throw new Error(r.statusText)
+    const blob = await r.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'watchlists.csv'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  },
+  uploadCSV: async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const url = `${BASE}/watchlists/upload-csv`
+    const r = await fetch(url, { method: 'POST', body: fd })
+    const ct = r.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const text = await r.text()
+      throw new Error(r.ok ? 'Invalid response format received from server.' : `HTTP ${r.status}: ${text.slice(0, 100)}`)
+    }
+    const json = await r.json()
+    if (!r.ok) throw new Error(json.detail || r.statusText)
+    return json
+  },
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────

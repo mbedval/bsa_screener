@@ -31,11 +31,33 @@ def load_ticker_mappings_from_db():
         logger.warning(f"Failed to load ticker mappings from DB: {e}")
     return _ticker_mappings
 
+# Cache for exchanges
+_ticker_exchanges = None
+
+def load_ticker_exchanges_from_db():
+    global _ticker_exchanges
+    if _ticker_exchanges is not None:
+        return _ticker_exchanges
+
+    _ticker_exchanges = {}
+    try:
+        from engine.database.connection import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ticker, exchange FROM ticker_master WHERE exchange IS NOT NULL")
+                rows = cur.fetchall()
+                for tk, exc in rows:
+                    if exc:
+                        _ticker_exchanges[tk.upper()] = exc.upper()
+    except Exception as e:
+        logger.warning(f"Failed to load ticker exchanges from DB: {e}")
+    return _ticker_exchanges
+
 def format_ticker(ticker: str) -> str:
     """
     Standardizes stock ticker formats and applies overrides from ticker_mappings table in DB:
     - If ends with .BSE or .BO (case-insensitive), formats as .BO (BSE).
-    - Otherwise, formats as .NS (NSE).
+    - Otherwise, formats based on the exchange recorded in ticker_master (defaults to .NS).
     """
     mappings = load_ticker_mappings_from_db()
     ticker_upper = ticker.upper()
@@ -77,9 +99,31 @@ def format_ticker(ticker: str) -> str:
     # Re-apply or standardize suffix
     if suffix == ".BO" or suffix == ".BSE":
         ticker_formatted = f"{base_ticker}.BO"
-    else:
-        # Default to .NS
+    elif suffix == ".NS":
         ticker_formatted = f"{base_ticker}.NS"
+    else:
+        # Check database for exchange
+        exchanges = load_ticker_exchanges_from_db()
+        exc = exchanges.get(base_ticker)
+        
+        # If not in cache, try fetching on-the-fly (in case it was just added)
+        if exc is None:
+            try:
+                from engine.database.connection import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT exchange FROM ticker_master WHERE ticker = %s", (base_ticker,))
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            exc = row[0].upper()
+                            _ticker_exchanges[base_ticker] = exc
+            except Exception:
+                pass
+                
+        if exc in ("BSE", "BO"):
+            ticker_formatted = f"{base_ticker}.BO"
+        else:
+            ticker_formatted = f"{base_ticker}.NS"
         
     return ticker_formatted
 

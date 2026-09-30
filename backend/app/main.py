@@ -4391,6 +4391,21 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error querying hhhl_insight for {actual_ticker}: {e}")
 
+            # 7. Watchlists
+            watchlists = []
+            try:
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT w.name 
+                        FROM watchlist w
+                        JOIN watchlist_items wi ON w.id = wi.watchlist_id
+                        WHERE wi.ticker = %s
+                        ORDER BY w.name
+                    """, (actual_ticker,))
+                    watchlists = [row["name"] for row in cur.fetchall()]
+            except Exception as e:
+                logger.error(f"Error querying watchlists for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
@@ -4408,7 +4423,8 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "opportunities_risk": opportunities_risk,
                 "inst_behavior": inst_behavior,
                 "retracement_pattern": retracement_pattern,
-                "hhhl_insight": hhhl_insight
+                "hhhl_insight": hhhl_insight,
+                "watchlists": watchlists
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
@@ -4655,7 +4671,7 @@ def get_retracement_speculators(
 @app.get("/api/intelligence/research/watchlist-monitor")
 def get_watchlist_monitor(
     dataset: str = "intelligence",
-    watchlist_id: int = Query(None, description="Watchlist ID to fetch tickers for"),
+    watchlist_id: str = Query(None, description="Watchlist ID or 'all' to fetch tickers for"),
 ):
     """
     Returns watchlist metadata (all watchlists) plus full ticker performance
@@ -4676,14 +4692,32 @@ def get_watchlist_monitor(
             """)
             watchlists = [dict(r) for r in cur.fetchall()]
 
+            # Insert Watchlist-All
+            cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items")
+            all_count_row = cur.fetchone()
+            all_count = all_count_row['count'] if all_count_row else 0
+            watchlists.insert(0, {
+                "id": "all",
+                "name": "Watchlist-All",
+                "description": "Union of all watchlists",
+                "ticker_count": all_count
+            })
+
             if not watchlists:
                 return {"watchlists": [], "watchlist_id": None, "tickers": [], "summary": {}}
 
             # If no watchlist_id given, use first
-            active_id = watchlist_id if watchlist_id else watchlists[0]["id"]
+            active_id = str(watchlist_id) if watchlist_id else str(watchlists[0]["id"])
+
+            if active_id == 'all':
+                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items) wi"
+                params = ()
+            else:
+                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = %s) wi"
+                params = (int(active_id),)
 
             # Fetch tickers for the selected watchlist with full performance data
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     wi.ticker,
                     COALESCE(tm.company_name, wi.ticker) AS company_name,
@@ -4710,7 +4744,7 @@ def get_watchlist_monitor(
                     f.last_pat                              AS pat,
                     f.debt_to_equity,
                     COALESCE(a.updated_at::text, '') AS updated_at
-                FROM watchlist_items wi
+                FROM {from_clause}
                 LEFT JOIN ticker_master tm ON tm.ticker = wi.ticker
                 LEFT JOIN LATERAL (
                     SELECT s.name 
@@ -4735,9 +4769,8 @@ def get_watchlist_monitor(
                     FROM fundamentals
                     WHERE ticker = wi.ticker ORDER BY fetched_date DESC LIMIT 1
                 ) f ON true
-                WHERE wi.watchlist_id = %s
                 ORDER BY COALESCE(a.hybrid_score, 0) DESC, wi.ticker ASC
-            """, (active_id,))
+            """, params)
             tickers = [dict(r) for r in cur.fetchall()]
 
             # Summary stats

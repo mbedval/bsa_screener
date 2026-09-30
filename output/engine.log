@@ -12229,3 +12229,121 @@ LINE 2:                     SELECT pe_ratio, pb_ratio, debt_to_equit...
 2026-09-30 12:55:23,155 [INFO] bsa_orchestrator: Core Ticker Analysis completed. Total: 297, Succeeded: 297, Failed: 0, Time Taken: 224.47s
 2026-09-30 12:55:23,160 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 224.52s.
 2026-09-30 12:55:23,160 [INFO] bsa_cli: [✓] Spot pipeline execution completed successfully in 609.05s!
+2026-09-30 15:25:49,043 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-09-30 15:25:49,049 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-09-30 15:26:08,941 [INFO] bsa_cli: User requested resume ('r'). Resuming Phase 1.1 (Download Technicals)...
+2026-09-30 15:27:34,958 [INFO] bsa_cli: [✓] Phase 1.1 (Download Technicals) completed in 105.91s.
+2026-09-30 15:27:34,959 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-09-30 15:27:47,422 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1.4 (Download F&O)...
+2026-09-30 15:27:49,591 [INFO] bsa_cli: [✓] Phase 1.4 (Download F&O) completed in 14.63s.
+2026-09-30 15:27:49,591 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-09-30 15:32:43,328 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-09-30 15:32:43,328 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-09-30 15:33:16,719 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-09-30 15:33:16,720 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-09-30 15:35:19,973 [INFO] bsa_cli: Running on-demand pipeline for ticker: DCG
+2026-09-30 15:35:20,107 [INFO] bsa_cli: Ticker DCG not found in ticker_master. Adding it...
+2026-09-30 15:37:18,370 [INFO] bsa_cli: Running on-demand pipeline for ticker: DCG
+2026-09-30 15:37:18,556 [INFO] bsa_cli: Ticker DCG not found in ticker_master. Adding it...
+2026-09-30 15:37:18,560 [INFO] bsa_cli: Successfully added DCG to ticker_master.
+2026-09-30 15:37:21,368 [INFO] bsa_cli: Analysis completed and upserted for DCG
+2026-09-30 15:37:43,967 [INFO] bsa_cli: Running on-demand pipeline for ticker: DCG
+2026-09-30 15:37:45,651 [INFO] bsa_cli: Analysis completed and upserted for DCG
+2026-09-30 15:39:26,020 [INFO] bsa_cli: Running on-demand pipeline for ticker: DCG
+2026-09-30 15:39:27,977 [INFO] bsa_cli: Analysis completed and upserted for DCG
+2026-09-30 15:48:22,359 [INFO] bsa_cli: Ticker DCG all ready exist in ticker_master.
+2026-09-30 15:49:19,692 [INFO] bsa_cli: Ticker DCG all ready exist in ticker_master.
+2026-09-30 15:49:28,023 [INFO] bsa_cli: Ticker MARCO not found in ticker_master. Adding it...
+2026-09-30 15:49:28,027 [INFO] bsa_cli: Successfully added MARCO to ticker_master. Running ingestion and analysis...
+2026-09-30 15:49:29,956 [INFO] bsa_cli: Analysis completed and upserted for MARCO
+2026-09-30 16:02:54,392 [INFO] bsa_cli: Ticker INA all ready exist in ticker_master.
+2026-09-30 16:29:57,494 [INFO] bsa_cli: Ticker SELECTRIC.BO not found in ticker_master. Adding it...
+2026-09-30 16:29:57,498 [INFO] bsa_cli: Successfully added SELECTRIC.BO to ticker_master. Running ingestion and analysis...
+2026-09-30 16:29:58,845 [WARNING] bsa_orchestrator: No price data available for SELECTRIC.BO, skipping analysis.
+2026-09-30 16:29:58,845 [ERROR] bsa_cli: Analysis failed for SELECTRIC.BO
+2026-09-30 16:32:26,620 [INFO] bsa_cli: Ticker JAYBEE.BO not found in ticker_master. Adding it...
+2026-09-30 16:32:26,622 [INFO] bsa_cli: Successfully added JAYBEE.BO to ticker_master. Running ingestion and analysis...
+2026-09-30 16:32:28,192 [ERROR] bsa_cli: Data download failed for JAYBEE.BO
+2026-09-30 16:39:29,858 [INFO] bsa_cli: Ticker DELETEME_TEST not found in ticker_master. Adding it...
+2026-09-30 16:39:29,862 [INFO] bsa_cli: Successfully added DELETEME_TEST to ticker_master. Running ingestion and analysis...
+2026-09-30 16:39:37,069 [ERROR] bsa_cli: Data download failed for DELETEME_TEST
+2026-09-30 16:39:43,489 [INFO] bsa_cli: Exact match found for ticker: DELETEME_TEST. Deleting from master and all related tables...
+2026-09-30 16:39:43,493 [INFO] bsa_cli: Deleted 1 rows from excluded_tickers
+2026-09-30 16:39:43,558 [INFO] bsa_cli: Deleted DELETEME_TEST from ticker_master
+2026-09-30 16:39:43,560 [INFO] bsa_cli: Successfully deleted DELETEME_TEST and all related data.
+2026-09-30 16:40:34,517 [INFO] bsa_cli: Exact match found for ticker: JAYBEE.BO. Deleting from master and all related tables...
+2026-09-30 16:40:34,545 [INFO] bsa_cli: Deleted JAYBEE.BO from ticker_master
+2026-09-30 16:40:34,547 [INFO] bsa_cli: Successfully deleted JAYBEE.BO and all related data.
+2026-09-30 16:40:46,147 [INFO] bsa_cli: No match found for ticker: JAYB
+2026-09-30 16:41:06,428 [INFO] bsa_cli: Exact match found for ticker: MARCO. Deleting from master and all related tables...
+2026-09-30 16:41:06,431 [INFO] bsa_cli: Deleted 1 rows from watchlist_items
+2026-09-30 16:41:06,433 [INFO] bsa_cli: Deleted 498 rows from ohlcv_daily
+2026-09-30 16:41:06,435 [INFO] bsa_cli: Deleted 498 rows from indicators_daily
+2026-09-30 16:41:06,437 [INFO] bsa_cli: Deleted 1 rows from analysis_summaries
+2026-09-30 16:41:06,439 [INFO] bsa_cli: Deleted 1 rows from historical_calls
+2026-09-30 16:41:06,440 [INFO] bsa_cli: Deleted 1 rows from call_efficiency
+2026-09-30 16:41:06,445 [INFO] bsa_cli: Deleted 104 rows from chart_patterns
+2026-09-30 16:41:06,453 [INFO] bsa_cli: Deleted 1 rows from cup_and_handle_scanner
+2026-09-30 16:41:06,454 [INFO] bsa_cli: Deleted 1 rows from elliot_analysis
+2026-09-30 16:41:06,457 [INFO] bsa_cli: Deleted MARCO from ticker_master
+2026-09-30 16:41:06,458 [INFO] bsa_cli: Successfully deleted MARCO and all related data.
+2026-09-30 16:47:00,716 [INFO] bsa_cli: Ticker RMC all ready exist in ticker_master.
+2026-09-30 16:49:25,036 [INFO] bsa_cli: Ticker ICELCO-SM not found in ticker_master. Adding it...
+2026-09-30 16:49:25,040 [INFO] bsa_cli: Successfully added ICELCO-SM to ticker_master. Running ingestion and analysis...
+2026-09-30 16:49:25,998 [INFO] bsa_cli: Analysis completed and upserted for ICELCO-SM
+2026-09-30 16:52:08,467 [INFO] bsa_cli: Ticker JAYBEE-SM.NS not found in ticker_master. Adding it...
+2026-09-30 16:52:08,470 [INFO] bsa_cli: Successfully added JAYBEE-SM.NS to ticker_master. Running ingestion and analysis...
+2026-09-30 16:52:14,531 [WARNING] bsa_orchestrator: No price data available for JAYBEE-SM.NS, skipping analysis.
+2026-09-30 16:52:14,531 [ERROR] bsa_cli: Analysis failed for JAYBEE-SM.NS
+2026-09-30 17:00:11,112 [INFO] bsa_cli: Ticker SELECTRIC.BO all ready exist in ticker_master.
+2026-09-30 17:31:40,412 [INFO] bsa_cli: Exact match found for ticker: SELECTRIC.BO. Deleting from master and all related tables...
+2026-09-30 17:31:40,447 [INFO] bsa_cli: Deleted SELECTRIC.BO from ticker_master
+2026-09-30 17:31:40,450 [INFO] bsa_cli: Successfully deleted SELECTRIC.BO and all related data.
+2026-09-30 17:31:47,422 [INFO] bsa_cli: Exact match found for ticker: SELECTRIC. Deleting from master and all related tables...
+2026-09-30 17:31:47,425 [INFO] bsa_cli: Deleted 51 rows from ohlcv_daily
+2026-09-30 17:31:47,426 [INFO] bsa_cli: Deleted 51 rows from indicators_daily
+2026-09-30 17:31:47,432 [INFO] bsa_cli: Deleted 1 rows from fundamentals
+2026-09-30 17:31:47,444 [INFO] bsa_cli: Deleted SELECTRIC from ticker_master
+2026-09-30 17:31:47,445 [INFO] bsa_cli: Successfully deleted SELECTRIC and all related data.
+2026-09-30 17:33:37,474 [INFO] bsa_cli: Ticker SELECTRIC all ready exist in ticker_master.
+2026-09-30 17:33:55,391 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:33:56,845 [ERROR] bsa_cli: Data download failed for SELECTRIC
+2026-09-30 17:38:02,546 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:38:04,297 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:41:10,035 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:41:11,325 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:41:36,597 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:41:37,817 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:42:40,897 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:42:42,386 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:46:22,099 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:46:23,328 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:49:40,820 [INFO] bsa_cli: Exact match found for ticker: SELECTRIC. Deleting from master and all related tables...
+2026-09-30 17:49:40,826 [INFO] bsa_cli: Deleted 1 rows from excluded_tickers
+2026-09-30 17:49:40,827 [INFO] bsa_cli: Deleted 51 rows from ohlcv_daily
+2026-09-30 17:49:40,829 [INFO] bsa_cli: Deleted 51 rows from indicators_daily
+2026-09-30 17:49:40,832 [INFO] bsa_cli: Deleted 1 rows from analysis_summaries
+2026-09-30 17:49:40,837 [INFO] bsa_cli: Deleted 1 rows from fundamentals
+2026-09-30 17:49:40,845 [INFO] bsa_cli: Deleted 36 rows from chart_patterns
+2026-09-30 17:49:40,852 [INFO] bsa_cli: Deleted 1 rows from cup_and_handle_scanner
+2026-09-30 17:49:40,853 [INFO] bsa_cli: Deleted 1 rows from elliot_analysis
+2026-09-30 17:49:40,857 [INFO] bsa_cli: Deleted SELECTRIC from ticker_master
+2026-09-30 17:49:40,860 [INFO] bsa_cli: Successfully deleted SELECTRIC and all related data.
+2026-09-30 17:49:47,753 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:49:47,866 [INFO] bsa_cli: Ticker SELECTRIC not found in ticker_master. Adding it...
+2026-09-30 17:49:47,870 [INFO] bsa_cli: Successfully added SELECTRIC to ticker_master.
+2026-09-30 17:49:49,272 [ERROR] bsa_cli: Data download failed for SELECTRIC
+2026-09-30 17:52:11,988 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:52:14,260 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 17:53:56,087 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 17:53:57,313 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 18:04:30,969 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 18:04:32,079 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 18:05:52,171 [INFO] bsa_cli: Triggered Phase 1.3: Mutual Fund & FII Holdings Download...
+2026-09-30 18:05:53,615 [INFO] bsa_cli: MF/FII download for SELECTRIC: MF(ok=True, saved=0), FII(ok=False, saved=0).
+2026-09-30 18:05:53,616 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 18:05:54,584 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC
+2026-09-30 18:07:52,616 [INFO] bsa_cli: Triggered Phase 1.3: Mutual Fund & FII Holdings Download...
+2026-09-30 18:07:53,957 [INFO] bsa_cli: MF/FII download for SELECTRIC: MF(ok=True, saved=0), FII(ok=False, saved=0).
+2026-09-30 18:07:53,958 [INFO] bsa_cli: Running on-demand pipeline for ticker: SELECTRIC
+2026-09-30 18:07:55,126 [INFO] bsa_cli: Analysis completed and upserted for SELECTRIC

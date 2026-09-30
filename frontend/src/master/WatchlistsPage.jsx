@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BookMarked, Edit2, Plus, Trash2, Check, X, AlertCircle } from 'lucide-react'
+import { BookMarked, Edit2, Plus, Trash2, Check, X, AlertCircle, Upload, Download } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
-  CountBadge, TickerChip, TruncatedCellText
+  CountBadge, TickerChip, TruncatedCellText, FormGroup
 } from './ui.jsx'
 
 const PAGE_SIZE = 25
@@ -26,6 +26,10 @@ export default function WatchlistsPage() {
   const [masterTickers, setMasterTickers] = useState([])
   const [tickerQuery, setTickerQuery]     = useState('')
   const [selectedFoundTicker, setSelectedFoundTicker] = useState('')
+  const [showImport, setShowImport]   = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading]     = useState(false)
+  const [importResult, setImportResult] = useState(null)
   const { show, ToastContainer }    = useToast()
 
   const load = async () => {
@@ -66,6 +70,30 @@ export default function WatchlistsPage() {
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setSelectedIds(next)
+  }
+
+  const downloadCSV = async () => {
+    try {
+      await api.watchlists.downloadCSV()
+      show('Watchlists downloaded successfully', 'success')
+    } catch (e) {
+      show('Failed to download watchlists: ' + e.message, 'error')
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!selectedFile) return
+    setUploading(true)
+    setImportResult(null)
+    try {
+      const res = await api.watchlists.uploadCSV(selectedFile)
+      setImportResult({ success: true, msg: res.message })
+      await load()
+    } catch (e) {
+      setImportResult({ success: false, msg: e.message })
+    } finally {
+      setUploading(false)
+    }
   }
 
   // ── Open Excel-like Editor ──────────────────────────────────────────────────
@@ -186,6 +214,15 @@ export default function WatchlistsPage() {
                 <Trash2 size={14}/> Delete Selected ({selectedIds.size})
               </button>
             )}
+            <button className="btn-secondary" onClick={downloadCSV} title="Download watchlists as CSV">
+              <Download size={14}/> Download CSV
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => { setSelectedFile(null); setImportResult(null); setShowImport(true) }}
+            >
+              <Upload size={14}/> Upload CSV
+            </button>
             <button className="btn-primary" onClick={() => openEditor(null)}><Plus size={14}/> Create Watchlist</button>
           </div>
         }
@@ -422,6 +459,53 @@ export default function WatchlistsPage() {
           onClose={() => setConfirmBatch(false)}
         />
       )}
+      {/* Upload CSV modal */}
+      {showImport && (
+        <Modal
+          title="Upload Watchlists CSV"
+          subtitle="Upload watchlists.csv containing Watchlist Name, Description, and Ticker columns"
+          onClose={() => setShowImport(false)}
+          size="sm"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <FormGroup label="Select CSV file" required hint="Supported: watchlists.csv">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={e => {
+                  setSelectedFile(e.target.files?.[0] || null)
+                  setImportResult(null)
+                }}
+                className="form-input"
+                style={{ padding: '8px' }}
+              />
+            </FormGroup>
+
+            {importResult && (
+              <div style={{
+                padding: 12, borderRadius: 8, fontSize: 13,
+                background: importResult.success ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+                color: importResult.success ? '#34d399' : '#f87171',
+                border: `1px solid ${importResult.success ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`
+              }}>
+                {importResult.msg}
+              </div>
+            )}
+
+            <div className="form-actions" style={{ marginTop: 8 }}>
+              <button className="btn-ghost" onClick={() => setShowImport(false)}>Close</button>
+              <button
+                className="btn-primary"
+                onClick={handleUpload}
+                disabled={!selectedFile || uploading}
+              >
+                {uploading ? 'Uploading…' : 'Upload & Import'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   )
 }

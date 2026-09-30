@@ -27,7 +27,7 @@ def main():
         "download-all", "download-technicals", "download-fundamental", "download-mf", "download-fno",
         "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
-        "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund"
+        "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund", "addticker", "deleteticker"
     ], help="Pipeline batch operation mode")
     parser.add_argument("--watchlist", "-w", nargs="*", metavar="WATCHLIST", help="Filter pipeline operations to tickers in specified watchlist(s) by name or ID")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
@@ -546,8 +546,40 @@ def main():
                     writer.writerows(rows)
                     
                 logger.info(f"[✓] Backup complete! Synchronized {copied} new historical call records to 'historical_call_bkp' table and saved backup to {bkp_csv_path}.")
+    # ── Argument Pre-processing ─────────────────────────────────────────────
+    if args.ticker:
+        raw_t = args.ticker.upper().strip()
+        if raw_t.endswith(".BO") or raw_t.endswith(".BSE"):
+            args.ticker = raw_t.replace(".BO", "").replace(".BSE", "")
+            args.exchange = "BSE"
+        elif raw_t.endswith(".NS"):
+            args.ticker = raw_t.replace(".NS", "")
+            args.exchange = "NSE"
+        else:
+            args.ticker = raw_t
+            args.exchange = "NSE"
+            
+        # Global auto-add for any mode using --ticker
+        try:
+            from engine.database.connection import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (args.ticker,))
+                    if not cur.fetchone():
+                        logger.info(f"Ticker {args.ticker} not found in ticker_master. Auto-adding it globally with exchange {args.exchange}...")
+                        cur.execute(
+                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                            (args.ticker, args.ticker, False, args.exchange)
+                        )
+                        conn.commit()
+                        logger.info(f"Successfully added {args.ticker} to ticker_master.")
+        except Exception as e:
+            logger.error(f"Failed during global auto-add for ticker {args.ticker}: {e}")
 
     # ── Batch Operations Dispatcher ──────────────────────────────────────────
+    if args.ticker and args.mode not in ("news-analyze", "download-mf", "mutualfund", "addticker", "deleteticker"):
+        args.mode = None
+        
     if args.mode == "download-all":
         logger.info("Triggered Phase 1: Full Raw Data Ingestion Pipeline...")
         run_phase_1()
@@ -641,11 +673,119 @@ def main():
                 print(f"  {i}. {n.get('title')}")
         except Exception as e:
             logger.error(f"Failed to fetch news for {ticker}: {e}")
+            
+    elif args.mode == "deleteticker":
+        if not args.ticker:
+            logger.error("--ticker argument is required when running --mode deleteticker")
+            sys.exit(1)
+        ticker = args.ticker.upper().strip()
+        from engine.database.connection import get_db_connection
+        exists = False
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                if cur.fetchone():
+                    exists = True
+        
+        if not exists:
+            logger.info(f"No match found for ticker: {ticker}")
+            sys.exit(0)
+            
+        logger.info(f"Exact match found for ticker: {ticker}. Deleting from master and all related tables...")
+        tables_to_delete_from = [
+            'ticker_sector', 'watchlist_items', 'excluded_tickers', 'ohlcv_daily', 
+            'indicators_daily', 'raw_fno_derivatives', 'analysis_summaries', 
+            'historical_calls', 'historical_call_bkp', 'call_efficiency', 'intraday_call', 
+            'fundamentals', 'fno_active', 'opportunities_risk', 'broker_recommendations', 
+            'retracement_speculator_patterns', 'raw_ticker_option_chain_temp', 'mf_holdings', 
+            'chart_patterns', 'stocks_respecting_patterns', 'sector_lead_follow_groups', 
+            'mf_historical_holdings', 'mf_behavior', 'fii_historical_holdings', 
+            'fii_behavior', 'continuous_hhhl_scanner', 'cup_and_handle_scanner', 'elliot_analysis'
+        ]
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                for table in tables_to_delete_from:
+                    try:
+                        cur.execute(f"DELETE FROM {table} WHERE ticker = %s", (ticker,))
+                        deleted = cur.rowcount
+                        if deleted > 0:
+                            logger.info(f"Deleted {deleted} rows from {table}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete from {table}: {e}")
+                        conn.rollback()
+                        continue
+                
+                # Delete from master last
+                try:
+                    cur.execute("DELETE FROM ticker_master WHERE ticker = %s", (ticker,))
+                    logger.info(f"Deleted {ticker} from ticker_master")
+                except Exception as e:
+                    logger.error(f"Could not delete from ticker_master: {e}")
+                    conn.rollback()
+                
+            conn.commit()
+            
+        logger.info(f"Successfully deleted {ticker} and all related data.")
+        sys.exit(0)
+    elif args.mode == "addticker":
+        if not args.ticker:
+            logger.error("--ticker argument is required when running --mode addticker")
+            sys.exit(1)
+        ticker = args.ticker.upper().strip()
+        from engine.database.connection import get_db_connection
+        exists = False
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                if cur.fetchone():
+                    exists = True
+        if exists:
+            logger.info(f"Ticker {ticker} all ready exist in ticker_master.")
+            sys.exit(0)
+        
+        logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                    (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+                )
+                conn.commit()
+        logger.info(f"Successfully added {ticker} to ticker_master. Running ingestion and analysis...")
+        
+        # Ingestion and Analysis
+        dl_ok = download_ticker_data(ticker)
+        if dl_ok:
+            is_fno = False
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        is_fno = row[0]
+            if is_fno:
+                download_and_insert_derivatives(ticker)
+                
+            ok = analyze_and_summarize_ticker(ticker)
+            if ok:
+                logger.info(f"Analysis completed and upserted for {ticker}")
+                generate_html_report(ticker)
+                if args.pdf:
+                    generate_pdf_report(ticker)
+            else:
+                logger.error(f"Analysis failed for {ticker}")
+        else:
+            logger.error(f"Data download failed for {ticker}")
+            
+        sys.exit(0)
 
     # Single Ticker On-demand Run
     if args.ticker:
         ticker = args.ticker.upper().strip()
         logger.info(f"Running on-demand pipeline for ticker: {ticker}")
+        
+        # Auto-add is now handled globally at the top of cli.py
         
         # 1. Download price and fundamentals
         dl_ok = download_ticker_data(ticker)
@@ -693,6 +833,20 @@ def main():
 
         if not has_summary:
             logger.info(f"No previous analysis found for {ticker}. Running download and analysis first...")
+            
+            # 0. Check if ticker exists in ticker_master, if not, add it
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                    if not cur.fetchone():
+                        logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
+                        cur.execute(
+                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                            (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+                        )
+                        conn.commit()
+                        logger.info(f"Successfully added {ticker} to ticker_master.")
+            
             dl_ok = download_ticker_data(ticker)
             if dl_ok:
                 is_fno = False

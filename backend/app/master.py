@@ -1171,6 +1171,104 @@ def delete_watchlists_batch(body: BatchDeleteWatchlists) -> dict:
 
 
 
+@router.get("/watchlists/download-csv")
+def download_watchlists_csv():
+    from fastapi.responses import StreamingResponse
+    import csv, io
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT w.name, w.description, wi.ticker
+            FROM watchlist w
+            LEFT JOIN watchlist_items wi ON w.id = wi.watchlist_id
+            ORDER BY w.name ASC, wi.ticker ASC
+        """)
+        rows = cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Watchlist Name", "Description", "Ticker"])
+    for row in rows:
+        writer.writerow([row["name"], row["description"] or "", row["ticker"] or ""])
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=watchlists.csv"}
+    )
+
+
+@router.post("/watchlists/upload-csv")
+def upload_watchlists_csv(file: UploadFile = File(...)):
+    import csv, io
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported.")
+    try:
+        raw_content = file.file.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(400, f"Error reading file: {e}")
+
+    records = []
+    try:
+        reader = csv.DictReader(io.StringIO(raw_content))
+        for row in reader:
+            w_name = None
+            w_desc = None
+            t_ticker = None
+            for k, v in row.items():
+                if k:
+                    kl = k.strip().lower()
+                    if kl in ("watchlist name", "watchlist", "name"):
+                        w_name = str(v).strip() if v else None
+                    elif kl in ("description", "desc"):
+                        w_desc = str(v).strip() if v else None
+                    elif kl in ("ticker", "symbol"):
+                        t_ticker = str(v).strip().upper() if v else None
+            
+            if w_name:
+                records.append({
+                    "name": w_name,
+                    "description": w_desc or "",
+                    "ticker": t_ticker
+                })
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse CSV: {e}")
+
+    if not records:
+        raise HTTPException(400, "No valid watchlist entries found in the uploaded file.")
+
+    watchlists_data = {}
+    for rec in records:
+        name = rec["name"]
+        if name not in watchlists_data:
+            watchlists_data[name] = {"description": rec["description"], "tickers": set()}
+        if not watchlists_data[name]["description"] and rec["description"]:
+             watchlists_data[name]["description"] = rec["description"]
+        if rec["ticker"]:
+             watchlists_data[name]["tickers"].add(rec["ticker"])
+
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT ticker FROM ticker_master")
+        known_tickers = {r["ticker"] for r in cur.fetchall()}
+        
+        for w_name, w_data in watchlists_data.items():
+            cur.execute(
+                "INSERT INTO watchlist (name, description) VALUES (%s, %s) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING id",
+                (w_name, w_data["description"])
+            )
+            w_id = cur.fetchone()["id"]
+            
+            valid_tickers = [t for t in w_data["tickers"] if t in known_tickers]
+            if valid_tickers:
+                 cur.execute("DELETE FROM watchlist_items WHERE watchlist_id = %s", (w_id,))
+                 cur.executemany(
+                     "INSERT INTO watchlist_items (watchlist_id, ticker) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                     [(w_id, t) for t in valid_tickers]
+                 )
+        conn.commit()
+
+    return {"message": f"Successfully imported {len(watchlists_data)} watchlists from CSV."}
+
+
 @router.post("/watchlists/{watchlist_id}/tickers")
 def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
     """Replace ticker assignments for a watchlist. Silently skips tickers not in ticker_master."""

@@ -5,7 +5,7 @@ import {
 } from 'lightweight-charts'
 import {
   TrendingUp, BarChart3, Activity, Layers, ArrowUpRight, ArrowDownRight,
-  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star, Printer
+  RefreshCw, Search, X, Check, Eye, ChevronRight, Zap, Target, AlertCircle, Calendar, Star, Printer, FolderHeart
 } from 'lucide-react'
 import MFBehaviorModule from './MFBehaviorModule'
 import FIIBehaviorModule from './FIIBehaviorModule'
@@ -3195,10 +3195,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
 
             {mfHoldings.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', color: '#64748b', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-                No Mutual Fund holdings data recorded for {data.ticker} yet.
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
-                  Run <code style={{ color: '#38bdf8', background: 'rgba(56,189,248,0.1)', padding: '2px 6px', borderRadius: 4 }}>python3 -m engine.cli --mode mutualfund --ticker {data.ticker}</code> to download holdings from Screener.in.
-                </div>
+                No Information of MF Holding found for {data.ticker}.
               </div>
             ) : (
               <div>
@@ -3303,10 +3300,24 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               <StockChartVisualizer ticker={data.ticker} height={420} apiBase={apiBase} />
             </ChartErrorBoundary>
           </div>
-        </div>
-      )}
 
-      {/* ─── Interactive Recommendation Details Modal ─── */}
+          {/* ─── Watchlist Memberships ─── */}
+          {data.watchlists && data.watchlists.length > 0 && (
+            <div style={{ marginTop: 24, padding: '16px 20px', background: 'rgba(0,0,0,0.25)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: 16, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderHeart size={18} style={{ color: '#ec4899' }} /> Member of Watchlist
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {data.watchlists.map((wl, idx) => (
+                  <span key={idx} style={{ padding: '6px 12px', background: 'rgba(236, 72, 153, 0.1)', color: '#fbcfe8', border: '1px solid rgba(236, 72, 153, 0.3)', borderRadius: 16, fontSize: 13, fontWeight: 600 }}>
+                    {wl.charAt(0).toUpperCase() + wl.slice(1).toLowerCase()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}      {/* ─── Interactive Recommendation Details Modal ─── */}
       {selectedRecModal && (
         <Modal title={`Broker Recommendation: ${selectedRecModal.recommender}`} onClose={() => setSelectedRecModal(null)}>
           <div style={{ padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -5379,7 +5390,7 @@ export function WatchlistMonitorPage({ apiBase = '/api/intelligence', dataset = 
           <label style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Select Watchlist:</label>
           <select
             value={selectedWatchlistId || ''}
-            onChange={e => handleWatchlistChange(Number(e.target.value))}
+            onChange={e => handleWatchlistChange(e.target.value === 'all' ? 'all' : Number(e.target.value))}
             disabled={loading || watchlists.length === 0}
             style={{ ...inpStyle, minWidth: 260, fontWeight: 700, color: '#f59e0b', background: '#0d1726', borderColor: '#3d2e0a', cursor: 'pointer' }}
           >

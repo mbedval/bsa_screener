@@ -36,7 +36,21 @@ export default function TickerTypeahead({ value, onChange, onSelect, placeholder
   const filteredTickers = value.trim() === '' ? [] : tickers.filter(t => 
     t.ticker.toLowerCase().includes(value.toLowerCase()) || 
     (t.company_name && t.company_name.toLowerCase().includes(value.toLowerCase()))
-  ).slice(0, 8); // Max 8 suggestions
+  ).sort((a, b) => {
+    const v = value.toLowerCase();
+    const aTicker = a.ticker.toLowerCase();
+    const bTicker = b.ticker.toLowerCase();
+    
+    if (aTicker === v && bTicker !== v) return -1;
+    if (bTicker === v && aTicker !== v) return 1;
+    
+    const aStarts = aTicker.startsWith(v);
+    const bStarts = bTicker.startsWith(v);
+    if (aStarts && !bStarts) return -1;
+    if (bStarts && !aStarts) return 1;
+    
+    return aTicker.localeCompare(bTicker);
+  }).slice(0, 8); // Max 8 suggestions
 
   const handleKeyDown = (e) => {
     if (!showDropdown || filteredTickers.length === 0) {

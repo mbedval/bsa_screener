@@ -162,7 +162,40 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
                 df = yfinance_safe_call(lambda: tk.history(period=YFPeriod.YEAR_1.value, interval="1d"))
 
             if df is None or df.empty:
-                logger.warning(f"No price data found for {ticker_clean}")
+                # Try fallback exchange
+                alt_formatted = None
+                alt_exchange = None
+                if formatted.endswith(".NS"):
+                    alt_formatted = formatted.replace(".NS", ".BO")
+                    alt_exchange = "BSE"
+                elif formatted.endswith(".BO"):
+                    alt_formatted = formatted.replace(".BO", ".NS")
+                    alt_exchange = "NSE"
+                    
+                if alt_formatted:
+                    logger.info(f"No data for {formatted}, retrying with alternative exchange: {alt_formatted}")
+                    alt_tk = yf.Ticker(alt_formatted)
+                    df = yfinance_safe_call(lambda: alt_tk.history(period=period, interval="1d"))
+                    
+                    if df is not None and not df.empty:
+                        logger.info(f"Success with {alt_formatted}. Updating ticker_master exchange to {alt_exchange}.")
+                        formatted = alt_formatted
+                        tk = alt_tk
+                        # Clear cache so other helpers fetch the updated exchange
+                        from engine.utils.helpers import _ticker_exchanges
+                        if _ticker_exchanges is not None:
+                            _ticker_exchanges[ticker_clean] = alt_exchange
+                        
+                        try:
+                            with get_db_connection() as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute("UPDATE ticker_master SET exchange = %s WHERE ticker = %s", (alt_exchange, ticker_clean))
+                                    conn.commit()
+                        except Exception as e:
+                            logger.error(f"Failed to update exchange in DB: {e}")
+
+            if df is None or df.empty:
+                logger.warning(f"\033[91mCheck if ticker name is correct and no ticker is found for {ticker_clean}\033[0m")
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute("""
