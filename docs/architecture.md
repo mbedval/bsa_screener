@@ -18,8 +18,10 @@ The BSA Screener is designed around an explicit **3-Phase Architecture**. Data i
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ PHASE 1: Raw Data Ingestion Only (No Indicator / No Scans)  │
-│  - Phase 1.1: Spot Data Download (--mode download-spot)     │
-│      Stores raw OHLCV prices, fundamentals, delivery history│
+│  - Phase 1.1a: Spot Data Download (--mode download-technicals)│
+│      Stores raw OHLCV prices, volume                                │
+│  - Phase 1.1b: Spot Data Download (--mode download-fundamental)│
+│      Stores fundamentals, delivery history                          │
 │  - Phase 1.2: F&O Option Chain Download (--mode download-fno)│
 │      Stores raw option chain strikes & prices               │
 │  - Scanner Reports & Analysis Summaries remain BLANK        │
@@ -43,7 +45,7 @@ The BSA Screener is designed around an explicit **3-Phase Architecture**. Data i
    `dump_database.py` must ONLY dump master setup metadata tables (`ticker_master`, `fno_stock_master`, `fno_index_master`, `sectors`, `ticker_sector`, `watchlist`, `users`, `alternative_names`, `excluded_tickers`, `system_config`, `ticker_mappings`). All price history, fundamentals, derivatives, scanners, and analysis report tables must be excluded.
 
 2. **Phase 1 Ingestion Integrity**:
-   `download-spot` and `download-fno` MUST NOT trigger indicator calculations, scanner signal generation, or scoring summaries. All scanner endpoints in `backend/app/main.py` return 0 rows when `analysis_summaries` is unpopulated.
+   `download-technicals`, `download-fundamental`, and `download-fno` MUST NOT trigger indicator calculations, scanner signal generation, or scoring summaries. All scanner endpoints in `backend/app/main.py` return 0 rows when `analysis_summaries` is unpopulated.
 
 3. **Phase 2 Analysis Execution**:
    All technical scanners (`quicktrade`, `screener`, `operatorfootprint`, `swinger`, `monthly_swinger`, `breakout`, `trend_trading`, `reversal_trading`, `support_resistance`), fundamental analysis reports (`cash_flow_summary`, `delivery_spikes`), and derivative summaries (`fno_active`, `intraday_call`, `historical_calls`) are populated only when `python3 -m engine.cli --mode analyze-all` runs.

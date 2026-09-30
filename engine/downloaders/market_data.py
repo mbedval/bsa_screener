@@ -116,8 +116,11 @@ def get_latest_trade_date(ticker_clean: str) -> datetime or None:
         pass
     return None
 
-def download_ticker_data(ticker_raw: str, period: str = None, force: bool = False) -> bool:
+def download_ticker_data(ticker_raw: str, period: str = None, force: bool = False, dl_technicals: bool = True, dl_fundamentals: bool = True) -> bool:
     """Download OHLCV, compute indicators, fetch meta & fundamentals with smart incremental freshness logic."""
+    if not dl_technicals and not dl_fundamentals:
+        return True
+        
     if period and period not in YFPeriod.valid_periods():
         logger.error(f"Invalid period '{period}'. Valid periods are: {', '.join(YFPeriod.valid_periods())}")
         return False
@@ -128,133 +131,153 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
     today_date = datetime.now().date()
 
     try:
-        # Determine smart fetch period if not specified
-        if not period:
-            last_date = get_latest_trade_date(ticker_clean)
-            if last_date and not force:
-                days_diff = (today_date - last_date.date()).days
-                # If last trade date is today (or yesterday/weekend within 1-2 days), skip download
-                if days_diff <= 0 or (today_date.weekday() in [5, 6] and days_diff <= 2):
-                    logger.info(f"Ticker {ticker_clean} is already up to date ({last_date.strftime('%Y-%m-%d')}). Skipping download.")
-                    return True
-                elif days_diff <= 7:
-                    period = YFPeriod.DAY_5.value
-                elif days_diff <= 30:
-                    period = YFPeriod.MONTH_1.value
+        tk = yf.Ticker(formatted)
+        info = None
+        
+        if dl_technicals:
+            # Determine smart fetch period if not specified
+            if not period:
+                last_date = get_latest_trade_date(ticker_clean)
+                if last_date and not force:
+                    days_diff = (today_date - last_date.date()).days
+                    # If last trade date is today (or yesterday/weekend within 1-2 days), skip download
+                    if days_diff <= 0 or (today_date.weekday() in [5, 6] and days_diff <= 2):
+                        logger.info(f"Ticker {ticker_clean} is already up to date ({last_date.strftime('%Y-%m-%d')}). Skipping download.")
+                        dl_technicals = False  # Skip technicals but maybe continue fundamentals if needed
+                    elif days_diff <= 7:
+                        period = YFPeriod.DAY_5.value
+                    elif days_diff <= 30:
+                        period = YFPeriod.MONTH_1.value
+                    else:
+                        period = YFPeriod.YEAR_2.value
                 else:
                     period = YFPeriod.YEAR_2.value
-            else:
-                period = YFPeriod.YEAR_2.value
 
-        # 1. Fetch OHLCV with rate limit protection & backoff
-        tk = yf.Ticker(formatted)
-        df = yfinance_safe_call(lambda: tk.history(period=period, interval="1d"))
-        
-        if (df is None or df.empty) and period in [YFPeriod.DAY_5.value, YFPeriod.MONTH_1.value]:
-            logger.info(f"Retry fetching {ticker_clean} with period=1y because {period} returned empty")
-            df = yfinance_safe_call(lambda: tk.history(period=YFPeriod.YEAR_1.value, interval="1d"))
+        if dl_technicals:
+            # 1. Fetch OHLCV with rate limit protection & backoff
+            df = yfinance_safe_call(lambda: tk.history(period=period, interval="1d"))
+            
+            if (df is None or df.empty) and period in [YFPeriod.DAY_5.value, YFPeriod.MONTH_1.value]:
+                logger.info(f"Retry fetching {ticker_clean} with period=1y because {period} returned empty")
+                df = yfinance_safe_call(lambda: tk.history(period=YFPeriod.YEAR_1.value, interval="1d"))
 
-        if df is None or df.empty:
-            logger.warning(f"No price data found for {ticker_clean}")
+            if df is None or df.empty:
+                logger.warning(f"No price data found for {ticker_clean}")
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO excluded_tickers (ticker, reason, added_by, status, created_at)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (ticker) DO UPDATE SET 
+                            reason = EXCLUDED.reason, status = EXCLUDED.status, created_at = EXCLUDED.created_at
+                        """, (ticker_clean, "No price data found (possibly delisted)", "SYSTEM", "EXCLUDED", now_str))
+                        conn.commit()
+                return False
+
+            # Localize timezones
+            if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
+
+            df["VWAP"] = compute_vwap(df)
+            enriched = compute_indicators(df)
+
+            # Drop any row where Close is NaN/None before saving
+            enriched = enriched.dropna(subset=["Close"])
+            if enriched.empty:
+                logger.warning(f"No valid close prices for {ticker_clean}")
+                return False
+
+            # 2. Save stock_meta information with rate limit protection
+            info = yfinance_safe_call(lambda: tk.info) or {}
+            company_name = info.get("longName", info.get("shortName", ticker_clean))
+            sector = info.get("sector", "Unknown")
+            exchange = "BO" if formatted.endswith(".BO") else "NS"
+
+            from psycopg2.extras import execute_values
+
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    # Upsert ticker_master metadata
                     cur.execute("""
-                        INSERT INTO excluded_tickers (ticker, reason, added_by, status, created_at)
+                        INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
                         VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (ticker) DO UPDATE SET 
-                        reason = EXCLUDED.reason, status = EXCLUDED.status, created_at = EXCLUDED.created_at
-                    """, (ticker_clean, "No price data found (possibly delisted)", "SYSTEM", "EXCLUDED", now_str))
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            company_name = EXCLUDED.company_name,
+                            sector = EXCLUDED.sector,
+                            exchange = EXCLUDED.exchange,
+                            updated_at = EXCLUDED.updated_at
+                    """, (ticker_clean, company_name, sector, exchange, now_str))
+
+                    # Batch upsert OHLCV and Indicators
+                    ohlcv_records = []
+                    indicators_records = []
+                    for idx, row in enriched.iterrows():
+                        date_str = idx.strftime("%Y-%m-%d")
+                        ohlcv_records.append((
+                            ticker_clean, date_str,
+                            _safe_float(row["Open"]), _safe_float(row["High"]),
+                            _safe_float(row["Low"]), _safe_float(row["Close"]),
+                            _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
+                            now_str
+                        ))
+                        indicators_records.append((
+                            ticker_clean, date_str,
+                            _safe_float(row.get("RSI14")), _safe_float(row.get("SMA20")),
+                            _safe_float(row.get("SMA50")), _safe_float(row.get("EMA12")),
+                            _safe_float(row.get("EMA26")), _safe_float(row.get("MACD_Line")),
+                            _safe_float(row.get("MACD_Signal")), _safe_float(row.get("MACD_Hist")),
+                            _safe_float(row.get("BB_Upper")), _safe_float(row.get("BB_Mid")),
+                            _safe_float(row.get("BB_Lower")), _safe_float(row.get("ATR14")),
+                            _safe_float(row.get("Tenkan_sen")), _safe_float(row.get("Kijun_sen")),
+                            _safe_float(row.get("Span_A")), _safe_float(row.get("Span_B")), now_str
+                        ))
+
+                    if ohlcv_records:
+                        execute_values(cur, """
+                            INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
+                            VALUES %s
+                            ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                                open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                                close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
+                                downloaded_at = EXCLUDED.downloaded_at
+                        """, ohlcv_records, page_size=500)
+
+                    if indicators_records:
+                        execute_values(cur, """
+                            INSERT INTO indicators_daily (
+                                ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
+                                macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
+                                atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
+                            ) VALUES %s
+                            ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                                rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
+                                ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
+                                macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
+                                bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
+                                atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
+                                span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
+                        """, indicators_records, page_size=500)
+
                     conn.commit()
-            return False
 
-        # Localize timezones
-        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
-            df.index = df.index.tz_localize(None)
-
-        df["VWAP"] = compute_vwap(df)
-        enriched = compute_indicators(df)
-
-        # Drop any row where Close is NaN/None before saving
-        enriched = enriched.dropna(subset=["Close"])
-        if enriched.empty:
-            logger.warning(f"No valid close prices for {ticker_clean}")
-            return False
-
-        # 2. Save stock_meta information with rate limit protection
-        info = yfinance_safe_call(lambda: tk.info) or {}
-        company_name = info.get("longName", info.get("shortName", ticker_clean))
-        sector = info.get("sector", "Unknown")
-        exchange = "BO" if formatted.endswith(".BO") else "NS"
-
-        from psycopg2.extras import execute_values
-
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Upsert ticker_master metadata
-                cur.execute("""
-                    INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        company_name = EXCLUDED.company_name,
-                        sector = EXCLUDED.sector,
-                        exchange = EXCLUDED.exchange,
-                        updated_at = EXCLUDED.updated_at
-                """, (ticker_clean, company_name, sector, exchange, now_str))
-
-                # Batch upsert OHLCV and Indicators
-                ohlcv_records = []
-                indicators_records = []
-                for idx, row in enriched.iterrows():
-                    date_str = idx.strftime("%Y-%m-%d")
-                    ohlcv_records.append((
-                        ticker_clean, date_str,
-                        _safe_float(row["Open"]), _safe_float(row["High"]),
-                        _safe_float(row["Low"]), _safe_float(row["Close"]),
-                        _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
-                        now_str
-                    ))
-                    indicators_records.append((
-                        ticker_clean, date_str,
-                        _safe_float(row.get("RSI14")), _safe_float(row.get("SMA20")),
-                        _safe_float(row.get("SMA50")), _safe_float(row.get("EMA12")),
-                        _safe_float(row.get("EMA26")), _safe_float(row.get("MACD_Line")),
-                        _safe_float(row.get("MACD_Signal")), _safe_float(row.get("MACD_Hist")),
-                        _safe_float(row.get("BB_Upper")), _safe_float(row.get("BB_Mid")),
-                        _safe_float(row.get("BB_Lower")), _safe_float(row.get("ATR14")),
-                        _safe_float(row.get("Tenkan_sen")), _safe_float(row.get("Kijun_sen")),
-                        _safe_float(row.get("Span_A")), _safe_float(row.get("Span_B")), now_str
-                    ))
-
-                if ohlcv_records:
-                    execute_values(cur, """
-                        INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
-                        VALUES %s
-                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                            open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
-                            close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
-                            downloaded_at = EXCLUDED.downloaded_at
-                    """, ohlcv_records, page_size=500)
-
-                if indicators_records:
-                    execute_values(cur, """
-                        INSERT INTO indicators_daily (
-                            ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
-                            macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
-                            atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
-                        ) VALUES %s
-                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                            rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
-                            ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
-                            macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
-                            bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
-                            atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
-                            span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
-                    """, indicators_records, page_size=500)
-
-                conn.commit()
+            # For technical score support we are using derivative information also,
+            # so if derivative chain detail is not downloaded, do it for ticker flagged with fno
+            is_fno = False
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker_clean,))
+                    row = cur.fetchone()
+                    if row:
+                        is_fno = row[0]
+            if is_fno:
+                from engine.downloaders.derivatives import download_and_insert_derivatives
+                download_and_insert_derivatives(ticker_clean)
 
         # 3. Fundamentals (reusing info dictionary)
-        download_fundamental_data(ticker_clean, formatted, tk, cached_info=info)
+        if dl_fundamentals:
+            if info is None:
+                info = yfinance_safe_call(lambda: tk.info) or {}
+            download_fundamental_data(ticker_clean, formatted, tk, cached_info=info)
 
         return True
 
@@ -347,8 +370,8 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
 
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 
-def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False, tickers: list = None):
-    """Download OHLCV and fundamentals for tickers in the database master list (or specified tickers list) with rate limit protection."""
+def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False, tickers: list = None, dl_technicals: bool = True, dl_fundamentals: bool = True, checkpoint_key: str = "spot_download"):
+    """Download OHLCV and/or fundamentals for tickers in the database master list (or specified tickers list) with rate limit protection."""
     all_tickers = []
     if tickers is not None:
         all_tickers = [t.upper().strip() for t in tickers]
@@ -366,24 +389,24 @@ def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callba
     if not all_tickers:
         logger.warning("No tickers found in ticker_master!")
         return
-    completed_set = get_completed_tickers("spot_download", valid_tickers=all_tickers) if resume else set()
+    completed_set = get_completed_tickers(checkpoint_key, valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
-    logger.info(f"Starting spot download pipeline (max_workers={max_workers}). Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+    logger.info(f"Starting spot download pipeline (max_workers={max_workers}, key={checkpoint_key}). Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
 
     if not pending_tickers:
-        logger.info("All spot tickers already downloaded!")
+        logger.info(f"All tickers already downloaded for {checkpoint_key}!")
         return
 
     success_count = len(completed_set)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(download_ticker_data, ticker, force=force): ticker for ticker in pending_tickers}
+        futures = {executor.submit(download_ticker_data, ticker, force=force, dl_technicals=dl_technicals, dl_fundamentals=dl_fundamentals): ticker for ticker in pending_tickers}
         for i, future in enumerate(as_completed(futures), 1):
             t = futures[future]
             res = future.result()
             if res:
                 success_count += 1
-                mark_ticker_completed("spot_download", t)
+                mark_ticker_completed(checkpoint_key, t)
             if progress_callback:
                 logger.debug(f"[{i}/{len(pending_tickers)}] Downloaded {t}: {'Success' if res else 'Failed'}")
                 progress_callback(t, res)

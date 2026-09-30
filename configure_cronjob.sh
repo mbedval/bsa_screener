@@ -34,8 +34,8 @@ cat << EOF >> "${TEMP_CRON}"
 
 ${CRON_COMMENT_HEADER}
 # NSE Stock Market Data & Technical Analysis Engine (Every 15 mins 09:15-14:45 & 15:00)
-0,15,30,45 9-14 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-spot >> ${LOG_DIR}/cron_nse.log 2>&1
-0 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-spot >> ${LOG_DIR}/cron_nse.log 2>&1
+0,15,30,45 9-14 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-technicals >> ${LOG_DIR}/cron_nse.log 2>&1
+0 15 * * 1-5           ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-technicals >> ${LOG_DIR}/cron_nse.log 2>&1
 
 # NSE Derivatives / Option Chain Data (Every 2 mins during market hours 09:16-15:30)
 16-58/2 9 * * 1-5 ${PYTHON_BIN} ${PROJECT_DIR}/engine/cli.py --mode download-fno >> ${LOG_DIR}/cron_fno.log 2>&1

@@ -191,6 +191,27 @@ def get_tickers_for_watchlist(watchlist_inputs: list) -> tuple:
     matched_watchlists = []
     tickers = set()
 
+    if any(t.lower() == 'all' for t in raw_tokens):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, name, description FROM watchlist")
+                rows = cur.fetchall()
+                for row in rows:
+                    wl_id, wl_name, wl_desc = row[0], row[1], row[2]
+                    cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                    cnt = cur.fetchone()[0]
+                    matched_watchlists.append({
+                        'id': wl_id,
+                        'name': wl_name,
+                        'description': wl_desc,
+                        'ticker_count': cnt
+                    })
+                cur.execute("SELECT DISTINCT ticker FROM watchlist_items")
+                for t_row in cur.fetchall():
+                    if t_row[0]:
+                        tickers.add(t_row[0].upper().strip())
+        return sorted(list(tickers)), matched_watchlists
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             for token in raw_tokens:

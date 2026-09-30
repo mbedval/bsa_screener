@@ -19,9 +19,17 @@ def create_phase_progress(phase_label: Union[int, str], phase_name: str, total: 
     else:
         phase_str = str(phase_label)
 
-    description = f"[bold cyan]{phase_str}[/bold cyan] ({phase_name})"
-    text_format = f"[bold yellow][ {phase_str} - {phase_name} : [/bold yellow]"
-    unit_text = f"[bold yellow] {unit} ][/bold yellow]"
+    if "Phase 1" in phase_str:
+        phase_desc = "Phase 1: Raw Data Ingestion"
+    elif "Phase 2" in phase_str:
+        phase_desc = "Phase 2: Scoring & Analysis"
+    else:
+        phase_desc = phase_str
+
+    color = "dark_orange" if "Phase 1" in phase_str else "yellow"
+    description = f"[bold cyan]{phase_desc}[/bold cyan] ({phase_name})"
+    text_format = f"[bold {color}][ {phase_desc} - {phase_name} : [/bold {color}]"
+    unit_text = f"[bold {color}] {unit} ][/bold {color}]"
     
     progress = Progress(
         SpinnerColumn(),

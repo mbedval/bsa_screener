@@ -144,7 +144,7 @@ PENDING_REPORT_TEMPLATE = """<!DOCTYPE html>
             <ol>
                 <li>
                     <strong>Download Market Data:</strong><br>
-                    Run <code>python3 -m engine.cli --mode download-spot</code> to fetch daily OHLCV price history.
+                    Run <code>python3 -m engine.cli --mode download-technicals</code> to fetch daily OHLCV price history.
                 </li>
                 <li>
                     <strong>Download F&amp;O Derivatives (if applicable):</strong><br>

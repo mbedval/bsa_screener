@@ -24,7 +24,7 @@ logger = setup_logger("bsa_cli")
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
     parser.add_argument("--mode", choices=[
-        "download-all", "download-spot", "download-mf", "download-fno",
+        "download-all", "download-technicals", "download-fundamental", "download-mf", "download-fno",
         "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
         "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund"
@@ -80,7 +80,7 @@ def main():
 
         wl_names = ", ".join([f"'{w['name']}' [ID: {w['id']}]" for w in matched_wls])
         logger.info(f"Watchlist filter active: matched {len(matched_wls)} watchlist(s) ({wl_names}).")
-        logger.info(f"Loaded {len(wl_tickers)} unique ticker(s) for watchlist execution: {wl_tickers}")
+
 
         if not wl_tickers:
             logger.warning("Specified watchlist(s) contain 0 tickers! Exiting.")
@@ -127,70 +127,92 @@ def main():
         return False
 
     # ── Phase 1: Raw Data Ingestion Sub-Runners ──────────────────────────────
-    def run_phase_1_1():
+    def run_phase_1_1_tech():
         p_start = time.time()
-        logger.info("=== Phase 1.1: Spot Data Download (Master Price & Fundamentals) ===")
+        logger.info("=== Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===")
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 1.1 (Download Spot)", "spot_download", total, valid_tickers=valid_tickers)
-        completed = get_completed_tickers("spot_download", valid_tickers=valid_tickers) if resume else set()
+        resume = resolve_resume_flag("Phase 1.1 (Download Technicals)", "tech_download", total, valid_tickers=valid_tickers)
+        completed = get_completed_tickers("tech_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 1.1 (Download Spot) are already completed. Use --fresh or --force to re-download.")
+            logger.info(f"All {total} items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.")
         else:
-            progress, task_id = create_phase_progress("Phase 1.1", "Download Spot", pending_count if resume else total, unit="tickers")
+            progress, task_id = create_phase_progress("Phase 1.1", "Download Technicals", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
-                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=True, dl_fundamentals=False, checkpoint_key="tech_download")
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.1 (Download Spot) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.1 (Download Technicals) completed in {p_elapsed:.2f}s.")
+
+    def run_phase_1_1_fund():
+        p_start = time.time()
+        logger.info("=== Phase 1.2: Spot Data Download (Fundamentals) ===")
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        total = len(valid_tickers)
+        resume = resolve_resume_flag("Phase 1.2 (Download Fundamentals)", "fund_download", total, valid_tickers=valid_tickers)
+        completed = get_completed_tickers("fund_download", valid_tickers=valid_tickers) if resume else set()
+        pending_count = max(total - len(completed), 0)
+        if pending_count == 0 and total > 0:
+            logger.info(f"All {total} items for Phase 1.2 (Download Fundamentals) are already completed. Use --fresh to re-download.")
+        else:
+            progress, task_id = create_phase_progress("Phase 1.2", "Download Fundamentals", pending_count if resume else total, unit="tickers")
+            with progress:
+                def cb(ticker, status, advance=1):
+                    if ticker is not None:
+                        progress.update(task_id, advance=advance)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=False, dl_fundamentals=True, checkpoint_key="fund_download")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1.2 (Download Fundamentals) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_2():
         p_start = time.time()
-        logger.info("=== Phase 1.2: Mutual Fund & FII Holdings Download ===")
+        logger.info("=== Phase 1.3: Mutual Fund & FII Holdings Download ===")
         from engine.downloaders.mutual_fund import ensure_mf_fii_tables_exist, download_all_fii_holdings
         ensure_mf_fii_tables_exist()
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total_tickers = len(valid_tickers)
         total_items = total_tickers * 2  # MF holdings (total_tickers) + FII holdings (total_tickers)
-        progress, task_id = create_phase_progress("Phase 1.2", "Download MF & FII", total_items, unit="items")
+        progress, task_id = create_phase_progress("Phase 1.3", "Download MF & FII", total_items, unit="items")
         with progress:
             def cb(current, total, ticker, count):
                 progress.update(task_id, advance=1)
             download_all_mf_holdings(progress_callback=cb, tickers=valid_tickers)
             download_all_fii_holdings(progress_callback=cb, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.2 (Download MF & FII) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.3 (Download MF & FII) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_3():
         p_start = time.time()
-        logger.info("=== Phase 1.3: F&O Derivatives Download ===")
+        logger.info("=== Phase 1.4: F&O Derivatives Download ===")
         all_fno = get_fno_tickers()
         valid_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 1.3 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
+        resume = resolve_resume_flag("Phase 1.4 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("fno_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 1.3 (Download F&O) are already completed. Use --fresh to re-download.")
+            logger.info(f"All {total} items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.")
         else:
-            progress, task_id = create_phase_progress("Phase 1.3", "Download F&O", pending_count if resume else total, unit="tickers")
+            progress, task_id = create_phase_progress("Phase 1.4", "Download F&O", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
                 download_all_derivatives(progress_callback=cb, resume=resume, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.3 (Download F&O) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.4 (Download F&O) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1():
         p_start = time.time()
         logger.info("=== Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===")
-        run_phase_1_1()
+        run_phase_1_1_tech()
+        run_phase_1_1_fund()
         run_phase_1_2()
         run_phase_1_3()
         p_elapsed = time.time() - p_start
@@ -529,11 +551,14 @@ def main():
     if args.mode == "download-all":
         logger.info("Triggered Phase 1: Full Raw Data Ingestion Pipeline...")
         run_phase_1()
-    elif args.mode == "download-spot":
-        logger.info("Triggered Phase 1.1: Spot Data Download...")
-        run_phase_1_1()
+    elif args.mode == "download-technicals":
+        logger.info("Triggered Phase 1.1: Spot Data Download (Technicals)...")
+        run_phase_1_1_tech()
+    elif args.mode == "download-fundamental":
+        logger.info("Triggered Phase 1.2: Spot Data Download (Fundamentals)...")
+        run_phase_1_1_fund()
     elif args.mode in ("download-mf", "mutualfund"):
-        logger.info("Triggered Phase 1.2: Mutual Fund & FII Holdings Download...")
+        logger.info("Triggered Phase 1.3: Mutual Fund & FII Holdings Download...")
         if args.ticker:
             ticker = args.ticker.upper().strip()
             from engine.downloaders.mutual_fund import download_fii_holdings_for_ticker
@@ -543,7 +568,7 @@ def main():
         else:
             run_phase_1_2()
     elif args.mode == "download-fno":
-        logger.info("Triggered Phase 1.3: F&O Derivatives Download...")
+        logger.info("Triggered Phase 1.4: F&O Derivatives Download...")
         run_phase_1_3()
     elif args.mode == "analyze-all":
         logger.info("Triggered Phase 2: Consolidated Scoring & Analysis Engine...")
@@ -579,12 +604,11 @@ def main():
         backup_historical_calls()
         logger.info("[✓] Full pipeline execution completed successfully!")
     elif args.mode == "spot-pipeline":
-        logger.info("Triggered Spot Stocks Pipeline (download-spot -> download-fno -> analyze-technical -> analyze-fundamental -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
+        logger.info("Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
         p_start = time.time()
-        run_phase_1_1()
+        run_phase_1_1_tech()
         run_phase_1_3()
         run_phase_2_1()
-        run_phase_2_2()
         run_phase_2_3()
         run_phase_2_4()
         run_phase_2_6()
