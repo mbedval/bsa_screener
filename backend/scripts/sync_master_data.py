@@ -17,7 +17,8 @@ MASTER_TABLES = [
     "watchlist_items",
     "fno_stock_master",
     "fno_index_master",
-    "opportunities_risk"
+    "opportunities_risk",
+    "derivative_history"
 ]
 
 def get_primary_key(conn, table_name):

@@ -37,10 +37,10 @@ bsa_screener/
 ## 2. Setup & Installation
 
 ### A. Database Initialization
-Ensure PostgreSQL is running, then run `seeding.sql` to initialize all master tables, market data tables, options chains, system configuration settings, and mapping translations:
+Ensure PostgreSQL is running, then run `bsa_db_backup.sql` (the Golden Master Baseline) to initialize all master metadata tables (including `derivative_history`), system configuration settings, and mapping translations:
 
 ```bash
-PGPASSWORD=jmbxdbpassword psql -h 192.168.1.18 -U jmbxdbuser -d bsa_db -f seeding.sql
+PGPASSWORD=jmbxdbpassword psql -h 192.168.1.18 -U jmbxdbuser -d bsa_db -f bsa_db_backup.sql
 ```
 
 ### B. Python Virtual Environment Setup

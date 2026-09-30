@@ -425,3 +425,12 @@ CREATE TABLE IF NOT EXISTS mf_historical_holdings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS derivative_history (
+    id          SERIAL PRIMARY KEY,
+    symbol      TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    lot_size    INTEGER,
+    action_date DATE,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT now()
+);

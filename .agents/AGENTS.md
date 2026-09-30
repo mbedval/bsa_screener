@@ -8,7 +8,7 @@ To maintain strict data integrity, zero contamination, and explicit control flow
 
 ### Rule 1.1: Phase 0 - Golden Master Setup Baseline
 - **Goal**: Initialize clean database structure & master setup metadata only.
-- **Master Tables Allowed**: `ticker_master`, `fno_stock_master`, `fno_index_master`, `sectors`, `ticker_sector`, `watchlist`, `watchlist_items`, `users`, `alternative_names`, `excluded_tickers`, `system_config`, `ticker_mappings`, `opportunities_risk`.
+- **Master Tables Allowed**: `ticker_master`, `fno_stock_master`, `fno_index_master`, `sectors`, `ticker_sector`, `watchlist`, `watchlist_items`, `users`, `alternative_names`, `excluded_tickers`, `system_config`, `ticker_mappings`, `opportunities_risk`, `derivative_history`.
 - **Database Dump Contract**: `dump_database.py` MUST ONLY dump records from the above master setup tables.
 - **Strict Prohibition**:
   - **NO MARKET PRICE DATA** (0 rows in `ohlcv_daily`).
