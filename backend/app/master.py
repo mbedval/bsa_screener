@@ -1,3 +1,4 @@
+from psycopg.rows import dict_row
 """Master data CRUD router — /api/master/
 
 Endpoints:
@@ -1881,3 +1882,32 @@ def update_system_config(key: str, data: SystemConfigUpdate, dataset: Optional[s
         return row
 
 
+
+# -- Derivative History --
+
+@router.get("/derivative_history")
+def get_derivative_history(dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+        try:
+            cur.execute("""
+                SELECT id, symbol, action, lot_size, action_date, created_at
+                FROM derivative_history
+                ORDER BY action_date DESC, id DESC
+            """)
+            return cur.fetchall()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/derivative_history/{ticker}")
+def get_derivative_history_by_ticker(ticker: str, dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+        try:
+            cur.execute("""
+                SELECT id, symbol, action, lot_size, action_date, created_at
+                FROM derivative_history
+                WHERE symbol = %s
+                ORDER BY action_date DESC, id DESC
+            """, (ticker.upper(),))
+            return cur.fetchall()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))

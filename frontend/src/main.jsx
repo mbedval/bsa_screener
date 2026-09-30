@@ -11,6 +11,7 @@ import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, Ch
 import ElliotReport from './reports/ElliotReport.jsx'
 import HHHLFullReportPage from './reports/HHHLFullReportPage.jsx'
 import CandlestickFullReportPage from './reports/CandlestickFullReportPage.jsx'
+import DerivativeHistoryPage from './reports/DerivativeHistoryPage.jsx'
 
 import './styles.css'
 
@@ -524,7 +525,7 @@ function App() {
 
   useEffect(() => {
     if (path === '' || path === '/') return
-    const customPages = ['dashboard', 'midcap_dashboard', 'smallcap_dashboard', 'largecap_dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy', 'charts_visualizations']
+    const customPages = ['dashboard', 'midcap_dashboard', 'smallcap_dashboard', 'largecap_dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy', 'charts_visualizations', 'derivative_history']
     if (!customPages.includes(active) && !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:')) {
       load(active, '')
     }
@@ -868,6 +869,8 @@ function App() {
           />
         ) : active === 'fno_active' ? (
           <FnoActivePage data={data} loading={loading} error={error} />
+        ) : active === 'derivative_history' ? (
+          <DerivativeHistoryPage setActive={setActive} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'option_chain_analyzer' ? (
           <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} dataset={dataset} />
         ) : active === 'best_option_strategy' ? (
@@ -3989,6 +3992,48 @@ const matchesRuleFilter = (rowVal, filterVal) => {
               title="Reset all filters to default (ALL)"
             >
               <RotateCcw size={13} /> Reset Filters
+            </button>
+          )}
+
+          {activeTable === 'fno_stock_master' && (
+            <button
+              onClick={() => {
+                const url = dataset ? `/api/master/derivative_history?dataset=${encodeURIComponent(dataset)}` : `/api/master/derivative_history`;
+                fetch(url)
+                  .then(r => r.json())
+                  .then(data => {
+                     if (!data || !data.length) {
+                       alert('No derivative history found.');
+                       return;
+                     }
+                     const headers = Object.keys(data[0]);
+                     const csv = [headers.join(',')].concat(data.map(row => headers.map(h => row[h]).join(','))).join('\\n');
+                     const blob = new Blob([csv], { type: 'text/csv' });
+                     const link = document.createElement('a');
+                     link.href = URL.createObjectURL(blob);
+                     link.download = `derivative_history_${new Date().toISOString().split('T')[0]}.csv`;
+                     document.body.appendChild(link);
+                     link.click();
+                     document.body.removeChild(link);
+                  })
+                  .catch(e => alert('Failed to download derivative history: ' + e.message));
+              }}
+              style={{
+                background: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.45)',
+                color: '#38bdf8',
+                borderRadius: 6,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(56, 189, 248, 0.15)'
+              }}
+            >
+              <Download size={14} /> Download Derivative History CSV
             </button>
           )}
 

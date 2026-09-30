@@ -9,6 +9,7 @@ FIXED_TABLES = {
     "fno_active": {"label": "FNO Active", "group": "Derivative"},
     "option_chain_analyzer": {"label": "Option Chain & Greeks", "group": "Derivative"},
     "best_option_strategy": {"label": "Best Option Strategy", "group": "Derivative"},
+    "derivative_history": {"label": "Derivative History", "group": "Derivative"},
     "quicktrade_timestamp": {"label": "QuickTrade", "group": "Technical Scanners"},
     "screener_timestamp": {"label": "Screener", "group": "Technical Scanners"},
     "operatorfootprint": {"label": "Operator footprint", "group": "Research Board"},

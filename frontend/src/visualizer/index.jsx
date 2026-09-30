@@ -2339,6 +2339,78 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               {master.suggestion_remarks || `Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only.`}
             </div>
 
+            
+            {/* Derivative History Card */}
+            {data?.derivative_history && data.derivative_history.length > 0 && (
+              <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
+                <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 14 }}>
+                  📜 Derivative History & Lot Sizes (Last 24 Months)
+                </b>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {(() => {
+                    const history = data.derivative_history;
+                    const entryRecord = history.find(h => h.action === 'ENTRY');
+                    const exitRecord = history.find(h => h.action === 'EXIT');
+                    const lotChangeRecords = history.filter(h => h.action === 'LOT_CHANGE').sort((a, b) => new Date(b.action_date) - new Date(a.action_date));
+                    
+                    const entryDate = entryRecord?.action_date || 'Not Available';
+                    const exitDate = exitRecord ? exitRecord.action_date : 'Active (Continuous)';
+                    
+                    let currentLot = 'Not Available';
+                    let prevLot = null;
+                    
+                    if (lotChangeRecords.length > 0) {
+                      currentLot = lotChangeRecords[0].lot_size;
+                      if (lotChangeRecords.length > 1) {
+                        prevLot = lotChangeRecords[1].lot_size;
+                      } else if (entryRecord && entryRecord.lot_size) {
+                        prevLot = entryRecord.lot_size;
+                      }
+                    } else if (entryRecord && entryRecord.lot_size) {
+                      currentLot = entryRecord.lot_size;
+                    }
+                    
+                    if (exitRecord) {
+                      currentLot = 'Not Available';
+                      prevLot = null;
+                    }
+                    
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '12px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ display: 'flex', gap: 32 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Entry Date</span>
+                            <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: "'DM Mono', monospace" }}>{entryDate}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Exit Date</span>
+                            <span style={{ fontSize: 13, color: exitRecord ? '#ef4444' : '#34d399', fontFamily: "'DM Mono', monospace" }}>{exitDate}</span>
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+                          {prevLot && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                              <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Prev Lot Size</span>
+                              <span style={{ fontSize: 13, color: '#94a3b8', fontFamily: "'DM Mono', monospace", textDecoration: 'line-through' }}>
+                                {prevLot.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Current Lot Size</span>
+                            <span style={{ fontSize: 14, color: '#f8fafc', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
+                              {currentLot !== 'Not Available' && currentLot !== null ? currentLot.toLocaleString() : 'Not Available'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* Institutional Behavior Cards (Horizontal Row) */}
             <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
               {/* MF View Card */}
