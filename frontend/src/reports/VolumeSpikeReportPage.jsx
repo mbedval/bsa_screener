@@ -1,0 +1,127 @@
+import React, { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
+
+export default function VolumeSpikeReportPage({ apiBase, initialTicker }) {
+  const [ticker, setTicker] = useState(initialTicker || 'RELIANCE');
+  const [searchInput, setSearchInput] = useState(initialTicker || 'RELIANCE');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const handleSearch = () => {
+    if (!searchInput.trim()) return;
+    setTicker(searchInput.trim().toUpperCase());
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    const baseUrl = apiBase.replace('/intelligence', '');
+    fetch(`${baseUrl}/ticker-master-search/${ticker}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.found === false) {
+          setError(d.message);
+          setData(null);
+        } else {
+          setData(d);
+          setError(null);
+        }
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [ticker, apiBase]);
+
+  const volumeSpikes = data?.volume_spikes || [];
+
+  const totalPages = Math.ceil(volumeSpikes.length / pageSize);
+  const paginatedData = pageSize > 0 ? volumeSpikes.slice((page - 1) * pageSize, page * pageSize) : volumeSpikes;
+
+  const renderTruncatedCell = (val) => {
+    const s = String(val || '');
+    if (s.length > 20) return <span title={s}>{s.substring(0, 16)}...</span>;
+    return s;
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center' }}>
+        <div className="brand">
+          <h2 style={{ margin: 0 }}>Volume Spike Report</h2>
+          <p className="eyebrow" style={{ margin: 0, marginTop: 4 }}>Volume &gt; 1.3x 20-Day Average</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input 
+            type="text" 
+            value={searchInput} 
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="Search ticker..."
+            style={{ padding: '6px 12px', borderRadius: 4, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+          />
+          <button onClick={handleSearch} className="btn primary"><Search size={14}/> Search</button>
+        </div>
+      </div>
+      
+      {loading ? <div className="state">Loading {ticker}...</div> : error ? <div className="state error">{error}</div> : !data ? null : (
+        <section className="panel data-panel">
+          <div className="table-wrap">
+            <table style={{ background: 'rgba(0,0,0,0.15)' }}>
+              <thead>
+                <tr>
+                  <th>TRADE DATE</th>
+                  <th>OPEN (₹)</th>
+                  <th>HIGH (₹)</th>
+                  <th>LOW (₹)</th>
+                  <th>CLOSE (₹)</th>
+                  <th>VOLUME</th>
+                  <th>VWAP / SPIKE RATIO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {volumeSpikes.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>No volume spike dates detected for {ticker}.</td></tr>
+                ) : paginatedData.map((row, idx) => (
+                  <tr key={idx}>
+                    <td>{row.trade_date}</td>
+                    <td>{row.open?.toFixed(1)}</td>
+                    <td style={{ color: '#22c55e', fontWeight: 700 }}>{row.high?.toFixed(1)}</td>
+                    <td style={{ color: '#ef4444' }}>{row.low?.toFixed(1)}</td>
+                    <td style={{ color: '#22c55e', fontWeight: 700 }}>{row.close?.toFixed(1)}</td>
+                    <td style={{ color: '#f59e0b', fontWeight: 700 }}>{row.volume?.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                    <td style={{ color: '#f59e0b', fontWeight: 700 }}>{renderTruncatedCell(row.vwap_spike_ratio)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {volumeSpikes.length > 0 && (
+            <div className="pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(0,0,0,0.2)' }}>
+              <div>
+                <span style={{ marginRight: '10px', fontSize: 12 }}>Page Size:</span>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ background: '#1a202c', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: 4 }}>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={0}>All</option>
+                </select>
+              </div>
+              {pageSize > 0 && totalPages > 1 && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button disabled={page <= 1} onClick={() => setPage(page - 1)} style={{ cursor: page <= 1 ? 'not-allowed' : 'pointer', background: 'transparent', border: 'none', color: page <= 1 ? '#475569' : '#38bdf8' }}>◄ Prev</button>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>Page {page} of {totalPages}</span>
+                  <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} style={{ cursor: page >= totalPages ? 'not-allowed' : 'pointer', background: 'transparent', border: 'none', color: page >= totalPages ? '#475569' : '#38bdf8' }}>Next ►</button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}

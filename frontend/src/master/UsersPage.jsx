@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit2, Mail, Plus, Trash2, User } from 'lucide-react'
+import { Edit2, Mail, Plus, Trash2, User, Download } from 'lucide-react'
 import * as api from './api.js'
 import {
   useToast, Modal, ConfirmDialog, Pagination, SectionHeader, SearchBar,
@@ -219,7 +219,10 @@ export default function UsersPage() {
                   <td>
                     <div className="row-actions">
                       {u.is_subscribed && u.watchlist_id && (
-                        <button className="icon-btn sm" title="Send Daily Watchlist Reports Now" onClick={() => triggerNewsletter(u.email)} style={{color:'#66e4ca'}}><Mail size={13}/></button>
+                        <>
+                          <button className="icon-btn sm" title="Download Newsletter PDF" onClick={() => window.open(`/api/master/users/${encodeURIComponent(u.email)}/newsletter-download`, '_blank')} style={{color:'#66e4ca'}}><Download size={13}/></button>
+                          <button className="icon-btn sm" title="Send Daily Watchlist Reports Now" onClick={() => triggerNewsletter(u.email)} style={{color:'#66e4ca'}}><Mail size={13}/></button>
+                        </>
                       )}
                       <button className="icon-btn sm" title="Edit" onClick={() => openEdit(u)}><Edit2 size={13}/></button>
                       <button className="icon-btn sm danger" title="Delete" onClick={() => setConfirm(u)}><Trash2 size={13}/></button>

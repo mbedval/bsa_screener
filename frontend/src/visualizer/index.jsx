@@ -904,6 +904,18 @@ export function ChartsVisualizationsPage({ onSelectStock, apiBase = '/api/intell
 function OverlapChart({ series1, series2, label1, label2, height = 400 }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
+  
+  if (!series1?.length && !series2?.length) {
+    return (
+      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', borderRadius: 8, color: '#64748b' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AlertCircle size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+          <div style={{ fontSize: 14 }}>No market data available for the selected ranges.</div>
+        </div>
+      </div>
+    )
+  }
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -917,13 +929,20 @@ function OverlapChart({ series1, series2, label1, label2, height = 400 }) {
       timeScale: { borderColor: 'rgba(255,255,255,0.12)', timeVisible: false },
     })
     chartRef.current = chart
+
+    const makeTime = (i) => {
+      const d = new Date(Date.UTC(2020, 0, 1))
+      d.setUTCDate(d.getUTCDate() + i)
+      return d.toISOString().split('T')[0]
+    }
+
     if (series1.length > 0) {
       const s1 = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 2, title: label1, priceLineVisible: false })
-      s1.setData(series1.map((d, i) => ({ time: i + 1, value: d.normalised ?? 100 })))
+      s1.setData(series1.map((d, i) => ({ time: makeTime(i), value: d.normalised ?? 100 })))
     }
     if (series2.length > 0) {
       const s2 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, title: label2, priceLineVisible: false })
-      s2.setData(series2.map((d, i) => ({ time: i + 1, value: d.normalised ?? 100 })))
+      s2.setData(series2.map((d, i) => ({ time: makeTime(i), value: d.normalised ?? 100 })))
     }
     chart.timeScale().fitContent()
     const ro = new ResizeObserver(() => { if (chartRef.current && container) chartRef.current.applyOptions({ width: container.clientWidth }) })
@@ -936,6 +955,18 @@ function OverlapChart({ series1, series2, label1, label2, height = 400 }) {
 function AbsolutePriceChart({ series1, series2, label1, label2, height = 400 }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
+
+  if (!series1?.length && !series2?.length) {
+    return (
+      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', borderRadius: 8, color: '#64748b' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AlertCircle size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+          <div style={{ fontSize: 14 }}>No market data available for the selected ranges.</div>
+        </div>
+      </div>
+    )
+  }
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -949,9 +980,20 @@ function AbsolutePriceChart({ series1, series2, label1, label2, height = 400 }) 
       timeScale: { borderColor: 'rgba(255,255,255,0.12)', timeVisible: false },
     })
     chartRef.current = chart
+
+    const makeTime = (i) => {
+      const d = new Date(Date.UTC(2020, 0, 1))
+      d.setUTCDate(d.getUTCDate() + i)
+      return d.toISOString().split('T')[0]
+    }
+
     if (series1.length > 0) {
       const s1 = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 2, title: label1, priceLineVisible: false })
-      s1.setData(series1.map((d, i) => ({ time: i + 1, value: d.close })))
+      s1.setData(series1.map((d, i) => ({ time: makeTime(i), value: d.close })))
+    }
+    if (series2.length > 0) {
+      const s2 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 2, title: label2, priceLineVisible: false })
+      s2.setData(series2.map((d, i) => ({ time: makeTime(i), value: d.close })))
     }
     chart.timeScale().fitContent()
     const ro = new ResizeObserver(() => { if (chartRef.current && container) chartRef.current.applyOptions({ width: container.clientWidth }) })
@@ -1807,7 +1849,7 @@ export function TickerResearchProfilePage({ apiBase = '/api/intelligence', datas
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5, marginBottom: 4 }}>OVERALL SIGNAL</div>
                   <span style={badgeStyle(summary.overall_signal.includes('BUY') ? '#34d399' : '#f87171', summary.overall_signal.includes('BUY') ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)')}>
-                    {summary.overall_signal}
+                    {((summary.overall_signal || "HOLD").toUpperCase())}
                   </span>
                 </div>
               )}
@@ -1984,6 +2026,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [htfSetup, setHtfSetup] = useState(null)
   const [hhhlHistPage, setHhhlHistPage] = useState(1)
   const [cupHistPage, setCupHistPage] = useState(1)
 
@@ -2029,6 +2072,12 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
         setData(null)
       })
       .finally(() => setLoading(false))
+
+    // Fetch HTF setups
+    fetch(`/api/research/htf-setup/${encodeURIComponent(sym)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(res => setHtfSetup(res?.setups || null))
+      .catch(e => console.error(`[HTF Setup] Error:`, e))
   }
 
   // Initial & prop-change load search
@@ -2270,7 +2319,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             </div>
 
             {/* Sector Master & Overall Suggestion Custom Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
               {/* Custom Variant Wide Sector Name Card with All Mapped Sectors */}
               <div style={{ ...metricBoxStyle, textAlign: 'left', padding: '14px 18px', background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
                 <div style={{ fontSize: 11, color: '#38bdf8', fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
@@ -2313,6 +2362,25 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   {renderTruncatedCell(master.overall_suggestion || 'TRADING ONLY')}
                 </div>
               </div>
+
+              {/* Retracement Pattern Card */}
+              <div 
+                style={{ ...metricBoxStyle, textAlign: 'center', padding: '14px 18px', background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', cursor: 'pointer', transition: 'background 0.2s' }}
+                onClick={() => onNavigate && onNavigate('research:retracement')}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.05)'}
+              >
+                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>RETRACEMENT PATTERN</div>
+                <div style={{ 
+                  fontSize: 16, fontWeight: 800, marginTop: 6, letterSpacing: 0.5,
+                  color: ((retracementPattern.breakout_stage || '').toLowerCase().includes('risk') || (retracementPattern.breakout_stage || '').toLowerCase().includes('fail')) ? '#ef4444' 
+                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('breakout') || (retracementPattern.breakout_stage || '').toLowerCase().includes('confirmed')) ? '#34d399'
+                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('consolidating') || (retracementPattern.breakout_stage || '').toLowerCase().includes('neutral')) ? '#fbbf24'
+                       : '#fbbf24' 
+                }}>
+                  {retracementPattern.breakout_stage ? `${retracementPattern.breakout_stage}: ${retracementPattern.consolidation_days} Days` : 'No Data'}
+                </div>
+              </div>
             </div>
 
             {/* About Company Card */}
@@ -2339,77 +2407,45 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               {master.suggestion_remarks || `Current P/E ratio of 15.5 (vs 20.0 AVG PE) with 1.1x volume activity and 42.0% confidence rating. Lacks full multi-year fundamental valuation alignment or consolidation breakout confirmation. Recommended for short-term swing/intraday trading setups only.`}
             </div>
 
-            
-            {/* Derivative History Card */}
-            {data?.derivative_history && data.derivative_history.length > 0 && (
-              <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
-                <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 14 }}>
-                  📜 Derivative History & Lot Sizes (Last 24 Months)
+            {/* Risk & Opportunities Matrices */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              {/* Risk Matrix */}
+              <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+                <b style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 14 }}>
+                  ⚠️ Risk Factors
                 </b>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {(() => {
-                    const history = data.derivative_history;
-                    const entryRecord = history.find(h => h.action === 'ENTRY');
-                    const exitRecord = history.find(h => h.action === 'EXIT');
-                    const lotChangeRecords = history.filter(h => h.action === 'LOT_CHANGE').sort((a, b) => new Date(b.action_date) - new Date(a.action_date));
-                    
-                    const entryDate = entryRecord?.action_date || 'Not Available';
-                    const exitDate = exitRecord ? exitRecord.action_date : 'Active (Continuous)';
-                    
-                    let currentLot = 'Not Available';
-                    let prevLot = null;
-                    
-                    if (lotChangeRecords.length > 0) {
-                      currentLot = lotChangeRecords[0].lot_size;
-                      if (lotChangeRecords.length > 1) {
-                        prevLot = lotChangeRecords[1].lot_size;
-                      } else if (entryRecord && entryRecord.lot_size) {
-                        prevLot = entryRecord.lot_size;
-                      }
-                    } else if (entryRecord && entryRecord.lot_size) {
-                      currentLot = entryRecord.lot_size;
-                    }
-                    
-                    if (exitRecord) {
-                      currentLot = 'Not Available';
-                      prevLot = null;
-                    }
-                    
-                    return (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '12px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ display: 'flex', gap: 32 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Entry Date</span>
-                            <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: "'DM Mono', monospace" }}>{entryDate}</span>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Exit Date</span>
-                            <span style={{ fontSize: 13, color: exitRecord ? '#ef4444' : '#34d399', fontFamily: "'DM Mono', monospace" }}>{exitDate}</span>
-                          </div>
-                        </div>
-                        
-                        <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
-                          {prevLot && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                              <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Prev Lot Size</span>
-                              <span style={{ fontSize: 13, color: '#94a3b8', fontFamily: "'DM Mono', monospace", textDecoration: 'line-through' }}>
-                                {prevLot.toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Current Lot Size</span>
-                            <span style={{ fontSize: 14, color: '#f8fafc', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
-                              {currentLot !== 'Not Available' && currentLot !== null ? currentLot.toLocaleString() : 'Not Available'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+                {oppRisk && oppRisk.risk ? (
+                  <ol style={{ margin: 0, paddingLeft: 20 }}>
+                    {oppRisk.risk.split(/<br\s*\/?>|\n/i).filter(r => r.trim()).map((risk, idx) => (
+                      <li key={idx} style={{ marginBottom: 4 }}>{risk.replace(/^[-\*•]\s*/, '').trim()}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div style={{ color: '#64748b', fontStyle: 'italic', fontWeight: 600 }}>
+                    No Risk recorded into system
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Opportunities Matrix */}
+              <div style={{ background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>
+                <b style={{ color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 14 }}>
+                  🚀 Opportunities
+                </b>
+                {oppRisk && oppRisk.opportunities ? (
+                  <ol style={{ margin: 0, paddingLeft: 20 }}>
+                    {oppRisk.opportunities.split(/<br\s*\/?>|\n/i).filter(o => o.trim()).map((opp, idx) => (
+                      <li key={idx} style={{ marginBottom: 4 }}>{opp.replace(/^[-\*•]\s*/, '').trim()}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div style={{ color: '#64748b', fontStyle: 'italic', fontWeight: 600 }}>
+                    No Opputunities record in system
+                  </div>
+                )}
+              </div>
+            </div>
+
 
             {/* Institutional Behavior Cards (Horizontal Row) */}
             <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
@@ -2435,22 +2471,13 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 </div>
               </div>
 
-              {/* Retracement Pattern Card */}
-              <div 
-                style={{ flex: 1, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', textAlign: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
-                onClick={() => onNavigate && onNavigate('research:retracement')}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.05)'}
-              >
-                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Retracement Pattern</div>
+              {/* Total MF Holding Card */}
+              <div style={{ flex: 1, background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Total MF Holding</div>
                 <div style={{ 
-                  fontSize: 16, fontWeight: 800, 
-                  color: ((retracementPattern.breakout_stage || '').toLowerCase().includes('risk') || (retracementPattern.breakout_stage || '').toLowerCase().includes('fail')) ? '#ef4444' 
-                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('breakout') || (retracementPattern.breakout_stage || '').toLowerCase().includes('confirmed')) ? '#34d399'
-                       : ((retracementPattern.breakout_stage || '').toLowerCase().includes('consolidating') || (retracementPattern.breakout_stage || '').toLowerCase().includes('neutral')) ? '#fbbf24'
-                       : '#fbbf24' 
+                  fontSize: 16, fontWeight: 800, color: '#38bdf8' 
                 }}>
-                  {retracementPattern.breakout_stage ? `${retracementPattern.breakout_stage}: ${retracementPattern.consolidation_days} Days` : 'No Data'}
+                  {data?.mf_holdings ? `${data.mf_holdings.reduce((sum, h) => sum + (h.holding_pct || 0), 0).toFixed(2)}%` : '0.00%'}
                 </div>
               </div>
             </div>
@@ -2464,35 +2491,328 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 {quicktrade.close != null ? `${Number(quicktrade.close).toFixed(2)}` : '—'}
               </div>
             </div>
-
             <div style={cardStyle}>
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>P/E RATIO</span>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fundamentals?.pe_metrics?.pe != null ? `${Number(fundamentals.pe_metrics.pe).toFixed(2)}` : '—'}
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>52 WEEK LOW / HIGH</span>
+              {master.week_52_low != null && master.week_52_high != null && quicktrade.close != null ? (
+                <>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {Number(master.week_52_low).toFixed(2)} / {Number(master.week_52_high).toFixed(2)}
+                  </div>
+                  <div style={{ marginTop: 12, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 4, position: 'relative' }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${Math.max(0, Math.min(100, ((quicktrade.close - master.week_52_low) / (master.week_52_high - master.week_52_low)) * 100))}%`,
+                      background: 'linear-gradient(90deg, #ef4444, #f59e0b, #22c55e)',
+                      borderRadius: 4,
+                      opacity: 0.6
+                    }} />
+                    <div style={{ 
+                      position: 'absolute', 
+                      left: `${Math.max(0, Math.min(100, ((quicktrade.close - master.week_52_low) / (master.week_52_high - master.week_52_low)) * 100))}%`, 
+                      top: '50%', 
+                      transform: 'translate(-50%, -50%)', 
+                      width: 12, 
+                      height: 12, 
+                      borderRadius: '50%', 
+                      background: '#38bdf8',
+                      boxShadow: '0 0 10px #38bdf8' 
+                    }} title={`Current: ${Number(quicktrade.close).toFixed(2)}`} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 10, color: '#64748b', fontWeight: 700 }}>
+                    <span>L</span>
+                    <span style={{ color: '#38bdf8' }}>CMP: {Number(quicktrade.close).toFixed(2)}</span>
+                    <span>H</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>—</div>
+              )}
+            </div>
+          </div>
+
+          {/* 1.5. Broker Recommendations Card (Before Technical Analysis Hub) */}
+          <div style={{ ...cardStyle, border: '1px solid rgba(245, 158, 11, 0.35)', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                💡 Analyst & Broker Recommendations ({recommendations.length})
+              </h3>
+              {recommendations.length > 0 && (
+                <span style={badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.2)')}>
+                  {recommendations.length} Active Target Calls
+                </span>
+              )}
+            </div>
+
+            {recommendations.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 10px', color: '#94a3b8', fontSize: 13, background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+                No active analyst recommendations found for {master.ticker || searchedSymbol}.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, width: '100%', boxSizing: 'border-box' }}>
+                {recommendations.map((rec) => (
+                  <div
+                    key={rec.id}
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.35)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      borderRadius: 10,
+                      padding: 16,
+                      minHeight: 150,
+                      maxHeight: 180,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8' }}>{renderTruncatedCell(rec.recommender)}</span>
+                        <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>{rec.time_period || 'Long Term'}</span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10, fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>CMP</div>
+                          <div style={{ fontWeight: 800, color: '#fff', fontSize: 13, marginTop: 2 }}>{rec.cmp ? Number(rec.cmp).toFixed(1) : '—'}</div>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>STOP LOSS</div>
+                          <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 13, marginTop: 2 }}>{rec.stop_loss ? Number(rec.stop_loss).toFixed(1) : '—'}</div>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>TARGET</div>
+                          <div style={{ fontWeight: 800, color: '#22c55e', fontSize: 13, marginTop: 2 }}>{rec.target ? Number(rec.target).toFixed(1) : '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+                      <span style={{ fontSize: 11, color: '#64748b', fontFamily: "'DM Mono', monospace" }}>
+                        📅 {rec.rec_date || rec.date || '—'}
+                      </span>
+                      <button
+                        onClick={() => setSelectedRecModal(rec)}
+                        style={{
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          color: '#0f172a',
+                          border: 'none',
+                          borderRadius: 6,
+                          padding: '6px 12px',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                      >
+                        Recommendation Details ➔
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Technical Analysis Hub Section */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Zap size={18} style={{ color: '#38bdf8' }} /> Technical Analysis Hub
+              </h3>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>Multi-Strategy Quantitative Technical Scanners & Levels</span>
+            </div>
+
+            {/* HTF Trade Setup Summary */}
+            {htfSetup && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+                {[
+                  { label: 'Quarterly', val: htfSetup.Quarterly },
+                  { label: 'Monthly', val: htfSetup.Monthly },
+                  { label: 'Weekly', val: htfSetup.Weekly },
+                  { label: 'Intraday', val: htfSetup.Intraday }
+                ].map((item, i) => {
+                  let color = '#94a3b8'
+                  let bg = 'rgba(148, 163, 184, 0.1)'
+                  if (item.val === 'Strong Buy' || item.val === 'Buy') {
+                    color = '#22c55e'
+                    bg = 'rgba(34, 197, 94, 0.1)'
+                  } else if (item.val === 'Strong Sell' || item.val === 'Sell') {
+                    color = '#ef4444'
+                    bg = 'rgba(239, 68, 68, 0.1)'
+                  }
+                  return (
+                    <div key={i} style={{ background: 'rgba(0,0,0,0.2)', border: `1px solid ${bg}`, borderRadius: 8, padding: '12px 8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: color }}>{item.val?.toUpperCase() || 'N/A'}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* QuickTrade Scanner Card */}
+            <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 10, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <b style={{ color: '#38bdf8', fontSize: 15 }}>⚡ QuickTrade Scanner ( {master.ticker || searchedSymbol} )</b>
+                <span style={badgeStyle('#22c55e', 'rgba(34, 197, 94, 0.2)')}>
+                  {((quicktrade.overall_signal || "HOLD").toUpperCase())} ({quicktrade.confidence || 42.0}% CONFIDENCE)
+                </span>
+              </div>
+
+              {/* 6 Metric Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>CLOSE PRICE</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(quicktrade.close || 1322.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>ENTRY PRICE</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(quicktrade.entry_price || quicktrade.close || 1322.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>STOP LOSS</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(quicktrade.stop_loss || 1280.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>TARGET PRICE</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(quicktrade.target_price || 1420.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>OVERALL SCORE</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(quicktrade.overall_score || 34.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>RECORD DATE</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#cbd5e1', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {quicktrade.record_date || '05/09/2026'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rationale & Analysis */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '10px 14px', fontSize: 13, color: '#cbd5e1' }}>
+                <span style={{ color: '#94a3b8', fontWeight: 700, marginRight: 8 }}>📋 RATIONALE & ANALYSIS:</span>
+                {quicktrade.rationale || 'RSI in momentum zone; SMA Golden crossover.'}
               </div>
             </div>
 
-            <div style={cardStyle}>
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>SECTOR P/E</span>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#fbbf24', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fundamentals?.pe_metrics?.sector_pe != null ? `${Number(fundamentals.pe_metrics.sector_pe).toFixed(2)}` : '—'}
+            {/* Screener & Swing Scanner Signals Grid */}
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                🔻 Screener & Swing Scanner Signals
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                {Object.entries({
+                  'SCREENER EMA': screenerSignals.screener_ema || 'BEARISH',
+                  'SCREENER VWAP': screenerSignals.screener_vwap || 'BELOW VWAP',
+                  'WEEKLY SUPERTREND': screenerSignals.weekly_supertrend || 'BEARISH',
+                  'WEEKLY ICHIMOKU': screenerSignals.weekly_ichimoku || 'BEARISH',
+                  'WEEKLY MACD': screenerSignals.weekly_macd || 'BEARISH',
+                  'WEEKLY OBV': screenerSignals.weekly_obv || 'DISTRIBUTION'
+                }).map(([lbl, val]) => (
+                  <div key={lbl} style={metricBoxStyle}>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>{lbl}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: val.includes('BULL') || val.includes('ABOVE') ? '#22c55e' : '#ef4444', marginTop: 4 }}>
+                      {renderTruncatedCell(val)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div style={cardStyle}>
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>PROFIT AFTER TAX (PAT)</span>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {fundamentals?.pat_metrics?.pat != null ? (typeof fundamentals.pat_metrics.pat === 'number' ? `${(Math.abs(fundamentals.pat_metrics.pat) >= 10000 ? fundamentals.pat_metrics.pat / 1e7 : fundamentals.pat_metrics.pat).toFixed(2)} Cr` : (String(fundamentals.pat_metrics.pat).includes('Cr') ? fundamentals.pat_metrics.pat : `${fundamentals.pat_metrics.pat} Cr`)) : '—'}
+            {/* Breakout, Trend & Reversal Trading Grid */}
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📈 Breakout, Trend & Reversal Trading
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                {Object.entries({
+                  'BREAKOUT TYPE': tradingSignals.breakout_type || 'RESISTANCE CO...',
+                  'VOLUME SURGE': tradingSignals.volume_surge || '1.1x AVG',
+                  'TREND STATUS': tradingSignals.trend_status || 'DOWNTREND',
+                  'ADX SIGNAL': tradingSignals.adx_signal || 'WEAK TREND (A...',
+                  'REVERSAL PATTERN': tradingSignals.reversal_pattern || 'BULLISH PINBA...',
+                  'BOLLINGER STATUS': tradingSignals.bollinger_status || 'LOWER BAND TO...'
+                }).map(([lbl, val]) => (
+                  <div key={lbl} style={metricBoxStyle}>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>{lbl}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginTop: 4 }}>
+                      {renderTruncatedCell(val)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div style={cardStyle}>
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>TECHNICAL SCORE</span>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#c084fc', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                {quicktrade.overall_score != null ? getQuicktradeLabel(quicktrade.overall_score) : '—'}
-              </div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-                {quicktrade.overall_score != null ? `(${Number(quicktrade.overall_score).toFixed(2)}/100)` : ''}
+            {/* Support & Resistance Levels Grid */}
+            <div>
+              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                ↕️ Support & Resistance Levels
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PIVOT POINT</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.pivot_point || 705.0).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 1</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.support_1 || 683.6).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 2</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.support_2 || 662.3).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>RESISTANCE 1</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.resistance_1 || 740.6).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>RESISTANCE 2</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.resistance_2 || 769.1).toFixed(1)}
+                  </div>
+                </div>
+
+                <div style={metricBoxStyle}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>CURRENT CLOSE</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.current_close || 1322.0).toFixed(1)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2722,261 +3042,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             </div>
           )}
 
-          {/* 1.5. Broker Recommendations Card (Before Technical Analysis Hub) */}
-          <div style={{ ...cardStyle, border: '1px solid rgba(245, 158, 11, 0.35)', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-                💡 Analyst & Broker Recommendations ({recommendations.length})
-              </h3>
-              {recommendations.length > 0 && (
-                <span style={badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.2)')}>
-                  {recommendations.length} Active Target Calls
-                </span>
-              )}
-            </div>
 
-            {recommendations.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px 10px', color: '#94a3b8', fontSize: 13, background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-                No active analyst recommendations found for {master.ticker || searchedSymbol}.
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, width: '100%', boxSizing: 'border-box' }}>
-                {recommendations.map((rec) => (
-                  <div
-                    key={rec.id}
-                    style={{
-                      background: 'rgba(0, 0, 0, 0.35)',
-                      border: '1px solid rgba(245, 158, 11, 0.25)',
-                      borderRadius: 10,
-                      padding: 16,
-                      minHeight: 150,
-                      maxHeight: 180,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8' }}>{renderTruncatedCell(rec.recommender)}</span>
-                        <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>{rec.time_period || 'Long Term'}</span>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10, fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
-                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>CMP</div>
-                          <div style={{ fontWeight: 800, color: '#fff', fontSize: 13, marginTop: 2 }}>{rec.cmp ? Number(rec.cmp).toFixed(1) : '—'}</div>
-                        </div>
-                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>STOP LOSS</div>
-                          <div style={{ fontWeight: 800, color: '#ef4444', fontSize: 13, marginTop: 2 }}>{rec.stop_loss ? Number(rec.stop_loss).toFixed(1) : '—'}</div>
-                        </div>
-                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 4px', borderRadius: 6, textAlign: 'center' }}>
-                          <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700 }}>TARGET</div>
-                          <div style={{ fontWeight: 800, color: '#22c55e', fontSize: 13, marginTop: 2 }}>{rec.target ? Number(rec.target).toFixed(1) : '—'}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
-                      <span style={{ fontSize: 11, color: '#64748b', fontFamily: "'DM Mono', monospace" }}>
-                        📅 {rec.rec_date || rec.date || '—'}
-                      </span>
-                      <button
-                        onClick={() => setSelectedRecModal(rec)}
-                        style={{
-                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                          color: '#0f172a',
-                          border: 'none',
-                          borderRadius: 6,
-                          padding: '6px 12px',
-                          fontSize: 11,
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
-                      >
-                        Recommendation Details ➔
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 2. Technical Analysis Hub Section */}
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Zap size={18} style={{ color: '#38bdf8' }} /> Technical Analysis Hub
-              </h3>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>Multi-Strategy Quantitative Technical Scanners & Levels</span>
-            </div>
-
-            {/* QuickTrade Scanner Card */}
-            <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <b style={{ color: '#38bdf8', fontSize: 15 }}>⚡ QuickTrade Scanner ( {master.ticker || searchedSymbol} )</b>
-                <span style={badgeStyle('#22c55e', 'rgba(34, 197, 94, 0.2)')}>
-                  {quicktrade.overall_signal || 'BUY'} ({quicktrade.confidence || 42.0}% CONFIDENCE)
-                </span>
-              </div>
-
-              {/* 6 Metric Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>CLOSE PRICE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(quicktrade.close || 1322.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>ENTRY PRICE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(quicktrade.entry_price || quicktrade.close || 1322.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>STOP LOSS</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(quicktrade.stop_loss || 1280.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>TARGET PRICE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(quicktrade.target_price || 1420.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>OVERALL SCORE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(quicktrade.overall_score || 34.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>RECORD DATE</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#cbd5e1', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {quicktrade.record_date || '05/09/2026'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Rationale & Analysis */}
-              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '10px 14px', fontSize: 13, color: '#cbd5e1' }}>
-                <span style={{ color: '#94a3b8', fontWeight: 700, marginRight: 8 }}>📋 RATIONALE & ANALYSIS:</span>
-                {quicktrade.rationale || 'RSI in momentum zone; SMA Golden crossover.'}
-              </div>
-            </div>
-
-            {/* Screener & Swing Scanner Signals Grid */}
-            <div style={{ marginBottom: 20 }}>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                🔻 Screener & Swing Scanner Signals
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-                {Object.entries({
-                  'SCREENER EMA': screenerSignals.screener_ema || 'BEARISH',
-                  'SCREENER VWAP': screenerSignals.screener_vwap || 'BELOW VWAP',
-                  'WEEKLY SUPERTREND': screenerSignals.weekly_supertrend || 'BEARISH',
-                  'WEEKLY ICHIMOKU': screenerSignals.weekly_ichimoku || 'BEARISH',
-                  'WEEKLY MACD': screenerSignals.weekly_macd || 'BEARISH',
-                  'WEEKLY OBV': screenerSignals.weekly_obv || 'DISTRIBUTION'
-                }).map(([lbl, val]) => (
-                  <div key={lbl} style={metricBoxStyle}>
-                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>{lbl}</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: val.includes('BULL') || val.includes('ABOVE') ? '#22c55e' : '#ef4444', marginTop: 4 }}>
-                      {renderTruncatedCell(val)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Breakout, Trend & Reversal Trading Grid */}
-            <div style={{ marginBottom: 20 }}>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                📈 Breakout, Trend & Reversal Trading
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-                {Object.entries({
-                  'BREAKOUT TYPE': tradingSignals.breakout_type || 'RESISTANCE CO...',
-                  'VOLUME SURGE': tradingSignals.volume_surge || '1.1x AVG',
-                  'TREND STATUS': tradingSignals.trend_status || 'DOWNTREND',
-                  'ADX SIGNAL': tradingSignals.adx_signal || 'WEAK TREND (A...',
-                  'REVERSAL PATTERN': tradingSignals.reversal_pattern || 'BULLISH PINBA...',
-                  'BOLLINGER STATUS': tradingSignals.bollinger_status || 'LOWER BAND TO...'
-                }).map(([lbl, val]) => (
-                  <div key={lbl} style={metricBoxStyle}>
-                    <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>{lbl}</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginTop: 4 }}>
-                      {renderTruncatedCell(val)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Support & Resistance Levels Grid */}
-            <div>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                ↕️ Support & Resistance Levels
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PIVOT POINT</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.pivot_point || 705.0).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 1</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.support_1 || 683.6).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 2</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.support_2 || 662.3).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>RESISTANCE 1</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.resistance_1 || 740.6).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>RESISTANCE 2</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.resistance_2 || 769.1).toFixed(1)}
-                  </div>
-                </div>
-
-                <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>CURRENT CLOSE</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.current_close || 1322.0).toFixed(1)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* 🎯 Pattern Performance & Directional Pass/Fail Track Record Table (Last 10 Days) */}
           <div style={cardStyle}>
@@ -3112,7 +3178,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                       </td>
                     </tr>
                   ) : (
-                    volumeSpikes.map((row, idx) => (
+                    volumeSpikes.slice(0, 5).map((row, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                         <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{row.trade_date}</td>
                         <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{row.open.toFixed(1)}</td>
@@ -3126,6 +3192,16 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   )}
                 </tbody>
               </table>
+              {volumeSpikes.length > 5 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                  <button
+                    onClick={() => onNavigate('research:volume_spike_report')}
+                    style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
+                  >
+                    View Full Record history ({volumeSpikes.length} Total Spikes) ➔
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3372,6 +3448,77 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               <StockChartVisualizer ticker={data.ticker} height={420} apiBase={apiBase} />
             </ChartErrorBoundary>
           </div>
+
+          {/* Derivative History Card */}
+          {data?.derivative_history && data.derivative_history.length > 0 && (
+            <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 16 }}>
+              <b style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 14 }}>
+                📜 Derivative History & Lot Sizes (Last 24 Months)
+              </b>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {(() => {
+                  const history = data.derivative_history;
+                  const entryRecord = history.find(h => h.action === 'ENTRY');
+                  const exitRecord = history.find(h => h.action === 'EXIT');
+                  const lotChangeRecords = history.filter(h => h.action === 'LOT_CHANGE').sort((a, b) => new Date(b.action_date) - new Date(a.action_date));
+                  
+                  const entryDate = entryRecord?.action_date || 'Not Available';
+                  const exitDate = exitRecord ? exitRecord.action_date : 'Active (Continuous)';
+                  
+                  let currentLot = 'Not Available';
+                  let prevLot = null;
+                  
+                  if (lotChangeRecords.length > 0) {
+                    currentLot = lotChangeRecords[0].lot_size;
+                    if (lotChangeRecords.length > 1) {
+                      prevLot = lotChangeRecords[1].lot_size;
+                    } else if (entryRecord && entryRecord.lot_size) {
+                      prevLot = entryRecord.lot_size;
+                    }
+                  } else if (entryRecord && entryRecord.lot_size) {
+                    currentLot = entryRecord.lot_size;
+                  }
+                  
+                  if (exitRecord) {
+                    currentLot = 'Not Available';
+                    prevLot = null;
+                  }
+                  
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '12px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ display: 'flex', gap: 32 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Entry Date</span>
+                          <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: "'DM Mono', monospace" }}>{entryDate}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Exit Date</span>
+                          <span style={{ fontSize: 13, color: exitRecord ? '#ef4444' : '#34d399', fontFamily: "'DM Mono', monospace" }}>{exitDate}</span>
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+                        {prevLot && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                            <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Prev Lot Size</span>
+                            <span style={{ fontSize: 13, color: '#94a3b8', fontFamily: "'DM Mono', monospace", textDecoration: 'line-through' }}>
+                              {prevLot.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                          <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Current Lot Size</span>
+                          <span style={{ fontSize: 14, color: '#f8fafc', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
+                            {currentLot !== 'Not Available' && currentLot !== null ? currentLot.toLocaleString() : 'Not Available'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* ─── Watchlist Memberships ─── */}
           {data.watchlists && data.watchlists.length > 0 && (
@@ -3671,7 +3818,7 @@ export function SectorWiseReportPage({ apiBase = '/api/intelligence', dataset = 
                     {summary.topRanked.ticker}
                   </div>
                   <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4 }}>
-                    Hybrid Score: <strong>{summary.topRanked.hybrid_score}</strong> ({summary.topRanked.overall_signal})
+                    Hybrid Score: <strong>{summary.topRanked.hybrid_score}</strong> ({((summary.topRanked.overall_signal || "HOLD").toUpperCase())})
                   </div>
                 </div>
               )}
@@ -3723,7 +3870,7 @@ export function SectorWiseReportPage({ apiBase = '/api/intelligence', dataset = 
                           </td>
                           <td style={{ padding: '12px 16px' }}>
                             <span style={{ background: sigBg, color: sigColor, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, display: 'inline-block' }}>
-                              {r.overall_signal || 'HOLD'}
+                              {((r.overall_signal || "HOLD").toUpperCase())}
                             </span>
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: r.hybrid_score > 0 ? '#4ade80' : '#f87171' }}>
@@ -3994,7 +4141,7 @@ export function MarketCapWiseReportPage({ apiBase = '/api/intelligence', dataset
                     {summary.topRanked.ticker}
                   </div>
                   <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4 }}>
-                    Hybrid Score: <strong>{summary.topRanked.hybrid_score}</strong> ({summary.topRanked.overall_signal})
+                    Hybrid Score: <strong>{summary.topRanked.hybrid_score}</strong> ({((summary.topRanked.overall_signal || "HOLD").toUpperCase())})
                   </div>
                 </div>
               )}
@@ -4050,7 +4197,7 @@ export function MarketCapWiseReportPage({ apiBase = '/api/intelligence', dataset
                           </td>
                           <td style={{ padding: '12px 16px' }}>
                             <span style={{ background: sigBg, color: sigColor, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, display: 'inline-block' }}>
-                              {r.overall_signal || 'HOLD'}
+                              {((r.overall_signal || "HOLD").toUpperCase())}
                             </span>
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: r.hybrid_score > 0 ? '#4ade80' : '#f87171' }}>

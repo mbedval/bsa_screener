@@ -3582,8 +3582,60 @@ def get_sectorwise_followers(
 
 
 
+from engine.reports.pdf_htf_indicators import calculate_htf_indicators
+from app.database import get_connection
 
+@app.get("/api/research/htf-setup/{ticker}")
+def get_htf_setup(ticker: str):
+    indicators = [
+        "VWAP Signal", "Pivot Signal", "Breakout signal", "RSI", 
+        "ADX signal", "Donchain upper", "Bollinger signal", "EMA20 signal", 
+        "EMA26", "MACD Signal", "OBV Signal", "Super trend signal", 
+        "Fibonacci signal", "Ichimoku signal", "SMA100 Signal"
+    ]
+    
+    with get_connection() as conn:
+        val_strs_w, signals_w, val_strs_m, signals_m, val_strs_q, signals_q, val_strs_i, signals_i = calculate_htf_indicators(ticker, conn, indicators)
 
+    def evaluate_setup(period_signals, primary_keys, secondary_keys):
+        score = 0
+        primary_bull = 0
+        primary_bear = 0
+        total_signals = 0
+        
+        for k, sig in period_signals.items():
+            if sig != "Neutral":
+                total_signals += 1
+            w = 2 if k in primary_keys else (1 if k in secondary_keys else 0.5)
+            val = 1 if "Bullish" in sig or "Oversold" in sig else (-1 if "Bearish" in sig or "Overbought" in sig else 0)
+            if k in primary_keys:
+                if val > 0: primary_bull += 1
+                elif val < 0: primary_bear += 1
+            score += val * w
+            
+        if total_signals == 0:
+            return "N/A"
+            
+        if score > 4 and primary_bull > 0: return "Strong Buy"
+        elif score > 1: return "Buy"
+        elif score < -4 and primary_bear > 0: return "Strong Sell"
+        elif score < -1: return "Sell"
+        else: return "Hold"
+
+    setup_q = evaluate_setup(signals_q, ["SMA100 Signal", "MACD Signal"], [])
+    setup_m = evaluate_setup(signals_m, ["MACD Signal", "SMA100 Signal", "Super trend signal", "Ichimoku signal"], ["RSI", "Bollinger signal"])
+    setup_w = evaluate_setup(signals_w, ["MACD Signal", "SMA100 Signal", "Super trend signal", "Ichimoku signal"], ["RSI", "Bollinger signal"])
+    setup_i = evaluate_setup(signals_i, ["VWAP Signal", "RSI", "EMA20 signal"], ["Pivot Signal", "Breakout signal"])
+
+    return {
+        "ticker": ticker,
+        "setups": {
+            "Quarterly": setup_q,
+            "Monthly": setup_m,
+            "Weekly": setup_w,
+            "Intraday": setup_i
+        }
+    }
 
 @app.get("/api/{dataset}/ticker-profile/{ticker}")
 @app.get("/api/ticker-profile/{ticker}")
@@ -3617,6 +3669,21 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
 
             meta = dict(meta_row)
             actual_ticker = meta["ticker"]
+
+            cur.execute("""
+                SELECT MAX(high) as high_52, MIN(low) as low_52
+                FROM (
+                    SELECT high, low 
+                    FROM ohlcv_daily 
+                    WHERE ticker = %s 
+                    ORDER BY trade_date DESC 
+                    LIMIT 252
+                ) as sub
+            """, (actual_ticker,))
+            hl_52 = cur.fetchone()
+            if hl_52:
+                meta["week_52_high"] = hl_52["high_52"]
+                meta["week_52_low"] = hl_52["low_52"]
 
             # 2. Query fundamentals
             fundamentals = None
@@ -3876,6 +3943,23 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
 
             actual_ticker = master_row["ticker"]
             master_data = dict(master_row)
+
+            # Compute 52-week high and low
+            cur.execute("""
+                SELECT MAX(high) as high_52, MIN(low) as low_52
+                FROM (
+                    SELECT high, low 
+                    FROM ohlcv_daily 
+                    WHERE ticker = %s 
+                    ORDER BY trade_date DESC 
+                    LIMIT 252
+                ) as sub
+            """, (actual_ticker,))
+            hl_52 = cur.fetchone()
+            if hl_52:
+                master_data["week_52_high"] = hl_52["high_52"]
+                master_data["week_52_low"] = hl_52["low_52"]
+
 
             # Fetch all primary & secondary mapped sectors for this ticker from ticker_sector & sectors
             all_sectors = []

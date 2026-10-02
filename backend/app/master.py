@@ -1577,7 +1577,7 @@ def delete_excluded_ticker(id: int) -> None:
 
 # ─── Newsletter Dispatch Router ──────────────────────────────────────────────
 from pathlib import Path
-from engine.reports.pdf_generator import generate_pdf_report
+from engine.reports.pdf_generator import generate_pdf_report, generate_newsletter_pdfs
 from engine.utils.email_sender import send_email_with_attachment
 
 @router.post("/users/{email}/newsletter-send")
@@ -1605,20 +1605,12 @@ def send_user_newsletter(email: str):
     if not tickers:
         raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
         
-    pdf_paths = []
-    pdf_dir = Path("output/pdf")
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate reports
-    for ticker in tickers:
-        pdf_path = pdf_dir / f"{ticker}_report.pdf"
-        if not pdf_path.exists():
-            generate_pdf_report(ticker)
-        if pdf_path.exists():
-            pdf_paths.append(str(pdf_path.resolve()))
+    # Generate batched newsletter PDFs
+    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
             
     if not pdf_paths:
-        raise HTTPException(500, "Failed to generate PDF reports for the watchlist.")
+        raise HTTPException(500, "Failed to generate newsletter PDF reports for the watchlist.")
         
     # Build inline HTML summary table
     from send_newsletters import build_newsletter_html_table
@@ -1654,6 +1646,37 @@ def send_user_newsletter(email: str):
         raise HTTPException(500, err_detail)
 
     return {"status": "success", "detail": f"Sent {len(pdf_paths)} reports to {email}"}
+
+
+@router.get("/users/{email}/newsletter-download")
+def download_user_newsletter(email: str):
+    """Generates PDF newsletter for a user's watchlist and returns it as a download."""
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT first_name, last_name, watchlist_id FROM users WHERE email = %s", (email.lower(),))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise _not_found("User", email)
+            
+        first_name, watchlist_id = user_row["first_name"], user_row["watchlist_id"]
+        
+        if not watchlist_id:
+            raise HTTPException(400, f"User '{email}' does not have an assigned watchlist.")
+            
+        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = %s", (watchlist_id,))
+        tickers = [row["ticker"] for row in cur.fetchall()]
+        
+    if not tickers:
+        raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
+        
+    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
+    
+    if not pdf_paths:
+        raise HTTPException(500, "Failed to generate newsletter PDF.")
+        
+    # If multiple parts, return the first one (or ideally we'd zip them, but standard is first one)
+    from fastapi.responses import FileResponse
+    return FileResponse(pdf_paths[0], media_type="application/pdf", filename=f"newsletter_{email}.pdf")
 
 
 # ── Reference Pages CRUD ──────────────────────────────────────────────────────

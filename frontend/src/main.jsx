@@ -4,13 +4,14 @@ import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, CheckCircle, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, Key, LayoutDashboard, Layers, PieChart, Plus,
   RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, Sliders, TableProperties, Tag,
-  Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap
+  Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap, BarChart2
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
 import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport, CupAndHandleReport } from './visualizer/index.jsx'
 import ElliotReport from './reports/ElliotReport.jsx'
 import HHHLFullReportPage from './reports/HHHLFullReportPage.jsx'
 import CandlestickFullReportPage from './reports/CandlestickFullReportPage.jsx'
+import VolumeSpikeReportPage from './reports/VolumeSpikeReportPage.jsx'
 import DerivativeHistoryPage from './reports/DerivativeHistoryPage.jsx'
 
 import './styles.css'
@@ -547,7 +548,7 @@ function App() {
     if (path === '' || path === '/') return
     const isMaster = active.startsWith('master:') || active === 'fno_stock_master' || active === 'fno_index_master' || active === 'fno_master' || active === 'ticker_master'
     const isSector = active.startsWith('sector:')
-    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor', 'research:elliot_recommendations', 'research:hhhl_full_report', 'research:candlestick_full_report'].includes(active)
+    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor', 'research:elliot_recommendations', 'research:hhhl_full_report', 'research:candlestick_full_report', 'research:volume_spike_report'].includes(active)
     if (isMaster) {
       setExpandedSection('Master Data')
     } else if (isSector) {
@@ -665,13 +666,16 @@ function App() {
                   <PieChart size={14} /> Top 10- by Sector
                 </button>
                 <button className={`nav-item ${active === 'research:penny_stocks' ? 'selected' : ''}`} onClick={() => setActive('research:penny_stocks')}>
-                  <Zap size={14} /> Penny Stocks
+                  <Zap size={14} /> Little Stars
                 </button>
                 <button className={`nav-item ${active === 'research:elliot_recommendations' ? 'selected' : ''}`} onClick={() => setActive('research:elliot_recommendations')}>
                   <Zap size={14} /> Elliot Recommendations
                 </button>
                 <button className={`nav-item ${active === 'research:hhhl_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:hhhl_full_report')}>
                   <Activity size={14} /> HHHL Full Report
+                </button>
+                <button className={`nav-item ${active === 'research:volume_spike_report' ? 'selected' : ''}`} onClick={() => setActive('research:volume_spike_report')}>
+                  <BarChart2 size={14} /> Volume Spike Report
                 </button>
                 <button className={`nav-item ${active === 'research:candlestick_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:candlestick_full_report')}>
                   <Activity size={14} /> Candlestick Full Report
@@ -898,6 +902,10 @@ function App() {
         ) : active === 'research:hhhl_full_report' ? (
           <ChartErrorBoundary>
             <HHHLFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+          </ChartErrorBoundary>
+        ) : active === 'research:volume_spike_report' ? (
+          <ChartErrorBoundary>
+            <VolumeSpikeReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
           </ChartErrorBoundary>
         ) : active === 'research:candlestick_full_report' ? (
           <ChartErrorBoundary>
@@ -2805,7 +2813,7 @@ function PennyStocksDashboard({ apiBase, setActive, onSelectTicker }) {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(234, 179, 8, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 18, color: '#facc15', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⚡ Penny Stocks & Institutional Micro-Cap Opportunities
+              ⚡ Little Stars & Institutional Micro-Cap Opportunities
             </h3>
             <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4 }}>
               Showing Small-Cap &amp; Micro-Cap tickers backed by a minimum of 2 Mutual Funds holding &gt; 2% stake each.
