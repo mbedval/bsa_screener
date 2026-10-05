@@ -23,32 +23,53 @@ DEFAULT_HEADERS = {
 }
 
 
+import random
+import threading
+
 _screener_ticker_cache: dict = {}
 _screener_cache_loaded: bool = False
 _screener_company_id_cache: dict = {}
 
+_SCREENER_LOCK = threading.Lock()
+_LAST_SCREENER_TIME = 0.0
+DEFAULT_SCREENER_DELAY = float(os.getenv("SCREENER_REQUEST_DELAY", "0.6"))
 
-def screener_safe_request(url: str, max_retries: int = 3, timeout: int = 10) -> Optional[requests.Response]:
-    """Execute Screener API HTTP request with retry, backoff, and connection error handling."""
-    for attempt in range(1, max_retries + 1):
+def pace_screener_request(delay: float = None):
+    """Enforces minimum time delay between consecutive requests to Screener.in across threads."""
+    global _LAST_SCREENER_TIME
+    target_delay = delay if delay is not None else DEFAULT_SCREENER_DELAY
+    with _SCREENER_LOCK:
+        now = time.time()
+        elapsed = now - _LAST_SCREENER_TIME
+        if elapsed < target_delay:
+            time.sleep(target_delay - elapsed)
+        _LAST_SCREENER_TIME = time.time()
+
+
+def screener_safe_request(url: str, max_retries: int = 1, retry_delay: float = 2.0, timeout: int = 12) -> Optional[requests.Response]:
+    """Execute Screener API HTTP request with thread-safe rate limiting, max 1 retry, and 2.0s wait."""
+    total_attempts = 1 + max_retries
+    for attempt in range(1, total_attempts + 1):
+        pace_screener_request()
         try:
             res = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
             if res.status_code == 200:
                 return res
             elif res.status_code in (429, 502, 503, 504):
-                sleep_time = attempt * 2.0
-                logger.warning(f"Screener HTTP {res.status_code} for {url}. Retrying in {sleep_time}s (attempt {attempt}/{max_retries})...")
-                time.sleep(sleep_time)
+                if attempt == total_attempts:
+                    logger.warning(f"Screener HTTP {res.status_code} for {url} after {total_attempts} attempt(s).")
+                    return None
+                logger.warning(f"Screener HTTP {res.status_code} for {url}. Retrying in {retry_delay:.1f}s (attempt {attempt}/{max_retries})...")
+                time.sleep(retry_delay)
             else:
                 logger.warning(f"Screener API returned HTTP {res.status_code} for {url}")
                 return None
         except (requests.exceptions.RequestException, Exception) as err:
-            sleep_time = attempt * 2.0
-            if attempt < max_retries:
-                logger.warning(f"Screener connection error ({err}). Retrying in {sleep_time}s (attempt {attempt}/{max_retries})...")
-                time.sleep(sleep_time)
+            if attempt < total_attempts:
+                logger.warning(f"Screener connection error ({err}). Retrying in {retry_delay:.1f}s (attempt {attempt}/{max_retries})...")
+                time.sleep(retry_delay)
             else:
-                logger.warning(f"Failed connecting to Screener ({url}) after {max_retries} attempts: {err}")
+                logger.warning(f"Failed connecting to Screener ({url}) after {total_attempts} attempt(s): {err}")
     return None
 
 
@@ -572,4 +593,5 @@ def download_all_fii_holdings(progress_callback=None, tickers: Optional[List[str
         ok, count = download_fii_holdings_for_ticker(ticker)
         if progress_callback:
             progress_callback(idx + 1, len(target_tickers), ticker, count)
+        time.sleep(0.6)  # Rate limiting between Screener API requests
 

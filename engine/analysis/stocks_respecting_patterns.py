@@ -25,7 +25,7 @@ def ensure_table_exists(conn):
         """)
         conn.commit()
 
-def generate_stocks_respecting_patterns(conn=None) -> bool:
+def generate_stocks_respecting_patterns(conn=None, tickers=None) -> bool:
     """
     Computes top stocks that best respect chart pattern theory across 7 historical lookback durations
     (2d, 4d, 8d, 15d, 1m, 3m, 5m) and saves pre-calculated records into PostgreSQL database table.
@@ -45,15 +45,22 @@ def generate_stocks_respecting_patterns(conn=None) -> bool:
         logger.info("Generating pre-calculated Stocks Respecting Patterns analysis for database...")
 
         with active_conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE stocks_respecting_patterns RESTART IDENTITY;")
+            ticker_list = list(tickers) if tickers is not None else None
+            if ticker_list:
+                cur.execute("DELETE FROM stocks_respecting_patterns WHERE ticker = ANY(%s);", (ticker_list,))
+            else:
+                cur.execute("TRUNCATE TABLE stocks_respecting_patterns RESTART IDENTITY;")
             total_records_inserted = 0
 
             for tf, days in durations.items():
+                ticker_filter = "AND p.ticker = ANY(%s)" if ticker_list else ""
+                params = (ticker_list,) if ticker_list else ()
                 cur.execute(f"""
                     WITH pattern_subset AS (
                         SELECT p.ticker, p.pattern_name, p.category, p.close_price, p.detected_date
                         FROM chart_patterns p
                         WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - INTERVAL '{days} days'
+                        {ticker_filter}
                     ),
                     evaluated_subset AS (
                         SELECT 
@@ -117,7 +124,7 @@ def generate_stocks_respecting_patterns(conn=None) -> bool:
                         ROW_NUMBER() OVER (ORDER BY pass_count DESC, pass_rate DESC, total_patterns DESC)::int,
                         CURRENT_TIMESTAMP
                     FROM evaluated_subset;
-                """)
+                """, params)
                 total_records_inserted += cur.rowcount
 
             active_conn.commit()

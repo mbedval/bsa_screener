@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS fno_stock_master (
     underlying_name TEXT NOT NULL,
     instrument_type TEXT DEFAULT 'STOCK',
     serial_number INTEGER,
+    lot_size INTEGER,
     is_active BOOLEAN DEFAULT TRUE,
     entry_date TEXT DEFAULT CURRENT_DATE::text,
     exit_date TEXT,
@@ -96,6 +97,7 @@ CREATE TABLE IF NOT EXISTS fno_index_master (
     underlying_name TEXT NOT NULL,
     instrument_type TEXT DEFAULT 'INDEX',
     serial_number INTEGER,
+    lot_size INTEGER,
     is_active BOOLEAN DEFAULT TRUE,
     entry_date TEXT DEFAULT CURRENT_DATE::text,
     exit_date TEXT,
@@ -425,3 +427,12 @@ CREATE TABLE IF NOT EXISTS mf_historical_holdings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS derivative_history (
+    id          SERIAL PRIMARY KEY,
+    symbol      TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    lot_size    INTEGER,
+    action_date DATE,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT now()
+);

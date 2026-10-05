@@ -170,8 +170,6 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name.startswith("master:"):
         table_name = table_name.split("master:", 1)[1]
 
-    limit = max(limit, 5000)
-
     if table_name in ANALYSIS_REPORT_TABLE_NAMES and not is_analysis_executed(dsn):
         cols = get_columns_for_virtual_table(table_name)
         return {
@@ -3582,8 +3580,60 @@ def get_sectorwise_followers(
 
 
 
+from engine.reports.pdf_htf_indicators import calculate_htf_indicators
+from app.database import get_connection
 
+@app.get("/api/research/htf-setup/{ticker}")
+def get_htf_setup(ticker: str):
+    indicators = [
+        "VWAP Signal", "Pivot Signal", "Breakout signal", "RSI", 
+        "ADX signal", "Donchain upper", "Bollinger signal", "EMA20 signal", 
+        "EMA26", "MACD Signal", "OBV Signal", "Super trend signal", 
+        "Fibonacci signal", "Ichimoku signal", "SMA100 Signal"
+    ]
+    
+    with get_connection() as conn:
+        val_strs_w, signals_w, val_strs_m, signals_m, val_strs_q, signals_q, val_strs_i, signals_i = calculate_htf_indicators(ticker, conn, indicators)
 
+    def evaluate_setup(period_signals, primary_keys, secondary_keys):
+        score = 0
+        primary_bull = 0
+        primary_bear = 0
+        total_signals = 0
+        
+        for k, sig in period_signals.items():
+            if sig != "Neutral":
+                total_signals += 1
+            w = 2 if k in primary_keys else (1 if k in secondary_keys else 0.5)
+            val = 1 if "Bullish" in sig or "Oversold" in sig else (-1 if "Bearish" in sig or "Overbought" in sig else 0)
+            if k in primary_keys:
+                if val > 0: primary_bull += 1
+                elif val < 0: primary_bear += 1
+            score += val * w
+            
+        if total_signals == 0:
+            return "N/A"
+            
+        if score > 4 and primary_bull > 0: return "Strong Buy"
+        elif score > 1: return "Buy"
+        elif score < -4 and primary_bear > 0: return "Strong Sell"
+        elif score < -1: return "Sell"
+        else: return "Hold"
+
+    setup_q = evaluate_setup(signals_q, ["SMA100 Signal", "MACD Signal"], [])
+    setup_m = evaluate_setup(signals_m, ["MACD Signal", "SMA100 Signal", "Super trend signal", "Ichimoku signal"], ["RSI", "Bollinger signal"])
+    setup_w = evaluate_setup(signals_w, ["MACD Signal", "SMA100 Signal", "Super trend signal", "Ichimoku signal"], ["RSI", "Bollinger signal"])
+    setup_i = evaluate_setup(signals_i, ["VWAP Signal", "RSI", "EMA20 signal"], ["Pivot Signal", "Breakout signal"])
+
+    return {
+        "ticker": ticker,
+        "setups": {
+            "Quarterly": setup_q,
+            "Monthly": setup_m,
+            "Weekly": setup_w,
+            "Intraday": setup_i
+        }
+    }
 
 @app.get("/api/{dataset}/ticker-profile/{ticker}")
 @app.get("/api/ticker-profile/{ticker}")
@@ -3617,6 +3667,21 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
 
             meta = dict(meta_row)
             actual_ticker = meta["ticker"]
+
+            cur.execute("""
+                SELECT MAX(high) as high_52, MIN(low) as low_52
+                FROM (
+                    SELECT high, low 
+                    FROM ohlcv_daily 
+                    WHERE ticker = %s 
+                    ORDER BY trade_date DESC 
+                    LIMIT 252
+                ) as sub
+            """, (actual_ticker,))
+            hl_52 = cur.fetchone()
+            if hl_52:
+                meta["week_52_high"] = hl_52["high_52"]
+                meta["week_52_low"] = hl_52["low_52"]
 
             # 2. Query fundamentals
             fundamentals = None
@@ -3876,6 +3941,23 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
 
             actual_ticker = master_row["ticker"]
             master_data = dict(master_row)
+
+            # Compute 52-week high and low
+            cur.execute("""
+                SELECT MAX(high) as high_52, MIN(low) as low_52
+                FROM (
+                    SELECT high, low 
+                    FROM ohlcv_daily 
+                    WHERE ticker = %s 
+                    ORDER BY trade_date DESC 
+                    LIMIT 252
+                ) as sub
+            """, (actual_ticker,))
+            hl_52 = cur.fetchone()
+            if hl_52:
+                master_data["week_52_high"] = hl_52["high_52"]
+                master_data["week_52_low"] = hl_52["low_52"]
+
 
             # Fetch all primary & secondary mapped sectors for this ticker from ticker_sector & sectors
             all_sectors = []
@@ -4391,10 +4473,41 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             except Exception as e:
                 logger.error(f"Error querying hhhl_insight for {actual_ticker}: {e}")
 
+            # 7. Watchlists
+            watchlists = []
+            try:
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT w.name 
+                        FROM watchlist w
+                        JOIN watchlist_items wi ON w.id = wi.watchlist_id
+                        WHERE wi.ticker = %s
+                        ORDER BY w.name
+                    """, (actual_ticker,))
+                    watchlists = [row["name"] for row in cur.fetchall()]
+            except Exception as e:
+                logger.error(f"Error querying watchlists for {actual_ticker}: {e}")
+
+# 14. Derivative History
+            derivative_history = []
+            try:
+                with conn.transaction():
+                    cur.execute("""
+                        SELECT id, symbol, action, lot_size, action_date, created_at
+                        FROM derivative_history
+                        WHERE symbol = %s
+                        ORDER BY action_date DESC, id DESC
+                    """, (actual_ticker,))
+                    derivative_history = [dict(r) for r in cur.fetchall()]
+            except Exception as e:
+                logger.error(f"Error querying derivative history for {actual_ticker}: {e}")
+
             return {
                 "found": True,
                 "ticker": actual_ticker,
                 "master": master_data,
+                "derivative_history": derivative_history,
+
                 "recommendations": recommendations,
                 "quicktrade": quicktrade_data,
                 "screener_signals": screener_signals,
@@ -4408,7 +4521,8 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "opportunities_risk": opportunities_risk,
                 "inst_behavior": inst_behavior,
                 "retracement_pattern": retracement_pattern,
-                "hhhl_insight": hhhl_insight
+                "hhhl_insight": hhhl_insight,
+                "watchlists": watchlists
             }
     except Exception as e:
         logger.error(f"Error querying ticker_master for {ticker}: {e}")
@@ -4655,7 +4769,7 @@ def get_retracement_speculators(
 @app.get("/api/intelligence/research/watchlist-monitor")
 def get_watchlist_monitor(
     dataset: str = "intelligence",
-    watchlist_id: int = Query(None, description="Watchlist ID to fetch tickers for"),
+    watchlist_id: str = Query(None, description="Watchlist ID or 'all' to fetch tickers for"),
 ):
     """
     Returns watchlist metadata (all watchlists) plus full ticker performance
@@ -4676,14 +4790,32 @@ def get_watchlist_monitor(
             """)
             watchlists = [dict(r) for r in cur.fetchall()]
 
+            # Insert Watchlist-All
+            cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items")
+            all_count_row = cur.fetchone()
+            all_count = all_count_row['count'] if all_count_row else 0
+            watchlists.insert(0, {
+                "id": "all",
+                "name": "Watchlist-All",
+                "description": "Union of all watchlists",
+                "ticker_count": all_count
+            })
+
             if not watchlists:
                 return {"watchlists": [], "watchlist_id": None, "tickers": [], "summary": {}}
 
             # If no watchlist_id given, use first
-            active_id = watchlist_id if watchlist_id else watchlists[0]["id"]
+            active_id = str(watchlist_id) if watchlist_id else str(watchlists[0]["id"])
+
+            if active_id == 'all':
+                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items) wi"
+                params = ()
+            else:
+                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = %s) wi"
+                params = (int(active_id),)
 
             # Fetch tickers for the selected watchlist with full performance data
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     wi.ticker,
                     COALESCE(tm.company_name, wi.ticker) AS company_name,
@@ -4710,7 +4842,7 @@ def get_watchlist_monitor(
                     f.last_pat                              AS pat,
                     f.debt_to_equity,
                     COALESCE(a.updated_at::text, '') AS updated_at
-                FROM watchlist_items wi
+                FROM {from_clause}
                 LEFT JOIN ticker_master tm ON tm.ticker = wi.ticker
                 LEFT JOIN LATERAL (
                     SELECT s.name 
@@ -4735,9 +4867,8 @@ def get_watchlist_monitor(
                     FROM fundamentals
                     WHERE ticker = wi.ticker ORDER BY fetched_date DESC LIMIT 1
                 ) f ON true
-                WHERE wi.watchlist_id = %s
                 ORDER BY COALESCE(a.hybrid_score, 0) DESC, wi.ticker ASC
-            """, (active_id,))
+            """, params)
             tickers = [dict(r) for r in cur.fetchall()]
 
             # Summary stats
@@ -4934,17 +5065,45 @@ def get_elliot_recommendations(dataset: str = "intelligence"):
                     e.intraday_probability,
                     o.close, 
                     o.trade_date,
-                    a.overall_signal, a.technical_score
+                    a.overall_signal, a.technical_score,
+                    ind.atr14
                 FROM elliot_analysis e
                 JOIN ticker_master t ON e.ticker = t.ticker
                 LEFT JOIN ohlcv_daily o ON e.ticker = o.ticker 
                    AND o.trade_date = (SELECT max(trade_date) FROM ohlcv_daily WHERE ticker = e.ticker)
+                LEFT JOIN indicators_daily ind ON e.ticker = ind.ticker
+                   AND ind.trade_date = (SELECT max(trade_date) FROM indicators_daily WHERE ticker = e.ticker)
                 LEFT JOIN analysis_summaries a ON e.ticker = a.ticker
                 WHERE e.current_wave IN ('W3', 'W5')
                 ORDER BY e.weekly_probability DESC, e.intraday_probability DESC
-                LIMIT 30
             """)
             rows = cur.fetchall()
+            for r in rows:
+                close = float(r['close']) if r.get('close') is not None else 0.0
+                wave = r.get('current_wave', 'W3')
+                w_prob = float(r.get('weekly_probability') or 50.0)
+                i_prob = float(r.get('intraday_probability') or 50.0)
+                atr = float(r.get('atr14') or (close * 0.02 if close else 0.0))
+                signal = str(r.get('overall_signal') or 'HOLD').upper()
+                
+                if close > 0:
+                    if wave == 'W3':
+                        delta = max(atr * 3.0, close * 0.12) * (w_prob / 100.0)
+                    else:
+                        delta = max(atr * 2.0, close * 0.08) * (i_prob / 100.0)
+                    
+                    if 'SELL' in signal:
+                        proj = close - delta
+                    else:
+                        proj = close + delta
+                        
+                    upside = ((proj - close) / close) * 100.0
+                else:
+                    proj = 0.0
+                    upside = 0.0
+                
+                r['predicted_price'] = round(proj, 2)
+                r['upside_pct'] = round(upside, 2)
             return {"data": rows}
 
 @app.get("/{path:path}", include_in_schema=False)

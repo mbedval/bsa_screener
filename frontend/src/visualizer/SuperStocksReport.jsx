@@ -8,7 +8,7 @@ export function SuperStocksReport({ apiBase = '/api/intelligence', onTickerClick
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [minProjPct, setMinProjPct] = useState(5);
+  const [minProjPct, setMinProjPct] = useState(1);
 
   useEffect(() => {
     setLoading(true);

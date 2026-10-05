@@ -448,3 +448,12 @@ CREATE TABLE IF NOT EXISTS fii_behavior (
     data JSONB NOT NULL,
     updated_at TIMESTAMP DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS derivative_history (
+    id SERIAL PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    action TEXT NOT NULL,
+    lot_size INTEGER,
+    action_date TEXT,
+    created_at TEXT DEFAULT NOW()::text
+);

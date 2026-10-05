@@ -91,35 +91,25 @@ def _ensure_tables_exist(cur):
         );
     """)
 
-def analyze_and_summarize_ticker(ticker: str) -> bool:
+def analyze_and_summarize_ticker(ticker: str, context=None) -> bool:
     """
     Executes full analysis (Technical, Fundamental, Options, Footprint, Projections)
     for a single ticker and saves the summarized statistical outputs to database.
     Enforces deduplication rules.
     """
     try:
-        # Get latest close price
-        close = 0.0
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                _ensure_tables_exist(cur)
-                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s AND close IS NOT NULL ORDER BY trade_date DESC LIMIT 1", (ticker,))
-                row = cur.fetchone()
-                if row and row[0] is not None:
-                    close = float(row[0])
-                
-                # Check F&O eligibility
-                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
-                fno_row = cur.fetchone()
-                is_fno = fno_row[0] if fno_row else False
+        from engine.analysis.context import TickerContext
+        ctx = context if context is not None else TickerContext.load(ticker)
+        close = ctx.latest_close
+        is_fno = ctx.is_fno
 
         if close <= 0.0:
             logger.warning(f"No price data available for {ticker}, skipping analysis.")
             return False
 
-        # Run analysis modules
-        tech_res = analyze_technical(ticker)
-        fund_res = analyze_fundamental(ticker)
+        # Run analysis modules using pre-loaded context
+        tech_res = analyze_technical(ticker, context=ctx)
+        fund_res = analyze_fundamental(ticker, context=ctx)
         foot_res = analyze_footprint_and_news(ticker)
         
         opt_res = analyze_options_chain(ticker)
@@ -136,7 +126,7 @@ def analyze_and_summarize_ticker(ticker: str) -> bool:
             logger.error(f"Error executing Elliot Wave analysis for {ticker}: {ee}")
 
         try:
-            scan_and_store_hhhl(ticker)
+            scan_and_store_hhhl(ticker, context=ctx)
         except Exception as he:
             logger.error(f"Error scanning HHHL for {ticker}: {he}")
             
@@ -399,17 +389,21 @@ def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bo
         return
 
     success_count = len(completed_set)
-    for i, ticker in enumerate(pending_tickers, 1):
-        res = analyze_and_summarize_ticker(ticker)
-        if res:
-            success_count += 1
-            mark_ticker_completed("analysis", ticker)
-        if progress_callback:
-            logger.debug(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
-            progress_callback(ticker, res)
-        else:
-            logger.info(f"[{i}/{len(pending_tickers)}] Analyzed {ticker}: {'Success' if res else 'Failed'}")
-        
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(analyze_and_summarize_ticker, ticker): ticker for ticker in pending_tickers}
+        for i, future in enumerate(as_completed(futures), 1):
+            t = futures[future]
+            res = future.result()
+            if res:
+                success_count += 1
+                mark_ticker_completed("analysis", t)
+            if progress_callback:
+                progress_callback(t, res)
+            else:
+                logger.debug(f"[{i}/{len(pending_tickers)}] Analyzed {t}: {'Success' if res else 'Failed'}")
+
     elapsed = time.time() - start_time
     failed_count = len(all_tickers) - success_count
     logger.info(f"Core Ticker Analysis completed. Total: {len(all_tickers)}, Succeeded: {success_count}, Failed: {failed_count}, Time Taken: {elapsed:.2f}s")

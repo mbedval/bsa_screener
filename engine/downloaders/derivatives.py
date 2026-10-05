@@ -119,6 +119,9 @@ def download_and_insert_derivatives(ticker: str) -> bool:
                     logger.info(f"Deduplication skip: identical spot observed for {ticker_clean}.")
                     return True
 
+                from psycopg2.extras import execute_values
+
+                derivatives_records = []
                 for strike in strikes:
                     dist_abs = abs(strike - spot)
                     intrinsic_ce = max(0.0, spot - strike)
@@ -132,42 +135,32 @@ def download_and_insert_derivatives(ticker: str) -> bool:
                     ce_volume = int(max(1000, 20000 - dist_abs * 10))
                     pe_volume = int(max(1000, 18000 - dist_abs * 9))
 
-                    cur.execute("""
-                        INSERT INTO raw_fno_derivatives (
-                            ticker, strike_price, option_type, expiry_date, volume, ltp, underlying_price, last_updated
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (ticker, strike_price, option_type, expiry_date) DO UPDATE SET
-                            volume = EXCLUDED.volume, ltp = EXCLUDED.ltp,
-                            underlying_price = EXCLUDED.underlying_price, last_updated = EXCLUDED.last_updated
-                    """, (ticker_clean, strike, "CE", active_expiry, ce_volume, ce_ltp, spot, now_str))
+                    derivatives_records.append((ticker_clean, strike, "CE", active_expiry, ce_volume, ce_ltp, spot, now_str))
+                    derivatives_records.append((ticker_clean, strike, "PE", active_expiry, pe_volume, pe_ltp, spot, now_str))
 
-                    cur.execute("""
+                if derivatives_records:
+                    execute_values(cur, """
                         INSERT INTO raw_fno_derivatives (
                             ticker, strike_price, option_type, expiry_date, volume, ltp, underlying_price, last_updated
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES %s
                         ON CONFLICT (ticker, strike_price, option_type, expiry_date) DO UPDATE SET
                             volume = EXCLUDED.volume, ltp = EXCLUDED.ltp,
                             underlying_price = EXCLUDED.underlying_price, last_updated = EXCLUDED.last_updated
-                    """, (ticker_clean, strike, "PE", active_expiry, pe_volume, pe_ltp, spot, now_str))
+                    """, derivatives_records, page_size=200)
 
                 conn.commit()
-
-        # Analyze F&O option chain immediately alongside derivative download
-        try:
-            from engine.analysis.options import analyze_options_chain
-            analyze_options_chain(ticker_clean)
-        except Exception as e:
-            logger.error(f"Error analyzing F&O options for {ticker_clean} during download: {e}")
 
         return True
     except Exception as e:
         logger.error(f"Error inserting derivative data for {ticker_clean}: {e}")
         return False
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 from engine.utils.fno_seeder import seed_fno_tickers
+from engine.utils.rate_limiter import DEFAULT_MAX_WORKERS
 
-def download_all_derivatives(progress_callback=None, resume: bool = True, tickers: list = None):
+def download_all_derivatives(progress_callback=None, resume: bool = True, tickers: list = None, max_workers: int = DEFAULT_MAX_WORKERS):
     """Download option chain derivatives for all F&O enabled tickers + indices (or specified tickers list)."""
     # Automatically seed/sync F&O list from F&O CSVs
     seed_fno_tickers()
@@ -220,23 +213,26 @@ def download_all_derivatives(progress_callback=None, resume: bool = True, ticker
     completed_set = get_completed_tickers("fno_download", valid_tickers=all_tickers) if resume else set()
     pending_tickers = [t for t in all_tickers if t not in completed_set]
 
-    logger.info(f"Starting F&O option chain download. Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
+    logger.info(f"Starting F&O option chain download (max_workers={max_workers}). Total: {len(all_tickers)}, Completed: {len(completed_set)}, Pending: {len(pending_tickers)}")
 
     if not pending_tickers:
         logger.info("All F&O tickers already downloaded!")
         return
 
     success_count = len(completed_set)
-    for i, ticker in enumerate(pending_tickers, 1):
-        res = download_and_insert_derivatives(ticker)
-        if res:
-            success_count += 1
-            mark_ticker_completed("fno_download", ticker)
-        if progress_callback:
-            logger.debug(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
-            progress_callback(ticker, res)
-        else:
-            logger.info(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(download_and_insert_derivatives, ticker): ticker for ticker in pending_tickers}
+        for i, future in enumerate(as_completed(futures), 1):
+            ticker = futures[future]
+            res = future.result()
+            if res:
+                success_count += 1
+                mark_ticker_completed("fno_download", ticker)
+            if progress_callback:
+                logger.debug(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
+                progress_callback(ticker, res)
+            else:
+                logger.info(f"[{i}/{len(pending_tickers)}] Derivative Downloaded {ticker}: {'Success' if res else 'Failed'}")
     logger.info(f"Derivative downloads completed: {success_count}/{len(all_tickers)} successful.")
 
 

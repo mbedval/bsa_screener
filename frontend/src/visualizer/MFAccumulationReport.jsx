@@ -67,15 +67,14 @@ export default function MFAccumulationReport({ onTickerClick }) {
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ color: '#f8fafc', fontSize: 24, margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-            Accumulation by MF
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <select
               value={period}
               onChange={e => setPeriod(e.target.value)}
               style={{
-                background: '#1e293b', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)', 
+                background: '#1e293b', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 6, padding: '4px 8px', fontSize: 14, outline: 'none', cursor: 'pointer'
               }}
             >
@@ -84,10 +83,7 @@ export default function MFAccumulationReport({ onTickerClick }) {
               <option value="6M">6 Months</option>
               <option value="12M">12 Months</option>
             </select>
-          </h2>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>
-            Top 25 stocks where mutual funds have increased their holdings over the selected period.
-          </p>
+          </div>
         </div>
         <button
           onClick={handleDownloadCSV}

@@ -37,10 +37,10 @@ bsa_screener/
 ## 2. Setup & Installation
 
 ### A. Database Initialization
-Ensure PostgreSQL is running, then run `seeding.sql` to initialize all master tables, market data tables, options chains, system configuration settings, and mapping translations:
+Ensure PostgreSQL is running, then run `bsa_db_backup.sql` (the Golden Master Baseline) to initialize all master metadata tables (including `derivative_history`), system configuration settings, and mapping translations:
 
 ```bash
-PGPASSWORD=jmbxdbpassword psql -h 192.168.1.18 -U jmbxdbuser -d bsa_db -f seeding.sql
+PGPASSWORD=jmbxdbpassword psql -h 192.168.1.18 -U jmbxdbuser -d bsa_db -f bsa_db_backup.sql
 ```
 
 ### B. Python Virtual Environment Setup
@@ -58,25 +58,40 @@ python3 -m venv .venv
 The engine CLI runs all background pipeline jobs and supports batch downloading, analysis, on-demand reviews, and report compiles.
 
 ### Batch Operations (Indian NSE Market — `bsa_db`)
-* **Execute Full Pipeline (Download All + Download F&O + Analyze All)**:
-  Runs the complete daily process sequentially in a single command.
-  ```bash
-  .venv/bin/python3 -m engine.cli --mode full-pipeline
-  ```
-* **Download historical data & fundamentals for all master tickers**:
-  Strictly downloads data only, without running any analysis.
-  ```bash
-  .venv/bin/python3 -m engine.cli --mode download-spot
-  ```
-* **Download F&O derivatives option chains for F&O tickers and indices**:
-  ```bash
-  .venv/bin/python3 -m engine.cli --mode download-fno
-  ```
-* **Execute analysis & scoring for all master tickers**:
-  Strictly processes the downloaded data through the analysis engine, without downloading any new data.
-  ```bash
-  .venv/bin/python3 -m engine.cli --mode analyze-all
-  ```
+
+The engine provides various execution modes covering different phases of downloading and analyzing market data. You can run them using the `--mode` flag:
+
+**Full Pipeline Execution**
+* `full-pipeline`: Runs the complete daily process sequentially (Download All -> Analyze All -> Backup).
+* `spot-pipeline`: Runs strictly the spot market pipeline (downloads & analysis).
+* `mf-pipeline`: Runs strictly the Mutual Fund and FII pipeline (downloads & analysis).
+
+**Phase 1: Raw Data Ingestion**
+* `download-all`: Triggers the full raw data ingestion pipeline (Spot + MF + F&O).
+* `download-technicals`: Downloads historical price data and technical indicators.
+* `download-fundamental`: Downloads fundamental financial data (PAT, PE, etc).
+* `download-fno`: Downloads F&O derivatives option chains for F&O tickers and indices.
+* `download-mf` (or `mutualfund`): Downloads Mutual Fund & FII institutional holdings.
+
+**Phase 2: Data Analysis & Scoring**
+* `analyze-all`: Execute all analysis, scoring, and multi-factor synthesis.
+* `analyze-technical`: Run technical analysis and scanners (HHHL, Cup & Handle, Retracements).
+* `analyze-fundamental`: Run fundamental analysis (PAT Growth, PE, Debt/Equity).
+* `analyze-fo`: Run F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup).
+* `analyze-patterns`: Scan candlestick chart patterns & respecting patterns analysis.
+* `analyze-mf`: Run Mutual Fund & FII Institutional Behavior Analysis.
+* `analyze-elliot`: Run Elliot Wave W3/W5 Momentum Analysis.
+* `analyze-sector`: Run Sectorwise Lead-Follow Relationship Groups Analysis.
+* `analyze-summaries`: Run Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking.
+
+**Maintenance & Utility Modes**
+* `backup`: Backups generated historical calls from `historical_calls` table into `historical_call_bkp`.
+* `news-analyze`: Runs news sentiment analysis for a selected ticker (requires `--ticker`).
+
+Example usage:
+```bash
+.venv/bin/python3 -m engine.cli --mode full-pipeline
+```
 
 ### Single Ticker On-Demand Operation (NSE Market)
 * **Download and analyze a single stock (e.g. INFY) with HTML report**:
@@ -102,7 +117,7 @@ To install or update the automated background tasks, simply run the provided bas
 
 ### Default Automation Schedule (Monday to Friday)
 Once configured, the following processes run automatically in the background during market hours:
-1. **Spot Market & Technical Data (`download-spot`)**: Synchronizes end-of-day data, intraday bars, and calculates foundational metrics every 15 minutes between `09:15` and `15:00`.
+1. **Spot Market & Technical Data (`download-technicals`)**: Synchronizes end-of-day data, intraday bars, and calculates foundational metrics every 15 minutes between `09:15` and `15:00`.
 2. **Derivatives & Option Chains (`download-fno`)**: Downloads live options chain, strike prices, implied volatility (IV), and open interest (OI) for all F&O stocks and indices **every 2 minutes** between `09:16` and `15:30`.
 
 The logs for these automated tasks are safely stored in the `logs/` directory for monitoring (`logs/cron_nse.log` and `logs/cron_fno.log`).

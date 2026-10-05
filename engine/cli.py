@@ -24,10 +24,10 @@ logger = setup_logger("bsa_cli")
 def main():
     parser = argparse.ArgumentParser(description="BSA Consolidated Analysis & Processing Engine")
     parser.add_argument("--mode", choices=[
-        "download-all", "download-spot", "download-mf", "download-fno",
+        "download-all", "download-technicals", "download-fundamental", "download-mf", "download-fno",
         "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
-        "full-pipeline", "news-analyze", "backup", "mutualfund"
+        "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund", "addticker", "deleteticker"
     ], help="Pipeline batch operation mode")
     parser.add_argument("--watchlist", "-w", nargs="*", metavar="WATCHLIST", help="Filter pipeline operations to tickers in specified watchlist(s) by name or ID")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
@@ -80,7 +80,7 @@ def main():
 
         wl_names = ", ".join([f"'{w['name']}' [ID: {w['id']}]" for w in matched_wls])
         logger.info(f"Watchlist filter active: matched {len(matched_wls)} watchlist(s) ({wl_names}).")
-        logger.info(f"Loaded {len(wl_tickers)} unique ticker(s) for watchlist execution: {wl_tickers}")
+
 
         if not wl_tickers:
             logger.warning("Specified watchlist(s) contain 0 tickers! Exiting.")
@@ -127,70 +127,92 @@ def main():
         return False
 
     # ── Phase 1: Raw Data Ingestion Sub-Runners ──────────────────────────────
-    def run_phase_1_1():
+    def run_phase_1_1_tech():
         p_start = time.time()
-        logger.info("=== Phase 1.1: Spot Data Download (Master Price & Fundamentals) ===")
+        logger.info("=== Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===")
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 1.1 (Download Spot)", "spot_download", total, valid_tickers=valid_tickers)
-        completed = get_completed_tickers("spot_download", valid_tickers=valid_tickers) if resume else set()
+        resume = resolve_resume_flag("Phase 1.1 (Download Technicals)", "tech_download", total, valid_tickers=valid_tickers)
+        completed = get_completed_tickers("tech_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 1.1 (Download Spot) are already completed. Use --fresh or --force to re-download.")
+            logger.info(f"All {total} items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.")
         else:
-            progress, task_id = create_phase_progress("Phase 1.1", "Download Spot", pending_count if resume else total, unit="tickers")
+            progress, task_id = create_phase_progress("Phase 1.1", "Download Technicals", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
-                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=True, dl_fundamentals=False, checkpoint_key="tech_download")
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.1 (Download Spot) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.1 (Download Technicals) completed in {p_elapsed:.2f}s.")
+
+    def run_phase_1_1_fund():
+        p_start = time.time()
+        logger.info("=== Phase 1.2: Spot Data Download (Fundamentals) ===")
+        all_spot = get_spot_tickers()
+        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        total = len(valid_tickers)
+        resume = resolve_resume_flag("Phase 1.2 (Download Fundamentals)", "fund_download", total, valid_tickers=valid_tickers)
+        completed = get_completed_tickers("fund_download", valid_tickers=valid_tickers) if resume else set()
+        pending_count = max(total - len(completed), 0)
+        if pending_count == 0 and total > 0:
+            logger.info(f"All {total} items for Phase 1.2 (Download Fundamentals) are already completed. Use --fresh to re-download.")
+        else:
+            progress, task_id = create_phase_progress("Phase 1.2", "Download Fundamentals", pending_count if resume else total, unit="tickers")
+            with progress:
+                def cb(ticker, status, advance=1):
+                    if ticker is not None:
+                        progress.update(task_id, advance=advance)
+                download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=False, dl_fundamentals=True, checkpoint_key="fund_download")
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Phase 1.2 (Download Fundamentals) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_2():
         p_start = time.time()
-        logger.info("=== Phase 1.2: Mutual Fund & FII Holdings Download ===")
+        logger.info("=== Phase 1.3: Mutual Fund & FII Holdings Download ===")
         from engine.downloaders.mutual_fund import ensure_mf_fii_tables_exist, download_all_fii_holdings
         ensure_mf_fii_tables_exist()
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total_tickers = len(valid_tickers)
         total_items = total_tickers * 2  # MF holdings (total_tickers) + FII holdings (total_tickers)
-        progress, task_id = create_phase_progress("Phase 1.2", "Download MF & FII", total_items, unit="items")
+        progress, task_id = create_phase_progress("Phase 1.3", "Download MF & FII", total_items, unit="items")
         with progress:
             def cb(current, total, ticker, count):
                 progress.update(task_id, advance=1)
             download_all_mf_holdings(progress_callback=cb, tickers=valid_tickers)
             download_all_fii_holdings(progress_callback=cb, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.2 (Download MF & FII) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.3 (Download MF & FII) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_3():
         p_start = time.time()
-        logger.info("=== Phase 1.3: F&O Derivatives Download ===")
+        logger.info("=== Phase 1.4: F&O Derivatives Download ===")
         all_fno = get_fno_tickers()
         valid_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         total = len(valid_tickers)
-        resume = resolve_resume_flag("Phase 1.3 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
+        resume = resolve_resume_flag("Phase 1.4 (Download F&O)", "fno_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("fno_download", valid_tickers=valid_tickers) if resume else set()
         pending_count = max(total - len(completed), 0)
         if pending_count == 0 and total > 0:
-            logger.info(f"All {total} items for Phase 1.3 (Download F&O) are already completed. Use --fresh to re-download.")
+            logger.info(f"All {total} items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.")
         else:
-            progress, task_id = create_phase_progress("Phase 1.3", "Download F&O", pending_count if resume else total, unit="tickers")
+            progress, task_id = create_phase_progress("Phase 1.4", "Download F&O", pending_count if resume else total, unit="tickers")
             with progress:
                 def cb(ticker, status, advance=1):
                     if ticker is not None:
                         progress.update(task_id, advance=advance)
                 download_all_derivatives(progress_callback=cb, resume=resume, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.3 (Download F&O) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[✓] Phase 1.4 (Download F&O) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1():
         p_start = time.time()
         logger.info("=== Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===")
-        run_phase_1_1()
+        run_phase_1_1_tech()
+        run_phase_1_1_fund()
         run_phase_1_2()
         run_phase_1_3()
         p_elapsed = time.time() - p_start
@@ -202,22 +224,39 @@ def main():
         logger.info("[Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...")
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
-        from engine.analysis.hhhl_scanner import scan_and_store_hhhl
-        from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle
+        from engine.analysis.context import TickerContext
+        from engine.analysis.hhhl_scanner import scan_and_store_hhhl, ensure_hhhl_table_exists
+        from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle, ensure_cup_and_handle_table
         from engine.analysis.retracement import generate_retracement_speculator_analysis
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from psycopg2.extras import RealDictCursor
+
+        # Pre-initialize scanner tables once to prevent DDL lock contention under multi-threading
+        try:
+            ensure_hhhl_table_exists()
+            with get_db_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    ensure_cup_and_handle_table(cur)
+        except Exception as e:
+            logger.warning(f"DDL pre-init warning in Phase 2.1: {e}")
         
+        def _worker_2_1(t):
+            try:
+                ctx = TickerContext(t)
+                scan_and_store_hhhl(t, context=ctx)
+                scan_and_store_cup_and_handle(t, context=ctx)
+            except Exception as e:
+                logger.error(f"Error in technical scanning for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.1", "Technical Scanners", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    scan_and_store_hhhl(t)
-                    scan_and_store_cup_and_handle(t)
-                except Exception as e:
-                    logger.error(f"Error in technical scanning for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_1, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         
         try:
-            generate_retracement_speculator_analysis()
+            generate_retracement_speculator_analysis(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error running Retracement Speculator Analysis: {e}")
             
@@ -230,14 +269,20 @@ def main():
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.fundamental import analyze_fundamental
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_2(t):
+            try:
+                analyze_fundamental(t)
+            except Exception as e:
+                logger.error(f"Error in fundamental analysis for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.2", "Fundamental Analysis", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    analyze_fundamental(t)
-                except Exception as e:
-                    logger.error(f"Error in fundamental analysis for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_2, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.2/2.8] Fundamental Analysis completed in {p_elapsed:.2f}s.")
 
@@ -247,14 +292,20 @@ def main():
         all_fno = get_fno_tickers()
         fno_tickers = [t for t in all_fno if t in watchlist_tickers] if watchlist_tickers is not None else all_fno
         from engine.analysis.options import analyze_options_chain
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_3(t):
+            try:
+                analyze_options_chain(t)
+            except Exception as e:
+                logger.error(f"Error analyzing F&O options for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.3", "F&O Options Analysis", len(fno_tickers), unit="tickers")
         with progress:
-            for t in fno_tickers:
-                try:
-                    analyze_options_chain(t)
-                except Exception as e:
-                    logger.error(f"Error analyzing F&O options for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_3, t) for t in fno_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in {p_elapsed:.2f}s.")
 
@@ -265,16 +316,22 @@ def main():
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.patterns import scan_and_store_ticker_patterns
         from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_4(t):
+            try:
+                scan_and_store_ticker_patterns(t)
+            except Exception as e:
+                logger.error(f"Error scanning chart patterns for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.4", "Chart Pattern Scanning", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    scan_and_store_ticker_patterns(t)
-                except Exception as e:
-                    logger.error(f"Error scanning chart patterns for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_4, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         try:
-            generate_stocks_respecting_patterns()
+            generate_stocks_respecting_patterns(tickers=watchlist_tickers)
         except Exception as e:
             logger.error(f"Error running Stocks Respecting Patterns: {e}")
         p_elapsed = time.time() - p_start
@@ -302,14 +359,20 @@ def main():
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.elliot import analyze_and_store_elliot
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _worker_2_6(t):
+            try:
+                analyze_and_store_elliot(t)
+            except Exception as e:
+                logger.error(f"Error executing Elliot Wave analysis for {t}: {e}")
+
         progress, task_id = create_phase_progress("Phase 2.6", "Elliot Wave Analysis", len(valid_tickers), unit="tickers")
         with progress:
-            for t in valid_tickers:
-                try:
-                    analyze_and_store_elliot(t)
-                except Exception as e:
-                    logger.error(f"Error executing Elliot Wave analysis for {t}: {e}")
-                progress.update(task_id, advance=1)
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(_worker_2_6, t) for t in valid_tickers]
+                for _ in as_completed(futures):
+                    progress.update(task_id, advance=1)
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.6/2.8] Elliot Wave Analysis completed in {p_elapsed:.2f}s.")
 
@@ -483,16 +546,51 @@ def main():
                     writer.writerows(rows)
                     
                 logger.info(f"[✓] Backup complete! Synchronized {copied} new historical call records to 'historical_call_bkp' table and saved backup to {bkp_csv_path}.")
+    # ── Argument Pre-processing ─────────────────────────────────────────────
+    if args.ticker:
+        raw_t = args.ticker.upper().strip()
+        if raw_t.endswith(".BO") or raw_t.endswith(".BSE"):
+            args.ticker = raw_t.replace(".BO", "").replace(".BSE", "")
+            args.exchange = "BSE"
+        elif raw_t.endswith(".NS"):
+            args.ticker = raw_t.replace(".NS", "")
+            args.exchange = "NSE"
+        else:
+            args.ticker = raw_t
+            args.exchange = "NSE"
+            
+        # Global auto-add for any mode using --ticker
+        try:
+            from engine.database.connection import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (args.ticker,))
+                    if not cur.fetchone():
+                        logger.info(f"Ticker {args.ticker} not found in ticker_master. Auto-adding it globally with exchange {args.exchange}...")
+                        cur.execute(
+                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                            (args.ticker, args.ticker, False, args.exchange)
+                        )
+                        conn.commit()
+                        logger.info(f"Successfully added {args.ticker} to ticker_master.")
+        except Exception as e:
+            logger.error(f"Failed during global auto-add for ticker {args.ticker}: {e}")
 
     # ── Batch Operations Dispatcher ──────────────────────────────────────────
+    if args.ticker and args.mode not in ("news-analyze", "download-mf", "mutualfund", "addticker", "deleteticker"):
+        args.mode = None
+        
     if args.mode == "download-all":
         logger.info("Triggered Phase 1: Full Raw Data Ingestion Pipeline...")
         run_phase_1()
-    elif args.mode == "download-spot":
-        logger.info("Triggered Phase 1.1: Spot Data Download...")
-        run_phase_1_1()
+    elif args.mode == "download-technicals":
+        logger.info("Triggered Phase 1.1: Spot Data Download (Technicals)...")
+        run_phase_1_1_tech()
+    elif args.mode == "download-fundamental":
+        logger.info("Triggered Phase 1.2: Spot Data Download (Fundamentals)...")
+        run_phase_1_1_fund()
     elif args.mode in ("download-mf", "mutualfund"):
-        logger.info("Triggered Phase 1.2: Mutual Fund & FII Holdings Download...")
+        logger.info("Triggered Phase 1.3: Mutual Fund & FII Holdings Download...")
         if args.ticker:
             ticker = args.ticker.upper().strip()
             from engine.downloaders.mutual_fund import download_fii_holdings_for_ticker
@@ -502,7 +600,7 @@ def main():
         else:
             run_phase_1_2()
     elif args.mode == "download-fno":
-        logger.info("Triggered Phase 1.3: F&O Derivatives Download...")
+        logger.info("Triggered Phase 1.4: F&O Derivatives Download...")
         run_phase_1_3()
     elif args.mode == "analyze-all":
         logger.info("Triggered Phase 2: Consolidated Scoring & Analysis Engine...")
@@ -537,6 +635,26 @@ def main():
         run_phase_2()
         backup_historical_calls()
         logger.info("[✓] Full pipeline execution completed successfully!")
+    elif args.mode == "spot-pipeline":
+        logger.info("Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
+        p_start = time.time()
+        run_phase_1_1_tech()
+        run_phase_1_3()
+        run_phase_2_1()
+        run_phase_2_3()
+        run_phase_2_4()
+        run_phase_2_6()
+        run_phase_2_7()
+        run_phase_2_8()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Spot pipeline execution completed successfully in {p_elapsed:.2f}s!")
+    elif args.mode == "mf-pipeline":
+        logger.info("Triggered Mutual Fund & FII Pipeline (download-mf -> analyze-mf)...")
+        p_start = time.time()
+        run_phase_1_2()
+        run_phase_2_5()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] Mutual Fund & FII pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "backup":
         backup_historical_calls()
     elif args.mode == "news-analyze":
@@ -555,11 +673,119 @@ def main():
                 print(f"  {i}. {n.get('title')}")
         except Exception as e:
             logger.error(f"Failed to fetch news for {ticker}: {e}")
+            
+    elif args.mode == "deleteticker":
+        if not args.ticker:
+            logger.error("--ticker argument is required when running --mode deleteticker")
+            sys.exit(1)
+        ticker = args.ticker.upper().strip()
+        from engine.database.connection import get_db_connection
+        exists = False
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                if cur.fetchone():
+                    exists = True
+        
+        if not exists:
+            logger.info(f"No match found for ticker: {ticker}")
+            sys.exit(0)
+            
+        logger.info(f"Exact match found for ticker: {ticker}. Deleting from master and all related tables...")
+        tables_to_delete_from = [
+            'ticker_sector', 'watchlist_items', 'excluded_tickers', 'ohlcv_daily', 
+            'indicators_daily', 'raw_fno_derivatives', 'analysis_summaries', 
+            'historical_calls', 'historical_call_bkp', 'call_efficiency', 'intraday_call', 
+            'fundamentals', 'fno_active', 'opportunities_risk', 'broker_recommendations', 
+            'retracement_speculator_patterns', 'raw_ticker_option_chain_temp', 'mf_holdings', 
+            'chart_patterns', 'stocks_respecting_patterns', 'sector_lead_follow_groups', 
+            'mf_historical_holdings', 'mf_behavior', 'fii_historical_holdings', 
+            'fii_behavior', 'continuous_hhhl_scanner', 'cup_and_handle_scanner', 'elliot_analysis'
+        ]
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                for table in tables_to_delete_from:
+                    try:
+                        cur.execute(f"DELETE FROM {table} WHERE ticker = %s", (ticker,))
+                        deleted = cur.rowcount
+                        if deleted > 0:
+                            logger.info(f"Deleted {deleted} rows from {table}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete from {table}: {e}")
+                        conn.rollback()
+                        continue
+                
+                # Delete from master last
+                try:
+                    cur.execute("DELETE FROM ticker_master WHERE ticker = %s", (ticker,))
+                    logger.info(f"Deleted {ticker} from ticker_master")
+                except Exception as e:
+                    logger.error(f"Could not delete from ticker_master: {e}")
+                    conn.rollback()
+                
+            conn.commit()
+            
+        logger.info(f"Successfully deleted {ticker} and all related data.")
+        sys.exit(0)
+    elif args.mode == "addticker":
+        if not args.ticker:
+            logger.error("--ticker argument is required when running --mode addticker")
+            sys.exit(1)
+        ticker = args.ticker.upper().strip()
+        from engine.database.connection import get_db_connection
+        exists = False
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                if cur.fetchone():
+                    exists = True
+        if exists:
+            logger.info(f"Ticker {ticker} all ready exist in ticker_master.")
+            sys.exit(0)
+        
+        logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                    (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+                )
+                conn.commit()
+        logger.info(f"Successfully added {ticker} to ticker_master. Running ingestion and analysis...")
+        
+        # Ingestion and Analysis
+        dl_ok = download_ticker_data(ticker)
+        if dl_ok:
+            is_fno = False
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        is_fno = row[0]
+            if is_fno:
+                download_and_insert_derivatives(ticker)
+                
+            ok = analyze_and_summarize_ticker(ticker)
+            if ok:
+                logger.info(f"Analysis completed and upserted for {ticker}")
+                generate_html_report(ticker)
+                if args.pdf:
+                    generate_pdf_report(ticker)
+            else:
+                logger.error(f"Analysis failed for {ticker}")
+        else:
+            logger.error(f"Data download failed for {ticker}")
+            
+        sys.exit(0)
 
     # Single Ticker On-demand Run
     if args.ticker:
         ticker = args.ticker.upper().strip()
         logger.info(f"Running on-demand pipeline for ticker: {ticker}")
+        
+        # Auto-add is now handled globally at the top of cli.py
         
         # 1. Download price and fundamentals
         dl_ok = download_ticker_data(ticker)
@@ -607,6 +833,20 @@ def main():
 
         if not has_summary:
             logger.info(f"No previous analysis found for {ticker}. Running download and analysis first...")
+            
+            # 0. Check if ticker exists in ticker_master, if not, add it
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                    if not cur.fetchone():
+                        logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
+                        cur.execute(
+                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
+                            (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+                        )
+                        conn.commit()
+                        logger.info(f"Successfully added {ticker} to ticker_master.")
+            
             dl_ok = download_ticker_data(ticker)
             if dl_ok:
                 is_fno = False

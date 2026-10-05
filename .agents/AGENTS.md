@@ -8,7 +8,7 @@ To maintain strict data integrity, zero contamination, and explicit control flow
 
 ### Rule 1.1: Phase 0 - Golden Master Setup Baseline
 - **Goal**: Initialize clean database structure & master setup metadata only.
-- **Master Tables Allowed**: `ticker_master`, `fno_stock_master`, `fno_index_master`, `sectors`, `ticker_sector`, `watchlist`, `watchlist_items`, `users`, `alternative_names`, `excluded_tickers`, `system_config`, `ticker_mappings`, `opportunities_risk`.
+- **Master Tables Allowed**: `ticker_master`, `fno_stock_master`, `fno_index_master`, `sectors`, `ticker_sector`, `watchlist`, `watchlist_items`, `users`, `alternative_names`, `excluded_tickers`, `system_config`, `ticker_mappings`, `opportunities_risk`, `derivative_history`.
 - **Database Dump Contract**: `dump_database.py` MUST ONLY dump records from the above master setup tables.
 - **Strict Prohibition**:
   - **NO MARKET PRICE DATA** (0 rows in `ohlcv_daily`).
@@ -19,10 +19,11 @@ To maintain strict data integrity, zero contamination, and explicit control flow
 
 ### Rule 1.2: Phase 1 - Raw Data Ingestion Only (No Calculation & No Analysis)
 - **Goal**: Fetch raw market data from external sources and store strictly in raw/master database tables.
-- **Sub-Phase 1.1 (`python3 -m engine.cli --mode download-spot`)**:
+- **Sub-Phase 1.1a (`python3 -m engine.cli --mode download-technicals`)**:
   - Downloads raw daily price history (open, high, low, close, volume) into `ohlcv_daily`.
-  - Downloads raw quarterly fundamental metrics (PAT, cash flow, PE ratio, Debt/Equity) into `fundamentals` mapped to `ticker_master`.
   - Downloads daily raw delivery metrics into `delivery_history`.
+- **Sub-Phase 1.1b (`python3 -m engine.cli --mode download-fundamental`)**:
+  - Downloads raw quarterly fundamental metrics (PAT, cash flow, PE ratio, Debt/Equity) into `fundamentals` mapped to `ticker_master`.
 - **Sub-Phase 1.2 (`python3 -m engine.cli --mode download-fno`)**:
   - Downloads raw F&O option chain strike rates, LTPs, IVs, and volumes into `raw_fno_derivatives`.
 - **Strict Ingestion Constraints**:

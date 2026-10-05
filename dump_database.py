@@ -41,6 +41,7 @@ ALLOWED_MASTER_TABLES = {
     "reference_pages",
     "screener_ticker_mappings",
     "broker_recommendations",
+    "derivative_history"
 }
 
 print(f"Connecting to database {database} on {host}...")

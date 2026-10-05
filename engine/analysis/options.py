@@ -90,6 +90,7 @@ def analyze_options_chain(ticker: str) -> dict:
                 insight = f"PCR is balanced at {pcr}. Expected range: ₹{support_strike} - ₹{resistance_strike}."
 
             return {
+                "is_fno": True,
                 "atm_strike": atm_strike,
                 "support": support_strike,
                 "resistance": resistance_strike,
@@ -98,36 +99,15 @@ def analyze_options_chain(ticker: str) -> dict:
                 "insights": insight
             }
         else:
-            # High-precision derivative modeling based on spot price & strike interval
-            if spot <= 0:
-                spot = 100.0
-            step = get_strike_interval(clean_t, spot)
-            atm_strike = round(spot / step) * step
-            support_strike = round(atm_strike - 2 * step, 1)
-            resistance_strike = round(atm_strike + 2 * step, 1)
-
-            if day_chg >= 0 and vol_up:
-                buildup = "Long Buildup (Accumulation)"
-                pcr = 1.18
-            elif day_chg >= 0 and not vol_up:
-                buildup = "Short Covering"
-                pcr = 1.05
-            elif day_chg < 0 and vol_up:
-                buildup = "Short Buildup (Distribution)"
-                pcr = 0.76
-            else:
-                buildup = "Long Unwinding"
-                pcr = 0.88
-
-            insight = f"Modeled around ATM ₹{atm_strike}. Major Support at ₹{support_strike}, Resistance at ₹{resistance_strike} (PCR: {pcr})."
-
+            # Non-F&O stock: Derivatives analysis is Not Applicable
             return {
-                "atm_strike": atm_strike,
-                "support": support_strike,
-                "resistance": resistance_strike,
-                "pcr": pcr,
-                "buildup": buildup,
-                "insights": insight
+                "is_fno": False,
+                "atm_strike": None,
+                "support": None,
+                "resistance": None,
+                "pcr": None,
+                "buildup": "N/A (Non-F&O Stock)",
+                "insights": f"Non-F&O Stock. {clean_t} is traded exclusively in the cash/equity segment."
             }
 
     except Exception as e:

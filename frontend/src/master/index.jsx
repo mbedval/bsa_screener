@@ -10,8 +10,9 @@ import RecommendationsPage from './RecommendationsPage.jsx'
 import OpportunitiesRiskPage from './OpportunitiesRiskPage.jsx'
 import ReferencePagesPage from './ReferencePagesPage.jsx'
 import ScreenerTickerMappingPage from './ScreenerTickerMappingPage.jsx'
+import SystemConfigPage from './SystemConfigPage.jsx'
 
-export { SectorsPage, TickersPage, IndicesPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage }
+export { SectorsPage, TickersPage, IndicesPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage, SystemConfigPage }
 
 export default function MasterSubmodule({ subView, onNavigate, dataset, onSelectTicker }) {
   switch (subView) {
@@ -29,8 +30,11 @@ export default function MasterSubmodule({ subView, onNavigate, dataset, onSelect
     case 'references':
     case 'reference_pages': return <ReferencePagesPage dataset={dataset} />
     case 'screener_mappings': return <ScreenerTickerMappingPage />
+    case 'config':
+    case 'system_config': return <SystemConfigPage dataset={dataset} />
     case 'sectors':
     default:           return <SectorsPage dataset={dataset} />
   }
 }
+
 

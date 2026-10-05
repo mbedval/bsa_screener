@@ -23,7 +23,7 @@ To ensure clean separation of data ingestion, baseline setup, and analysis compu
 
 #### Phase 1.1: Download Spot Price & Fundamentals
 ```bash
-python3 -m engine.cli --mode download-spot
+python3 -m engine.cli --mode download-technicals
 ```
 - Downloads daily OHLCV price history (open, high, low, close, volume) into `ohlcv_daily`.
 - Downloads raw fundamental metrics (PAT, cash flow, PE, Debt/Equity) into `fundamentals`.

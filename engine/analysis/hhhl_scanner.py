@@ -6,7 +6,38 @@ from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_hhhl_scanner")
 
-def scan_and_store_hhhl(ticker: str) -> bool:
+_hhhl_table_created = False
+
+def ensure_hhhl_table_exists():
+    global _hhhl_table_created
+    if _hhhl_table_created:
+        return
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS continuous_hhhl_scanner (
+                    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                    close DOUBLE PRECISION,
+                    current_hhhl INTEGER,
+                    avg_continuity_count DOUBLE PRECISION,
+                    broken_pattern_count INTEGER,
+                    broken_pattern_details TEXT,
+                    history_days_analyzed INTEGER,
+                    history_start_date DATE,
+                    cycle_start_date DATE,
+                    historical_cycles JSONB,
+                    updated_at TIMESTAMP DEFAULT now()
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_days_analyzed INTEGER;
+                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_start_date DATE;
+                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS cycle_start_date DATE;
+                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS historical_cycles JSONB;
+            """)
+    _hhhl_table_created = True
+
+def scan_and_store_hhhl(ticker: str, context=None) -> bool:
     """
     Scans the historical OHLCV data for a ticker to compute:
     - current_hhhl: The length of the current consecutive HHHL streak ending today.
@@ -17,46 +48,29 @@ def scan_and_store_hhhl(ticker: str) -> bool:
     Upserts into continuous_hhhl_scanner.
     """
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Ensure table exists
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS continuous_hhhl_scanner (
-                        ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-                        close DOUBLE PRECISION,
-                        current_hhhl INTEGER,
-                        avg_continuity_count DOUBLE PRECISION,
-                        broken_pattern_count INTEGER,
-                        broken_pattern_details TEXT,
-                        history_days_analyzed INTEGER,
-                        history_start_date DATE,
-                        cycle_start_date DATE,
-                        historical_cycles JSONB,
-                        updated_at TIMESTAMP DEFAULT now()
-                    );
-                """)
-                
-                cur.execute("""
-                    ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_days_analyzed INTEGER;
-                    ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_start_date DATE;
-                    ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS cycle_start_date DATE;
-                    ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS historical_cycles JSONB;
-                """)
-                
-                cur.execute("""
-                    SELECT trade_date, open, high, low, close
-                    FROM ohlcv_daily
-                    WHERE ticker = %s
-                    ORDER BY trade_date ASC
-                """, (ticker,))
-                rows = cur.fetchall()
+        ensure_hhhl_table_exists()
+        df = None
+        if context and context.df_ohlcv is not None and not context.df_ohlcv.empty:
+            df = context.df_ohlcv[['trade_date', 'open', 'high', 'low', 'close']].copy()
+            for col in ['open', 'high', 'low', 'close']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        else:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT trade_date, open, high, low, close
+                        FROM ohlcv_daily
+                        WHERE ticker = %s
+                        ORDER BY trade_date ASC
+                    """, (ticker,))
+                    rows = cur.fetchall()
 
-                if not rows or len(rows) < 5:
-                    return False
-                
-                df = pd.DataFrame(rows, columns=['trade_date', 'open', 'high', 'low', 'close'])
-                for col in ['open', 'high', 'low', 'close']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    if not rows or len(rows) < 5:
+                        return False
+                    
+                    df = pd.DataFrame(rows, columns=['trade_date', 'open', 'high', 'low', 'close'])
+                    for col in ['open', 'high', 'low', 'close']:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
                     
                 df['prev_high'] = df['high'].shift(1)
                 df['prev_low'] = df['low'].shift(1)
@@ -227,30 +241,31 @@ def scan_and_store_hhhl(ticker: str) -> bool:
 
                 latest_close = float(df['close'].iloc[-1])
                 
-                cur.execute("""
-                    INSERT INTO continuous_hhhl_scanner (
-                        ticker, close, current_hhhl, avg_continuity_count,
-                        broken_pattern_count, broken_pattern_details, 
-                        history_days_analyzed, history_start_date, cycle_start_date, historical_cycles, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        close = EXCLUDED.close,
-                        current_hhhl = EXCLUDED.current_hhhl,
-                        avg_continuity_count = EXCLUDED.avg_continuity_count,
-                        broken_pattern_count = EXCLUDED.broken_pattern_count,
-                        broken_pattern_details = EXCLUDED.broken_pattern_details,
-                        history_days_analyzed = EXCLUDED.history_days_analyzed,
-                        history_start_date = EXCLUDED.history_start_date,
-                        cycle_start_date = EXCLUDED.cycle_start_date,
-                        historical_cycles = EXCLUDED.historical_cycles,
-                        updated_at = NOW()
-                """, (
-                    ticker, latest_close, curr_hhhl, avg_continuity_count,
-                    current_cycle_length, details,
-                    history_days_analyzed, history_start_date, cycle_start_date, json.dumps(all_cycles)
-                ))
-                
-                conn.commit()
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO continuous_hhhl_scanner (
+                                ticker, close, current_hhhl, avg_continuity_count,
+                                broken_pattern_count, broken_pattern_details, 
+                                history_days_analyzed, history_start_date, cycle_start_date, historical_cycles, updated_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            ON CONFLICT (ticker) DO UPDATE SET
+                                close = EXCLUDED.close,
+                                current_hhhl = EXCLUDED.current_hhhl,
+                                avg_continuity_count = EXCLUDED.avg_continuity_count,
+                                broken_pattern_count = EXCLUDED.broken_pattern_count,
+                                broken_pattern_details = EXCLUDED.broken_pattern_details,
+                                history_days_analyzed = EXCLUDED.history_days_analyzed,
+                                history_start_date = EXCLUDED.history_start_date,
+                                cycle_start_date = EXCLUDED.cycle_start_date,
+                                historical_cycles = EXCLUDED.historical_cycles,
+                                updated_at = NOW()
+                        """, (
+                            ticker, latest_close, curr_hhhl, avg_continuity_count,
+                            current_cycle_length, details,
+                            history_days_analyzed, history_start_date, cycle_start_date, json.dumps(all_cycles)
+                        ))
+                        conn.commit()
                 return True
                 
     except Exception as e:

@@ -5,8 +5,8 @@ import FIIBehaviorModule from './FIIBehaviorModule';
 import TickerTypeahead from './TickerTypeahead';
 
 export default function MFBehaviorPage() {
-  const [ticker, setTicker] = useState('');
-  const [activeTicker, setActiveTicker] = useState('');
+  const [ticker, setTicker] = useState('RELIANCE');
+  const [activeTicker, setActiveTicker] = useState('RELIANCE');
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -17,13 +17,6 @@ export default function MFBehaviorPage() {
 
   return (
     <div className="dashboard" style={{ padding: '20px' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ color: '#f8fafc', fontSize: 24, margin: '0 0 10px 0' }}>Historical Institutional Behaviour</h2>
-        <p style={{ color: '#94a3b8', margin: 0 }}>
-          Search for a stock symbol to view institutional accumulation and distribution trends over time.
-        </p>
-      </div>
-
       <div style={{ background: 'rgba(30,41,59,0.7)', padding: 20, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: 10 }}>
           <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>

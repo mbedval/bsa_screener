@@ -1,3 +1,4 @@
+from psycopg.rows import dict_row
 """Master data CRUD router — /api/master/
 
 Endpoints:
@@ -1171,6 +1172,104 @@ def delete_watchlists_batch(body: BatchDeleteWatchlists) -> dict:
 
 
 
+@router.get("/watchlists/download-csv")
+def download_watchlists_csv():
+    from fastapi.responses import StreamingResponse
+    import csv, io
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT w.name, w.description, wi.ticker
+            FROM watchlist w
+            LEFT JOIN watchlist_items wi ON w.id = wi.watchlist_id
+            ORDER BY w.name ASC, wi.ticker ASC
+        """)
+        rows = cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Watchlist Name", "Description", "Ticker"])
+    for row in rows:
+        writer.writerow([row["name"], row["description"] or "", row["ticker"] or ""])
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=watchlists.csv"}
+    )
+
+
+@router.post("/watchlists/upload-csv")
+def upload_watchlists_csv(file: UploadFile = File(...)):
+    import csv, io
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported.")
+    try:
+        raw_content = file.file.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(400, f"Error reading file: {e}")
+
+    records = []
+    try:
+        reader = csv.DictReader(io.StringIO(raw_content))
+        for row in reader:
+            w_name = None
+            w_desc = None
+            t_ticker = None
+            for k, v in row.items():
+                if k:
+                    kl = k.strip().lower()
+                    if kl in ("watchlist name", "watchlist", "name"):
+                        w_name = str(v).strip() if v else None
+                    elif kl in ("description", "desc"):
+                        w_desc = str(v).strip() if v else None
+                    elif kl in ("ticker", "symbol"):
+                        t_ticker = str(v).strip().upper() if v else None
+            
+            if w_name:
+                records.append({
+                    "name": w_name,
+                    "description": w_desc or "",
+                    "ticker": t_ticker
+                })
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse CSV: {e}")
+
+    if not records:
+        raise HTTPException(400, "No valid watchlist entries found in the uploaded file.")
+
+    watchlists_data = {}
+    for rec in records:
+        name = rec["name"]
+        if name not in watchlists_data:
+            watchlists_data[name] = {"description": rec["description"], "tickers": set()}
+        if not watchlists_data[name]["description"] and rec["description"]:
+             watchlists_data[name]["description"] = rec["description"]
+        if rec["ticker"]:
+             watchlists_data[name]["tickers"].add(rec["ticker"])
+
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT ticker FROM ticker_master")
+        known_tickers = {r["ticker"] for r in cur.fetchall()}
+        
+        for w_name, w_data in watchlists_data.items():
+            cur.execute(
+                "INSERT INTO watchlist (name, description) VALUES (%s, %s) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING id",
+                (w_name, w_data["description"])
+            )
+            w_id = cur.fetchone()["id"]
+            
+            valid_tickers = [t for t in w_data["tickers"] if t in known_tickers]
+            if valid_tickers:
+                 cur.execute("DELETE FROM watchlist_items WHERE watchlist_id = %s", (w_id,))
+                 cur.executemany(
+                     "INSERT INTO watchlist_items (watchlist_id, ticker) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                     [(w_id, t) for t in valid_tickers]
+                 )
+        conn.commit()
+
+    return {"message": f"Successfully imported {len(watchlists_data)} watchlists from CSV."}
+
+
 @router.post("/watchlists/{watchlist_id}/tickers")
 def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
     """Replace ticker assignments for a watchlist. Silently skips tickers not in ticker_master."""
@@ -1478,7 +1577,7 @@ def delete_excluded_ticker(id: int) -> None:
 
 # ─── Newsletter Dispatch Router ──────────────────────────────────────────────
 from pathlib import Path
-from engine.reports.pdf_generator import generate_pdf_report
+from engine.reports.pdf_generator import generate_pdf_report, generate_newsletter_pdfs
 from engine.utils.email_sender import send_email_with_attachment
 
 @router.post("/users/{email}/newsletter-send")
@@ -1506,20 +1605,12 @@ def send_user_newsletter(email: str):
     if not tickers:
         raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
         
-    pdf_paths = []
-    pdf_dir = Path("output/pdf")
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate reports
-    for ticker in tickers:
-        pdf_path = pdf_dir / f"{ticker}_report.pdf"
-        if not pdf_path.exists():
-            generate_pdf_report(ticker)
-        if pdf_path.exists():
-            pdf_paths.append(str(pdf_path.resolve()))
+    # Generate batched newsletter PDFs
+    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
             
     if not pdf_paths:
-        raise HTTPException(500, "Failed to generate PDF reports for the watchlist.")
+        raise HTTPException(500, "Failed to generate newsletter PDF reports for the watchlist.")
         
     # Build inline HTML summary table
     from send_newsletters import build_newsletter_html_table
@@ -1545,11 +1636,47 @@ def send_user_newsletter(email: str):
     </html>
     """
     
-    sent = send_email_with_attachment(subject, body, pdf_paths, [email])
+    sent_result = send_email_with_attachment(subject, body, pdf_paths, [email], return_detail=True)
+    if isinstance(sent_result, tuple):
+        sent, err_detail = sent_result
+    else:
+        sent, err_detail = sent_result, "Failed to deliver newsletter email via SMTP server."
+
     if not sent:
-        raise HTTPException(500, "Failed to deliver newsletter email via SMTP server.")
-        
+        raise HTTPException(500, err_detail)
+
     return {"status": "success", "detail": f"Sent {len(pdf_paths)} reports to {email}"}
+
+
+@router.get("/users/{email}/newsletter-download")
+def download_user_newsletter(email: str):
+    """Generates PDF newsletter for a user's watchlist and returns it as a download."""
+    with rawdata_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT first_name, last_name, watchlist_id FROM users WHERE email = %s", (email.lower(),))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise _not_found("User", email)
+            
+        first_name, watchlist_id = user_row["first_name"], user_row["watchlist_id"]
+        
+        if not watchlist_id:
+            raise HTTPException(400, f"User '{email}' does not have an assigned watchlist.")
+            
+        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = %s", (watchlist_id,))
+        tickers = [row["ticker"] for row in cur.fetchall()]
+        
+    if not tickers:
+        raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
+        
+    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
+    
+    if not pdf_paths:
+        raise HTTPException(500, "Failed to generate newsletter PDF.")
+        
+    # If multiple parts, return the first one (or ideally we'd zip them, but standard is first one)
+    from fastapi.responses import FileResponse
+    return FileResponse(pdf_paths[0], media_type="application/pdf", filename=f"newsletter_{email}.pdf")
 
 
 # ── Reference Pages CRUD ──────────────────────────────────────────────────────
@@ -1750,3 +1877,60 @@ def list_master_recommendations() -> list[dict]:
         cur.execute("SELECT * FROM broker_recommendations ORDER BY id DESC LIMIT 500")
         return cur.fetchall()
 
+
+# ── System Config CRUD ──────────────────────────────────────────────────────────
+
+class SystemConfigUpdate(BaseModel):
+    value: str
+
+@router.get("/system-config")
+def list_system_config(dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("SELECT key, value, updated_at::text FROM system_config ORDER BY key ASC")
+        return cur.fetchall()
+
+@router.put("/system-config/{key}")
+def update_system_config(key: str, data: SystemConfigUpdate, dataset: Optional[str] = None):
+    from engine.utils.helpers import clear_system_config_cache
+    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO system_config (key, value, updated_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+            RETURNING key, value, updated_at::text
+        """, (key, data.value))
+        row = cur.fetchone()
+        conn.commit()
+        clear_system_config_cache()
+        return row
+
+
+
+# -- Derivative History --
+
+@router.get("/derivative_history")
+def get_derivative_history(dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+        try:
+            cur.execute("""
+                SELECT id, symbol, action, lot_size, action_date, created_at
+                FROM derivative_history
+                ORDER BY action_date DESC, id DESC
+            """)
+            return cur.fetchall()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/derivative_history/{ticker}")
+def get_derivative_history_by_ticker(ticker: str, dataset: Optional[str] = None):
+    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+        try:
+            cur.execute("""
+                SELECT id, symbol, action, lot_size, action_date, created_at
+                FROM derivative_history
+                WHERE symbol = %s
+                ORDER BY action_date DESC, id DESC
+            """, (ticker.upper(),))
+            return cur.fetchall()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))

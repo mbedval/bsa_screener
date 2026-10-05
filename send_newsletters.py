@@ -32,10 +32,11 @@ def build_newsletter_html_table(tickers: list[str]) -> str:
                 for r in cur.fetchall():
                     ticker, close, tech, fund, behav, hybrid, signal, confidence = r
                     
+                    signal = str(signal).upper() if signal else "HOLD"
                     sig_color = "#cbd5e1"
-                    if "BUY" in signal.upper():
+                    if "BUY" in signal:
                         sig_color = "#10b981"
-                    elif "SELL" in signal.upper():
+                    elif "SELL" in signal:
                         sig_color = "#ef4444"
                         
                     rows.append(f"""

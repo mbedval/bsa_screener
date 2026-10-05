@@ -1,4 +1,5 @@
 import logging
+import os
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_helpers")
@@ -6,6 +7,11 @@ logger = logging.getLogger("bsa_helpers")
 # Cache for mappings and configurations to reduce database calls
 _ticker_mappings = None
 _system_config = {}
+
+def clear_system_config_cache():
+    """Clear the system config in-memory cache."""
+    global _system_config
+    _system_config = {}
 
 def load_ticker_mappings_from_db():
     """Load ticker mappings from the database `ticker_mappings` table."""
@@ -25,11 +31,33 @@ def load_ticker_mappings_from_db():
         logger.warning(f"Failed to load ticker mappings from DB: {e}")
     return _ticker_mappings
 
+# Cache for exchanges
+_ticker_exchanges = None
+
+def load_ticker_exchanges_from_db():
+    global _ticker_exchanges
+    if _ticker_exchanges is not None:
+        return _ticker_exchanges
+
+    _ticker_exchanges = {}
+    try:
+        from engine.database.connection import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ticker, exchange FROM ticker_master WHERE exchange IS NOT NULL")
+                rows = cur.fetchall()
+                for tk, exc in rows:
+                    if exc:
+                        _ticker_exchanges[tk.upper()] = exc.upper()
+    except Exception as e:
+        logger.warning(f"Failed to load ticker exchanges from DB: {e}")
+    return _ticker_exchanges
+
 def format_ticker(ticker: str) -> str:
     """
     Standardizes stock ticker formats and applies overrides from ticker_mappings table in DB:
     - If ends with .BSE or .BO (case-insensitive), formats as .BO (BSE).
-    - Otherwise, formats as .NS (NSE).
+    - Otherwise, formats based on the exchange recorded in ticker_master (defaults to .NS).
     """
     mappings = load_ticker_mappings_from_db()
     ticker_upper = ticker.upper()
@@ -71,9 +99,31 @@ def format_ticker(ticker: str) -> str:
     # Re-apply or standardize suffix
     if suffix == ".BO" or suffix == ".BSE":
         ticker_formatted = f"{base_ticker}.BO"
-    else:
-        # Default to .NS
+    elif suffix == ".NS":
         ticker_formatted = f"{base_ticker}.NS"
+    else:
+        # Check database for exchange
+        exchanges = load_ticker_exchanges_from_db()
+        exc = exchanges.get(base_ticker)
+        
+        # If not in cache, try fetching on-the-fly (in case it was just added)
+        if exc is None:
+            try:
+                from engine.database.connection import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT exchange FROM ticker_master WHERE ticker = %s", (base_ticker,))
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            exc = row[0].upper()
+                            _ticker_exchanges[base_ticker] = exc
+            except Exception:
+                pass
+                
+        if exc in ("BSE", "BO"):
+            ticker_formatted = f"{base_ticker}.BO"
+        else:
+            ticker_formatted = f"{base_ticker}.NS"
         
     return ticker_formatted
 
@@ -82,9 +132,9 @@ def clean_ticker(ticker: str) -> str:
     return ticker.upper().split(".")[0]
 
 def get_system_config(key: str, default: str = "") -> str:
-    """Get system configuration value from database `system_config` table."""
+    """Get system configuration value from database `system_config` table with fallback to environment variables."""
     global _system_config
-    if key in _system_config:
+    if key in _system_config and _system_config[key]:
         return _system_config[key]
 
     try:
@@ -92,11 +142,18 @@ def get_system_config(key: str, default: str = "") -> str:
             with conn.cursor() as cur:
                 cur.execute("SELECT value FROM system_config WHERE key = %s", (key,))
                 row = cur.fetchone()
-                if row:
-                    _system_config[key] = row[0]
-                    return row[0]
+                if row and row[0] and str(row[0]).strip():
+                    val = str(row[0]).strip()
+                    _system_config[key] = val
+                    return val
     except Exception as e:
         logger.warning(f"Failed to query system_config for '{key}': {e}")
+
+    # Fallback to environment variables (e.g., GMAIL_USER, GMAIL_APP_PASSWORD, SMTP_USER, etc.)
+    env_val = os.getenv(key.upper()) or os.getenv(key)
+    if env_val:
+        return env_val
+
     return default
 
 def get_spot_tickers() -> list:
@@ -177,6 +234,27 @@ def get_tickers_for_watchlist(watchlist_inputs: list) -> tuple:
 
     matched_watchlists = []
     tickers = set()
+
+    if any(t.lower() == 'all' for t in raw_tokens):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, name, description FROM watchlist")
+                rows = cur.fetchall()
+                for row in rows:
+                    wl_id, wl_name, wl_desc = row[0], row[1], row[2]
+                    cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items WHERE watchlist_id = %s", (wl_id,))
+                    cnt = cur.fetchone()[0]
+                    matched_watchlists.append({
+                        'id': wl_id,
+                        'name': wl_name,
+                        'description': wl_desc,
+                        'ticker_count': cnt
+                    })
+                cur.execute("SELECT DISTINCT ticker FROM watchlist_items")
+                for t_row in cur.fetchall():
+                    if t_row[0]:
+                        tickers.add(t_row[0].upper().strip())
+        return sorted(list(tickers)), matched_watchlists
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
