@@ -170,8 +170,6 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     if table_name.startswith("master:"):
         table_name = table_name.split("master:", 1)[1]
 
-    limit = max(limit, 5000)
-
     if table_name in ANALYSIS_REPORT_TABLE_NAMES and not is_analysis_executed(dsn):
         cols = get_columns_for_virtual_table(table_name)
         return {
@@ -5067,17 +5065,45 @@ def get_elliot_recommendations(dataset: str = "intelligence"):
                     e.intraday_probability,
                     o.close, 
                     o.trade_date,
-                    a.overall_signal, a.technical_score
+                    a.overall_signal, a.technical_score,
+                    ind.atr14
                 FROM elliot_analysis e
                 JOIN ticker_master t ON e.ticker = t.ticker
                 LEFT JOIN ohlcv_daily o ON e.ticker = o.ticker 
                    AND o.trade_date = (SELECT max(trade_date) FROM ohlcv_daily WHERE ticker = e.ticker)
+                LEFT JOIN indicators_daily ind ON e.ticker = ind.ticker
+                   AND ind.trade_date = (SELECT max(trade_date) FROM indicators_daily WHERE ticker = e.ticker)
                 LEFT JOIN analysis_summaries a ON e.ticker = a.ticker
                 WHERE e.current_wave IN ('W3', 'W5')
                 ORDER BY e.weekly_probability DESC, e.intraday_probability DESC
-                LIMIT 30
             """)
             rows = cur.fetchall()
+            for r in rows:
+                close = float(r['close']) if r.get('close') is not None else 0.0
+                wave = r.get('current_wave', 'W3')
+                w_prob = float(r.get('weekly_probability') or 50.0)
+                i_prob = float(r.get('intraday_probability') or 50.0)
+                atr = float(r.get('atr14') or (close * 0.02 if close else 0.0))
+                signal = str(r.get('overall_signal') or 'HOLD').upper()
+                
+                if close > 0:
+                    if wave == 'W3':
+                        delta = max(atr * 3.0, close * 0.12) * (w_prob / 100.0)
+                    else:
+                        delta = max(atr * 2.0, close * 0.08) * (i_prob / 100.0)
+                    
+                    if 'SELL' in signal:
+                        proj = close - delta
+                    else:
+                        proj = close + delta
+                        
+                    upside = ((proj - close) / close) * 100.0
+                else:
+                    proj = 0.0
+                    upside = 0.0
+                
+                r['predicted_price'] = round(proj, 2)
+                r['upside_pct'] = round(upside, 2)
             return {"data": rows}
 
 @app.get("/{path:path}", include_in_schema=False)

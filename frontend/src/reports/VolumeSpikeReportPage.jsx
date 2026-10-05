@@ -48,22 +48,19 @@ export default function VolumeSpikeReportPage({ apiBase, initialTicker }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center' }}>
-        <div className="brand">
-          <h2 style={{ margin: 0 }}>Volume Spike Report</h2>
-          <p className="eyebrow" style={{ margin: 0, marginTop: 4 }}>Volume &gt; 1.3x 20-Day Average</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input 
-            type="text" 
-            value={searchInput} 
-            onChange={e => setSearchInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="Search ticker..."
-            style={{ padding: '6px 12px', borderRadius: 4, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
-          />
-          <button onClick={handleSearch} className="btn primary"><Search size={14}/> Search</button>
-        </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, background: 'rgba(0,0,0,0.2)', padding: '10px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>Ticker:</span>
+        <input 
+          type="text" 
+          value={searchInput} 
+          onChange={e => setSearchInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          placeholder="Enter ticker..."
+          style={{ padding: '6px 12px', borderRadius: 4, background: '#1e293b', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 13, width: 180 }}
+        />
+        <button onClick={handleSearch} className="btn primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Search size={14}/> Search
+        </button>
       </div>
       
       {loading ? <div className="state">Loading {ticker}...</div> : error ? <div className="state error">{error}</div> : !data ? null : (

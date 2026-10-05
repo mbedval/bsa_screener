@@ -161,7 +161,10 @@ export default function DerivativeHistoryPage({ setActive, onSelectTicker }) {
               filteredData.map(row => (
                 <tr key={row.symbol}>
                   <td>
-                    <button className="ticker-btn" onClick={() => onSelectTicker(row.symbol)}>
+                    <button 
+                      onClick={() => onSelectTicker(row.symbol)}
+                      style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                    >
                       {row.symbol}
                     </button>
                   </td>

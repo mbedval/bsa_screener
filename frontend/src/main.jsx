@@ -4,7 +4,7 @@ import {
   Activity, ArrowRight, Ban, BarChart3, BookMarked, Calendar, CheckCircle, ChevronDown, ChevronRight,
   Database, Edit2, ExternalLink, FileText, Filter, GitCompare, Globe, Home, Key, LayoutDashboard, Layers, PieChart, Plus,
   RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, Sliders, TableProperties, Tag,
-  Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap, BarChart2
+  Download, Trash2, TrendingUp, User, Users, X, Star, Target, Zap, BarChart2, Clock
 } from 'lucide-react'
 import MasterSubmodule, { SectorsPage, TickersPage, WatchlistsPage, UsersPage, AlternativeNamesPage, ExcludedTickersPage, RecommendationsPage, OpportunitiesRiskPage, ReferencePagesPage, ScreenerTickerMappingPage } from './master/index.jsx'
 import { StockChartVisualizer, StockVisualizerModal, SectorHeatmapVisualizer, ChartsVisualizationsPage, ChartErrorBoundary, ResearchBoardPage, PatternViewerPage, IndicesPatternViewerPage, TickerResearchProfilePage, SearchDetailPage, SectorWiseReportPage, MarketCapWiseReportPage, StocksRespectingPatternsPage, SectorwiseFollowersPage, RetracementPatternPage, WatchlistMonitorPage, MFBehaviorPage, MFAccumulationReport, MFExitReport, SuperStocksReport, CupAndHandleReport } from './visualizer/index.jsx'
@@ -548,8 +548,24 @@ function App() {
     if (path === '' || path === '/') return
     const isMaster = active.startsWith('master:') || active === 'fno_stock_master' || active === 'fno_index_master' || active === 'fno_master' || active === 'ticker_master'
     const isSector = active.startsWith('sector:')
-    const isReport = ['research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks', 'research:stocks_respecting_patterns', 'research:sectorwise_followers', 'research:watchlist_monitor', 'research:elliot_recommendations', 'research:hhhl_full_report', 'research:candlestick_full_report', 'research:volume_spike_report'].includes(active)
-    if (isMaster) {
+    const isFullHistory = ['research:volume_spike_report', 'research:hhhl_full_report', 'research:candlestick_full_report'].includes(active)
+    const isReport = [
+      'research:market_cap_wise', 'research:sector_wise', 'research:penny_stocks',
+      'research:stocks_respecting_patterns', 'research:sectorwise_followers',
+      'research:watchlist_monitor', 'research:elliot_recommendations',
+      'research:retracement_patterns', 'research:mf_behavior', 'research:mf_accumulation',
+      'research:mf_exit', 'research:super_stocks', 'research:cup_and_handle'
+    ].includes(active)
+    const isResearchTools = ['charts_visualizations', 'research:patterns', 'research:compare'].includes(active)
+    if (active === 'research:search_detail') {
+      setExpandedSection(null)
+    } else if (active === 'research:indices_patterns') {
+      setExpandedSection('Derivative')
+    } else if (isResearchTools) {
+      setExpandedSection('Research Tools')
+    } else if (isFullHistory) {
+      setExpandedSection('Full History')
+    } else if (isMaster) {
       setExpandedSection('Master Data')
     } else if (isSector) {
       setExpandedSection('By Sector')
@@ -558,7 +574,7 @@ function App() {
     } else if (current?.group) {
       setExpandedSection(current.group)
     } else {
-      setExpandedSection('Research Tools')
+      setExpandedSection(null)
     }
   }, [active, path, current])
 
@@ -609,28 +625,16 @@ function App() {
           <button className={`nav-item ${active === 'research:search_detail' ? 'selected' : ''}`} onClick={() => triggerSearchDetail()}>
             <Search size={14} /> Quick Ticker Report
           </button>
-          <section className={`nav-section ${expandedSection === 'Research Tools' ? 'expanded' : 'collapsed'}`}>
-            <div className="nav-label" onClick={() => toggleSection('Research Tools')} role="button" tabIndex={0}>
-              <BarChart3 />
-              <span style={{ flex: 1 }}>Research Tools</span>
-              {expandedSection === 'Research Tools' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+          <section className={`nav-section ${expandedSection === 'Reports' ? 'expanded' : 'collapsed'}`}>
+            <div className="nav-label" onClick={() => toggleSection('Reports')} role="button" tabIndex={0}>
+              <FileText size={14} />
+              <span style={{ flex: 1 }}>Reports</span>
+              {expandedSection === 'Reports' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
             </div>
-            {expandedSection === 'Research Tools' && (
+            {expandedSection === 'Reports' && (
               <div className="nav-section-items">
-                <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
-                  <TrendingUp size={14} /> Charts & Visualizer
-                </button>
-                <button className={`nav-item ${active === 'research:patterns' ? 'selected' : ''}`} onClick={() => setActive('research:patterns')}>
-                  <TrendingUp size={14} /> Pattern Viewer
-                </button>
-                <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
-                  <Layers size={14} /> Indices Pattern Viewer
-                </button>
                 <button className={`nav-item ${active === 'research:retracement_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:retracement_patterns')}>
                   <Activity size={14} /> Retracement & Speculator Behavior
-                </button>
-                <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
-                  <Activity size={14} /> Period Comparison
                 </button>
                 <button className={`nav-item ${active === 'research:mf_behavior' ? 'selected' : ''}`} onClick={() => setActive('research:mf_behavior')}>
                   <Activity size={14} /> Institutional Behaviour
@@ -647,18 +651,6 @@ function App() {
                 <button className={`nav-item ${active === 'research:cup_and_handle' ? 'selected' : ''}`} onClick={() => setActive('research:cup_and_handle')}>
                   <Activity size={14} style={{ color: '#38bdf8' }} /> Cup & Handle
                 </button>
-              </div>
-            )}
-          </section>
-
-          <section className={`nav-section ${expandedSection === 'Reports' ? 'expanded' : 'collapsed'}`}>
-            <div className="nav-label" onClick={() => toggleSection('Reports')} role="button" tabIndex={0}>
-              <FileText size={14} />
-              <span style={{ flex: 1 }}>Reports</span>
-              {expandedSection === 'Reports' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
-            </div>
-            {expandedSection === 'Reports' && (
-              <div className="nav-section-items">
                 <button className={`nav-item ${active === 'research:market_cap_wise' ? 'selected' : ''}`} onClick={() => setActive('research:market_cap_wise')}>
                   <TrendingUp size={14} /> Top 10- by Market Cap
                 </button>
@@ -670,15 +662,6 @@ function App() {
                 </button>
                 <button className={`nav-item ${active === 'research:elliot_recommendations' ? 'selected' : ''}`} onClick={() => setActive('research:elliot_recommendations')}>
                   <Zap size={14} /> Elliot Recommendations
-                </button>
-                <button className={`nav-item ${active === 'research:hhhl_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:hhhl_full_report')}>
-                  <Activity size={14} /> HHHL Full Report
-                </button>
-                <button className={`nav-item ${active === 'research:volume_spike_report' ? 'selected' : ''}`} onClick={() => setActive('research:volume_spike_report')}>
-                  <BarChart2 size={14} /> Volume Spike Report
-                </button>
-                <button className={`nav-item ${active === 'research:candlestick_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:candlestick_full_report')}>
-                  <Activity size={14} /> Candlestick Full Report
                 </button>
                 <button className={`nav-item ${active === 'research:stocks_respecting_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:stocks_respecting_patterns')}>
                   <Target size={14} /> Pattern Respecting Stocks
@@ -693,11 +676,30 @@ function App() {
             )}
           </section>
 
-          {/* Navigation sections ordered: MASTER DATA -> RAW DATA -> CALLS -> DERIVATIVE -> Other catalog sections */}
+          <section className={`nav-section ${expandedSection === 'Full History' ? 'expanded' : 'collapsed'}`}>
+            <div className="nav-label" onClick={() => toggleSection('Full History')} role="button" tabIndex={0}>
+              <Clock size={14} />
+              <span style={{ flex: 1 }}>Full history</span>
+              {expandedSection === 'Full History' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+            </div>
+            {expandedSection === 'Full History' && (
+              <div className="nav-section-items">
+                <button className={`nav-item ${active === 'research:volume_spike_report' ? 'selected' : ''}`} onClick={() => setActive('research:volume_spike_report')}>
+                  <BarChart2 size={14} /> Volume spike history
+                </button>
+                <button className={`nav-item ${active === 'research:hhhl_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:hhhl_full_report')}>
+                  <Activity size={14} /> HHHL full history
+                </button>
+                <button className={`nav-item ${active === 'research:candlestick_full_report' ? 'selected' : ''}`} onClick={() => setActive('research:candlestick_full_report')}>
+                  <BarChart3 size={14} /> Candle stick full history
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Navigation sections ordered: MASTER DATA -> DERIVATIVE -> Other catalog sections -> RESEARCH TOOLS -> RAW DATA -> CALLS */}
           {(() => {
             const orderedGroups = ['Master Data']
-            if (grouped['Raw data']) orderedGroups.push('Raw data')
-            if (grouped['Calls']) orderedGroups.push('Calls')
             if (grouped['Derivative']) orderedGroups.push('Derivative')
             Object.keys(grouped).forEach(g => {
               if (g !== 'Master Data' && g !== 'Research Board' && g !== 'Raw data' && g !== 'Calls' && g !== 'Derivative') {
@@ -705,61 +707,121 @@ function App() {
               }
             })
 
-            return orderedGroups.map(group => {
-              const isExpanded = expandedSection === group
-              if (group === 'Master Data') {
-                return (
-                  <section key="Master Data" className={`nav-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
-                    <div className="nav-label" onClick={() => toggleSection('Master Data')} role="button" tabIndex={0}>
-                      <Settings2 />
-                      <span style={{ flex: 1 }}>Master Data</span>
-                      {isExpanded ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
-                    </div>
-                    {isExpanded && (
-                      <div className="nav-section-items">
-                        <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
-                        <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker Master</button>
-                        <button className={`nav-item ${active === 'master:opportunities' ? 'selected' : ''}`} onClick={() => setActive('master:opportunities')}><Shield /> About Company</button>
-                        <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> Stock Derivatives</button>
-                        <button className={`nav-item ${active === 'master:indices' ? 'selected' : ''}`} onClick={() => setActive('master:indices')}><Layers /> Indices Master</button>
-                        <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> Indices Derivatives</button>
-                        <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>
-                        <button className={`nav-item ${active === 'master:recommendations' ? 'selected' : ''}`} onClick={() => setActive('master:recommendations')}><Star /> Recommendations</button>
-                        <button className={`nav-item ${active === 'master:users' ? 'selected' : ''}`} onClick={() => setActive('master:users')}><Users /> Users</button>
-                        <button className={`nav-item ${active === 'master:aliases' ? 'selected' : ''}`} onClick={() => setActive('master:aliases')}><GitCompare /> Alternative Names</button>
-                        <button className={`nav-item ${active === 'master:excluded' ? 'selected' : ''}`} onClick={() => setActive('master:excluded')}><Ban /> Excluded Tickers</button>
-                        <button className={`nav-item ${active === 'master:references' ? 'selected' : ''}`} onClick={() => setActive('master:references')}><Globe /> Reference Pages</button>
-                        <button className={`nav-item ${active === 'master:screener_mappings' ? 'selected' : ''}`} onClick={() => setActive('master:screener_mappings')}><ArrowRight /> Screener Mappings</button>
-                        <button className={`nav-item ${active === 'master:system_config' ? 'selected' : ''}`} onClick={() => setActive('master:system_config')}><Key /> System Config</button>
+            return (
+              <>
+                {orderedGroups.map(group => {
+                  const isExpanded = expandedSection === group
+                  if (group === 'Master Data') {
+                    return (
+                      <section key="Master Data" className={`nav-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                        <div className="nav-label" onClick={() => toggleSection('Master Data')} role="button" tabIndex={0}>
+                          <Settings2 />
+                          <span style={{ flex: 1 }}>Master data</span>
+                          {isExpanded ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+                        </div>
+                        {isExpanded && (
+                          <div className="nav-section-items">
+                            <button className={`nav-item ${active === 'master:sectors' ? 'selected' : ''}`} onClick={() => setActive('master:sectors')}><Tag /> Sectors</button>
+                            <button className={`nav-item ${active === 'master:tickers' ? 'selected' : ''}`} onClick={() => setActive('master:tickers')}><Globe /> Ticker master</button>
+                            <button className={`nav-item ${active === 'master:opportunities' ? 'selected' : ''}`} onClick={() => setActive('master:opportunities')}><Shield /> About company</button>
+                            <button className={`nav-item ${active === 'fno_stock_master' ? 'selected' : ''}`} onClick={() => setActive('fno_stock_master')}><Layers /> Stock derivatives</button>
+                            <button className={`nav-item ${active === 'master:indices' ? 'selected' : ''}`} onClick={() => setActive('master:indices')}><Layers /> Indices master</button>
+                            <button className={`nav-item ${active === 'fno_index_master' ? 'selected' : ''}`} onClick={() => setActive('fno_index_master')}><Layers /> Indices derivatives</button>
+                            <button className={`nav-item ${active === 'master:watchlists' ? 'selected' : ''}`} onClick={() => setActive('master:watchlists')}><BookMarked /> Watchlists</button>
+                            <button className={`nav-item ${active === 'master:recommendations' ? 'selected' : ''}`} onClick={() => setActive('master:recommendations')}><Star /> Recommendations</button>
+                            <button className={`nav-item ${active === 'master:users' ? 'selected' : ''}`} onClick={() => setActive('master:users')}><Users /> Users</button>
+                            <button className={`nav-item ${active === 'master:aliases' ? 'selected' : ''}`} onClick={() => setActive('master:aliases')}><GitCompare /> Alternative names</button>
+                            <button className={`nav-item ${active === 'master:excluded' ? 'selected' : ''}`} onClick={() => setActive('master:excluded')}><Ban /> Excluded tickers</button>
+                            <button className={`nav-item ${active === 'master:references' ? 'selected' : ''}`} onClick={() => setActive('master:references')}><Globe /> Reference pages</button>
+                            <button className={`nav-item ${active === 'master:screener_mappings' ? 'selected' : ''}`} onClick={() => setActive('master:screener_mappings')}><ArrowRight /> Screener mappings</button>
+                            <button className={`nav-item ${active === 'master:system_config' ? 'selected' : ''}`} onClick={() => setActive('master:system_config')}><Key /> System config</button>
+                          </div>
+                        )}
+                      </section>
+                    )
+                  }
+
+                  const items = grouped[group]
+                  if (!items || items.length === 0) return null
+                  const Icon = groupIcon[group] || TableProperties
+                  return (
+                    <section key={group} className={`nav-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                      <div className="nav-label" onClick={() => toggleSection(group)} role="button" tabIndex={0}>
+                        <Icon />
+                        <span style={{ flex: 1 }}>{group}</span>
+                        {isExpanded ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
                       </div>
-                    )}
-                  </section>
-                )
-              }
+                      {isExpanded && (
+                        <div className="nav-section-items">
+                          {items.filter(item => item.name !== 'operatorfootprint').map(item => {
+                            const ItemIcon = groupIcon[item.group] || TableProperties
+                            return (
+                              <button key={item.name} className={`nav-item ${active === item.name ? 'selected' : ''}`} onClick={() => { setQuery(''); setActive(item.name); }}>
+                                <ItemIcon size={14} /> {item.label}
+                              </button>
+                            )
+                          })}
+                          {group === 'Derivative' && (
+                            <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
+                              <Layers size={14} /> Indices pattern viewer
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
 
-              const items = grouped[group]
-              if (!items || items.length === 0) return null
-              const Icon = groupIcon[group] || TableProperties
-              return (
-                <section key={group} className={`nav-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
-                  <div className="nav-label" onClick={() => toggleSection(group)} role="button" tabIndex={0}>
-                    <Icon />
-                    <span style={{ flex: 1 }}>{group}</span>
-                    {isExpanded ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+                <section className={`nav-section ${expandedSection === 'Research Tools' ? 'expanded' : 'collapsed'}`}>
+                  <div className="nav-label" onClick={() => toggleSection('Research Tools')} role="button" tabIndex={0}>
+                    <BarChart3 />
+                    <span style={{ flex: 1 }}>Research tools</span>
+                    {expandedSection === 'Research Tools' ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
                   </div>
-                  {isExpanded && (
+                  {expandedSection === 'Research Tools' && (
                     <div className="nav-section-items">
-                      {items.filter(item => item.name !== 'operatorfootprint').map(item => (
-                        <button key={item.name} className={`nav-item ${active === item.name ? 'selected' : ''}`} onClick={() => { setQuery(''); setActive(item.name); }}>
-                          {item.label}
-                        </button>
-                      ))}
-
+                      <button className={`nav-item ${active === 'charts_visualizations' ? 'selected' : ''}`} onClick={() => setActive('charts_visualizations')}>
+                        <TrendingUp size={14} /> Charts & visualizer
+                      </button>
+                      <button className={`nav-item ${active === 'research:patterns' ? 'selected' : ''}`} onClick={() => setActive('research:patterns')}>
+                        <TrendingUp size={14} /> Pattern viewer
+                      </button>
+                      <button className={`nav-item ${active === 'research:compare' ? 'selected' : ''}`} onClick={() => setActive('research:compare')}>
+                        <Activity size={14} /> Period comparison
+                      </button>
                     </div>
                   )}
                 </section>
-              )
-            })
+
+                {['Raw data', 'Calls'].map(group => {
+                  const items = grouped[group]
+                  if (!items || items.length === 0) return null
+                  const isExpanded = expandedSection === group
+                  const Icon = groupIcon[group] || TableProperties
+                  return (
+                    <section key={group} className={`nav-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                      <div className="nav-label" onClick={() => toggleSection(group)} role="button" tabIndex={0}>
+                        <Icon />
+                        <span style={{ flex: 1 }}>{group}</span>
+                        {isExpanded ? <ChevronDown size={14} className="chevron" /> : <ChevronRight size={14} className="chevron" />}
+                      </div>
+                      {isExpanded && (
+                        <div className="nav-section-items">
+                          {items.filter(item => item.name !== 'operatorfootprint').map(item => {
+                            const ItemIcon = groupIcon[group] || TableProperties
+                            return (
+                              <button key={item.name} className={`nav-item ${active === item.name ? 'selected' : ''}`} onClick={() => { setQuery(''); setActive(item.name); }}>
+                                <ItemIcon size={14} /> {item.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
+              </>
+            )
           })()}
         </nav>
         <div className="connection" title={dbInfo?.host ? `Connected to ${dbInfo.host}` : ''}>
@@ -819,25 +881,63 @@ function App() {
           })}
         </div>
 
-        {!MASTER_PAGES.includes(active) && !active.startsWith('research:') && active !== 'charts_visualizations' && (
+        {active !== 'charts_visualizations' && (() => {
+          const SIDEBAR_NAMES = {
+            'research:search_detail': 'Quick ticker report',
+            'research:ticker_profile': 'Deep ticker profile',
+            'research:patterns': 'Pattern viewer',
+            'research:indices_patterns': 'Indices pattern viewer',
+            'research:compare': 'Period comparison',
+            'research:sector_wise': 'Top 10- by sector',
+            'research:market_cap_wise': 'Top 10- by market cap',
+            'research:penny_stocks': 'Little stars',
+            'research:elliot_recommendations': 'Elliot recommendations',
+            'research:hhhl_full_report': 'HHHL full history',
+            'research:volume_spike_report': 'Volume spike history',
+            'research:candlestick_full_report': 'Candle stick full history',
+            'research:stocks_respecting_patterns': 'Pattern respecting stocks',
+            'research:sectorwise_followers': 'Sectorwise followers',
+            'research:watchlist_monitor': 'Watchlist monitor',
+            'research:retracement_patterns': 'Retracement pattern & speculator behavior',
+            'research:mf_behavior': 'Institutional behavior',
+            'research:mf_accumulation': 'Accumulation by MF',
+            'research:mf_exit': 'Exit by MF',
+            'research:super_stocks': 'Super stocks',
+            'research:cup_and_handle': 'Cup & handle',
+            'master:sectors': 'Sectors',
+            'master:tickers': 'Ticker master',
+            'master:opportunities': 'About company',
+            'fno_stock_master': 'Stock derivatives',
+            'master:indices': 'Indices master',
+            'fno_index_master': 'Indices derivatives',
+            'master:watchlists': 'Watchlists',
+            'master:recommendations': 'Recommendations',
+            'master:users': 'Users',
+            'master:aliases': 'Alternative names',
+            'master:excluded': 'Excluded tickers',
+            'master:references': 'Reference pages',
+            'master:screener_mappings': 'Screener mappings',
+            'master:system_config': 'System config'
+          };
+          const pageTitle = active === 'dashboard' ? `${appInfo.title} overview`
+            : active === 'midcap_dashboard' ? 'Top 15 Mid-Cap Stocks'
+            : active === 'smallcap_dashboard' ? 'Top 15 Small-Cap Stocks'
+            : active === 'largecap_dashboard' ? 'Top 15 Large-Cap Stocks'
+            : active.startsWith('sector:') ? `Sector: ${activeSector}`
+            : SIDEBAR_NAMES[active] || current?.label || active;
 
+          return (
           <header>
             <div>
               <p className="eyebrow">{appInfo.eyebrow}</p>
-              <h1>
-                {active === 'dashboard' ? `${appInfo.title} overview`
-                  : active === 'midcap_dashboard' ? 'Top 15 Mid-Cap Stocks'
-                  : active === 'smallcap_dashboard' ? 'Top 15 Small-Cap Stocks'
-                  : active === 'largecap_dashboard' ? 'Top 15 Large-Cap Stocks'
-                  : active.startsWith('sector:') ? `Sector: ${activeSector}`
-                  : current?.label || active}
-              </h1>
+              <h1>{pageTitle}</h1>
               <p className="subhead">
                 {active === 'dashboard' ? appInfo.description
                   : active === 'midcap_dashboard' ? 'Algorithmically filtered mid-cap momentum plays — growth-oriented setups from the Nifty Midcap universe.'
                   : active === 'smallcap_dashboard' ? 'High-growth small-cap opportunities screened from the Nifty Smallcap 100 — aggressive setups with asymmetric risk-reward.'
                   : active === 'largecap_dashboard' ? 'Institutional-grade large-cap setups screened from the Nifty 50 / Nifty 100 — stable, high-conviction swing trade opportunities.'
                   : active.startsWith('sector:') ? `Intelligence data filtered to ${activeSector} tickers`
+                  : SIDEBAR_NAMES[active] ? ''
                   : `${data?.total ?? '—'} records · Latest rows first`}
               </p>
             </div>
@@ -848,8 +948,8 @@ function App() {
               </button>
             </div>
           </header>
-
-        )}
+          )
+        })()}
 
 
         {active === 'dashboard' ? (
@@ -912,9 +1012,9 @@ function App() {
             <CandlestickFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
           </ChartErrorBoundary>
         ) : active === 'research:stocks_respecting_patterns' ? (
-          <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} />
+          <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:sectorwise_followers' ? (
-          <SectorwiseFollowersPage apiBase={apiBase} dataset={dataset} />
+          <SectorwiseFollowersPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:retracement_patterns' ? (
           <ChartErrorBoundary>
             <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
