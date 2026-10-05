@@ -7,16 +7,41 @@ Enforces Rule 1.1 (Phase 0 Master Setup Baseline):
 """
 
 import os
+import sys
+import argparse
 import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
+load_dotenv("backend/.env.local", override=False)
 
-host = os.getenv("POSTGRES_HOST", "192.168.1.18")
-port = os.getenv("POSTGRES_PORT", "5432")
-user = os.getenv("POSTGRES_USER", "jmbxdbuser")
-password = os.getenv("POSTGRES_PASSWORD", "jmbxdbpassword")
-database = os.getenv("POSTGRES_DB", "bsa_db")
+parser = argparse.ArgumentParser(description="BSA Database Master Setup Dump Script.")
+parser.add_argument("--target", "--remote", "-t", "-r", "--host", dest="target",
+                    default=os.getenv("POSTGRES_HOST", "192.168.1.18"),
+                    help="Target machine IP address or host (default: 192.168.1.18 or POSTGRES_HOST)")
+parser.add_argument("--source", "-s", dest="source",
+                    default=os.getenv("POSTGRES_HOST", "localhost"),
+                    help="Source host IP or hostname (default: POSTGRES_HOST or localhost)")
+parser.add_argument("--port", "-p",
+                    default=os.getenv("POSTGRES_PORT", "5432"),
+                    help="Target PostgreSQL port (default: 5432)")
+parser.add_argument("--user", "-u",
+                    default=os.getenv("POSTGRES_USER", "jmbxdbuser"),
+                    help="Database username (default: jmbxdbuser)")
+parser.add_argument("--password", "-pwd",
+                    default=os.getenv("POSTGRES_PASSWORD", "jmbxdbpassword"),
+                    help="Database password (default: jmbxdbpassword)")
+parser.add_argument("--dbname", "-d",
+                    default=os.getenv("POSTGRES_DB", "bsa_db"),
+                    help="Database name (default: bsa_db)")
+
+args = parser.parse_args()
+
+host = args.target
+port = args.port
+user = args.user
+password = args.password
+database = args.dbname
 
 dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
 output_file = "bsa_db_backup.sql"
@@ -100,5 +125,3 @@ with open(output_file, "w", encoding="utf-8") as f:
 
 conn.close()
 print(f"\n[✓] Golden Master Dump complete! Removed old non-master data and saved sample setup baseline to {output_file}")
-
-
