@@ -27,7 +27,7 @@ def main():
         "download-all", "download-technicals", "download-fundamental", "download-mf", "download-fno",
         "analyze-all", "analyze-technical", "analyze-fundamental", "analyze-fo",
         "analyze-patterns", "analyze-mf", "analyze-elliot", "analyze-sector", "analyze-summaries",
-        "full-pipeline", "spot-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund", "addticker", "deleteticker"
+        "full-pipeline", "spot-pipeline", "fno-pipeline", "mf-pipeline", "news-analyze", "backup", "mutualfund", "addticker", "deleteticker"
     ], help="Pipeline batch operation mode")
     parser.add_argument("--watchlist", "-w", nargs="*", metavar="WATCHLIST", help="Filter pipeline operations to tickers in specified watchlist(s) by name or ID")
     parser.add_argument("--ticker", type=str, help="Execute download and analysis on-demand for a single ticker")
@@ -49,7 +49,7 @@ def main():
     from engine.database.connection import get_db_connection
     from engine.utils.progress import create_phase_progress
     from engine.utils.checkpoint import get_completed_tickers, clear_phase_checkpoint
-    from engine.utils.helpers import get_spot_tickers, get_fno_tickers, get_tickers_for_watchlist, list_all_watchlists
+    from engine.utils.helpers import get_spot_tickers, get_fno_tickers, get_tickers_for_watchlist, list_all_watchlists, is_index_symbol
 
     watchlist_tickers = None
     if args.watchlist is not None:
@@ -152,7 +152,7 @@ def main():
         p_start = time.time()
         logger.info("=== Phase 1.2: Spot Data Download (Fundamentals) ===")
         all_spot = get_spot_tickers()
-        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        valid_tickers = [t for t in (all_spot if watchlist_tickers is None else [x for x in all_spot if x in watchlist_tickers]) if not is_index_symbol(t)]
         total = len(valid_tickers)
         resume = resolve_resume_flag("Phase 1.2 (Download Fundamentals)", "fund_download", total, valid_tickers=valid_tickers)
         completed = get_completed_tickers("fund_download", valid_tickers=valid_tickers) if resume else set()
@@ -175,7 +175,7 @@ def main():
         from engine.downloaders.mutual_fund import ensure_mf_fii_tables_exist, download_all_fii_holdings
         ensure_mf_fii_tables_exist()
         all_spot = get_spot_tickers()
-        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        valid_tickers = [t for t in (all_spot if watchlist_tickers is None else [x for x in all_spot if x in watchlist_tickers]) if not is_index_symbol(t)]
         total_tickers = len(valid_tickers)
         total_items = total_tickers * 2  # MF holdings (total_tickers) + FII holdings (total_tickers)
         progress, task_id = create_phase_progress("Phase 1.3", "Download MF & FII", total_items, unit="items")
@@ -267,7 +267,7 @@ def main():
         p_start = time.time()
         logger.info("[Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...")
         all_spot = get_spot_tickers()
-        valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
+        valid_tickers = [t for t in (all_spot if watchlist_tickers is None else [x for x in all_spot if x in watchlist_tickers]) if not is_index_symbol(t)]
         from engine.analysis.fundamental import analyze_fundamental
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -340,14 +340,15 @@ def main():
     def run_phase_2_5():
         p_start = time.time()
         logger.info("[Sub-task 2.5/2.8] Starting Mutual Fund & FII Institutional Behavior Analysis...")
+        non_index_wl_tickers = [t for t in (watchlist_tickers if watchlist_tickers is not None else get_spot_tickers()) if not is_index_symbol(t)]
         try:
             from engine.analyzers.mf_behavior import precalculate_all_mf_behavior
-            precalculate_all_mf_behavior(tickers=watchlist_tickers)
+            precalculate_all_mf_behavior(tickers=non_index_wl_tickers)
         except Exception as e:
             logger.error(f"Error precalculating MF behavior: {e}")
         try:
             from engine.analyzers.fii_behavior import precalculate_all_fii_behavior
-            precalculate_all_fii_behavior(tickers=watchlist_tickers)
+            precalculate_all_fii_behavior(tickers=non_index_wl_tickers)
         except Exception as e:
             logger.error(f"Error precalculating FII behavior: {e}")
         p_elapsed = time.time() - p_start
@@ -648,6 +649,22 @@ def main():
         run_phase_2_8()
         p_elapsed = time.time() - p_start
         logger.info(f"[✓] Spot pipeline execution completed successfully in {p_elapsed:.2f}s!")
+    elif args.mode == "fno-pipeline":
+        logger.info("Triggered F&O Derivatives & Technicals Pipeline...")
+        if watchlist_tickers is None:
+            wl_tickers, matched_wls = get_tickers_for_watchlist(["fno"])
+            watchlist_tickers = wl_tickers
+            logger.info(f"Auto-applied F&O watchlist filter: {len(watchlist_tickers)} F&O tickers and indices.")
+        p_start = time.time()
+        run_phase_1_1_tech()
+        run_phase_1_3()
+        run_phase_2_1()
+        run_phase_2_3()
+        run_phase_2_4()
+        run_phase_2_6()
+        run_phase_2_8()
+        p_elapsed = time.time() - p_start
+        logger.info(f"[✓] F&O Pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "mf-pipeline":
         logger.info("Triggered Mutual Fund & FII Pipeline (download-mf -> analyze-mf)...")
         p_start = time.time()

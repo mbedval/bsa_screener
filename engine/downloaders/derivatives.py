@@ -25,13 +25,8 @@ def fetch_live_spot_price(ticker: str) -> float or None:
         pass
 
     # 2. Live yfinance fetch if not in DB
-    yf_sym = f"{raw}.NS" if not raw.endswith(".NS") and not raw.startswith("^") else raw
-    if raw in ("NIFTY", "NIFTY50", "NIFTY 50"): yf_sym = "^NSEI"
-    elif raw in ("BANKNIFTY", "BANK NIFTY"): yf_sym = "^NSEBANK"
-    elif raw in ("FINNIFTY",): yf_sym = "^CNXFIN"
-    elif raw in ("MIDCPNIFTY",): yf_sym = "^NSEMDCP50"
-    elif raw in ("NIFTYNXT50",): yf_sym = "^NSMIDCP"
-    elif raw in ("BANKEX",): yf_sym = "^BSESN"
+    from engine.utils.helpers import format_ticker
+    yf_sym = format_ticker(raw)
 
     try:
         tk = yf.Ticker(yf_sym)

@@ -3553,9 +3553,9 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               </h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PIVOT POINT</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.pivot_point || 705.0).toFixed(1)}
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 2</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.support_2 || 662.3).toFixed(1)}
                   </div>
                 </div>
 
@@ -3567,9 +3567,9 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                 </div>
 
                 <div style={metricBoxStyle}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>SUPPORT 2</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#22c55e', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
-                    {(supportResistance.support_2 || 662.3).toFixed(1)}
+                  <div style={{ fontSize: 10, color: '#f97316', fontWeight: 700 }}>PIVOT POINT</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#f97316', marginTop: 4, fontFamily: "'DM Mono', monospace" }}>
+                    {(supportResistance.pivot_point || 705.0).toFixed(1)}
                   </div>
                 </div>
 
@@ -3713,7 +3713,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                   {hhhlInsight.historical_cycles.length > 5 && (
                     <div style={{ marginTop: 16, textAlign: 'center' }}>
                       <button 
-                        onClick={() => onNavigate('research:hhhl_full_report')} 
+                        onClick={() => onNavigate && onNavigate('research:hhhl_full_report', searchedSymbol)} 
                         style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                       >
                         View Full Pattern History
@@ -3916,7 +3916,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
             {patternHistory.length > 5 && (
               <div style={{ marginTop: 16, textAlign: 'center' }}>
                 <button 
-                  onClick={() => onNavigate('research:candlestick_full_report')} 
+                  onClick={() => onNavigate && onNavigate('research:candlestick_full_report', searchedSymbol)} 
                   style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                 >
                   View Full Track Record History
@@ -3975,7 +3975,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               {volumeSpikes.length > 5 && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
                   <button
-                    onClick={() => onNavigate('research:volume_spike_report')}
+                    onClick={() => onNavigate && onNavigate('research:volume_spike_report', searchedSymbol)}
                     style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }}
                   >
                     View Full Record history ({volumeSpikes.length} Total Spikes) ➔

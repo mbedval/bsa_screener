@@ -18,6 +18,13 @@ export default function HHHLFullReportPage({ apiBase, initialTicker }) {
   };
 
   useEffect(() => {
+    if (initialTicker) {
+      setTicker(initialTicker.toUpperCase());
+      setSearchInput(initialTicker.toUpperCase());
+    }
+  }, [initialTicker]);
+
+  useEffect(() => {
     setLoading(true);
     // Note: SearchDetailPage uses /api/ticker-master-search which might be routed through main router
     // Or if it's intelligence dataset, we can just use the same URL path

@@ -84,7 +84,9 @@ def format_ticker(ticker: str) -> str:
         "BANK NIFTY": "^NSEBANK",
         "FINNIFTY": "^CNXFIN",
         "MIDCPNIFTY": "^NSEMDCP50",
-        "NIFTYNXT50": "^NN50"
+        "NIFTYNXT50": "^NSMIDCP",
+        "BANKEX": "BSE-BANK.BO",
+        "SENSEX": "^BSESN"
     }
     if base_ticker in index_map:
         return index_map[base_ticker]
@@ -157,11 +159,55 @@ def get_system_config(key: str, default: str = "") -> str:
     return default
 
 def get_spot_tickers() -> list:
-    """Retrieve all spot master tickers from database."""
+    """Retrieve all spot master tickers and index tickers from database."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker ASC")
-            return [row[0] for row in cur.fetchall()]
+            all_tickers = set()
+            try:
+                cur.execute("SELECT ticker FROM ticker_master")
+                for row in cur.fetchall():
+                    if row[0]:
+                        all_tickers.add(row[0].upper().strip())
+            except Exception:
+                conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM fno_index_master")
+                for row in cur.fetchall():
+                    if row[0]:
+                        all_tickers.add(row[0].upper().strip())
+            except Exception:
+                conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM indices_master")
+                for row in cur.fetchall():
+                    if row[0]:
+                        all_tickers.add(row[0].upper().strip())
+            except Exception:
+                conn.rollback()
+            for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
+                all_tickers.add(idx)
+            return sorted(list(all_tickers))
+
+def is_index_symbol(ticker: str) -> bool:
+    """Returns True if ticker is a market index (e.g. NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, NIFTYNXT50, BANKEX, SENSEX)."""
+    if not ticker:
+        return False
+    raw = ticker.upper().strip()
+    static_indices = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX", "SENSEX", "NIFTY50", "NIFTY 50", "BANK NIFTY"}
+    if raw in static_indices or raw.startswith("^"):
+        return True
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM fno_index_master WHERE symbol = %s", (raw,))
+                if cur.fetchone():
+                    return True
+                cur.execute("SELECT 1 FROM indices_master WHERE symbol = %s", (raw,))
+                if cur.fetchone():
+                    return True
+    except Exception:
+        pass
+    return False
 
 def get_fno_tickers() -> list:
     """Retrieve all F&O stock and index master tickers from database."""
@@ -234,6 +280,19 @@ def get_tickers_for_watchlist(watchlist_inputs: list) -> tuple:
 
     matched_watchlists = []
     tickers = set()
+
+    # Special handling for F&O watchlist requests (e.g. --watchlist fno / f&o / derivatives)
+    fno_aliases = {"fno", "f&o", "fo", "derivatives", "f_and_o", "f-and-o"}
+    has_fno_token = any(t.lower() in fno_aliases for t in raw_tokens)
+    if has_fno_token:
+        fno_tkrs = get_fno_tickers()
+        tickers.update(fno_tkrs)
+        matched_watchlists.append({
+            'id': 'fno',
+            'name': 'FNO',
+            'description': 'All F&O Stocks and Indices',
+            'ticker_count': len(fno_tkrs)
+        })
 
     if any(t.lower() == 'all' for t in raw_tokens):
         with get_db_connection() as conn:

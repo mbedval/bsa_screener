@@ -110,16 +110,13 @@ def reload_screener_ticker_mappings():
 def resolve_screener_company_id(ticker: str) -> Optional[int]:
     """
     Search Screener.in for ticker and return internal company ID integer.
-
-    Fallback logic:
-      0. Check in-memory resolved ID cache.
-      1. Check screener_ticker_mappings table:
-         a. If screener_company_id is set → use it directly (no search needed).
-         b. If only screener_ticker is set → use it as the search query.
-      2. Search screener.in API with the (possibly overridden) ticker name.
-      3. Match by exact company URL pattern, then fall back to first result.
+    Skips index symbols (e.g. NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, NIFTYNXT50).
     """
+    from engine.utils.helpers import is_index_symbol
     cleaned = ticker.replace(".NS", "").replace(".BO", "").strip().upper()
+
+    if is_index_symbol(cleaned):
+        return None
 
     # Step 0: Check in-memory cache first
     if cleaned in _screener_company_id_cache:
@@ -129,37 +126,54 @@ def resolve_screener_company_id(ticker: str) -> Optional[int]:
     mappings = _load_screener_ticker_mappings()
     mapping = mappings.get(cleaned)
     if mapping:
-        # Direct company ID override — skip search entirely
         if mapping.get('screener_company_id'):
             direct_id = mapping['screener_company_id']
             _screener_company_id_cache[cleaned] = direct_id
             logger.info(f"Screener direct ID override: {cleaned} → company_id={direct_id}")
             return direct_id
         search_name = mapping['screener_ticker']
-        if search_name != cleaned:
-            logger.info(f"Screener ticker mapping: {cleaned} → {search_name}")
     else:
         search_name = cleaned
 
-    search_url = f"https://www.screener.in/api/company/search/?q={search_name}"
-    res = screener_safe_request(search_url, max_retries=3, timeout=10)
-    if res and res.status_code == 200:
-        try:
-            results = res.json()
-            company_id = None
-            for item in results:
-                url = item.get("url", "")
-                if f"/company/{search_name}/" in url or item.get("name", "").upper() == search_name:
-                    company_id = item.get("id")
-                    break
-            if not company_id and results and isinstance(results, list):
-                company_id = results[0].get("id")
+    # Construct search query list
+    search_queries = [search_name]
+    if "-" in search_name or "&" in search_name:
+        search_queries.append(search_name.replace("-", " ").replace("&", " "))
 
-            if company_id:
-                _screener_company_id_cache[cleaned] = company_id
-                return company_id
-        except Exception as err:
-            logger.warning(f"Error parsing Screener search result for {ticker}: {err}")
+    # Try company_name from DB if simple search query fails
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT company_name FROM ticker_master WHERE ticker = %s", (cleaned,))
+                r = cur.fetchone()
+                if r and r[0] and str(r[0]).strip():
+                    search_queries.append(str(r[0]).strip())
+    except Exception:
+        pass
+
+    for q in search_queries:
+        search_url = f"https://www.screener.in/api/company/search/?q={q}"
+        res = screener_safe_request(search_url, max_retries=2, timeout=10)
+        if res and res.status_code == 200:
+            try:
+                results = res.json()
+                if not results or not isinstance(results, list):
+                    continue
+                company_id = None
+                for item in results:
+                    url = item.get("url", "")
+                    if f"/company/{search_name}/" in url or item.get("name", "").upper() == search_name or search_name.replace("-", "") in url.replace("-", ""):
+                        company_id = item.get("id")
+                        break
+                if not company_id and results:
+                    company_id = results[0].get("id")
+
+                if company_id:
+                    _screener_company_id_cache[cleaned] = company_id
+                    return company_id
+            except Exception as err:
+                logger.warning(f"Error parsing Screener search result for {ticker} (q='{q}'): {err}")
+
     return None
 
 

@@ -18,6 +18,13 @@ export default function CandlestickFullReportPage({ apiBase, initialTicker }) {
   };
 
   useEffect(() => {
+    if (initialTicker) {
+      setTicker(initialTicker.toUpperCase());
+      setSearchInput(initialTicker.toUpperCase());
+    }
+  }, [initialTicker]);
+
+  useEffect(() => {
     setLoading(true);
     const baseUrl = apiBase.replace('/intelligence', '');
     fetch(`${baseUrl}/ticker-master-search/${ticker}`)

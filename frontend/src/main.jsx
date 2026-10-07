@@ -981,7 +981,7 @@ function App() {
           <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
         ) : active === 'research:search_detail' ? (
           <ChartErrorBoundary>
-            <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} onNavigate={(page) => setActive(page)} />
+            <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} onNavigate={(page, ticker) => { if (ticker) setSelectedProfileTicker(ticker); setActive(page); }} />
           </ChartErrorBoundary>
         ) : active === 'research:ticker_profile' ? (
           <TickerResearchProfilePage apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker} onNavigate={(tab) => setActive(tab)} />
@@ -1001,15 +1001,15 @@ function App() {
           <ElliotReport apiBase={apiBase} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:hhhl_full_report' ? (
           <ChartErrorBoundary>
-            <HHHLFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+            <HHHLFullReportPage key={`hhhl_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
           </ChartErrorBoundary>
         ) : active === 'research:volume_spike_report' ? (
           <ChartErrorBoundary>
-            <VolumeSpikeReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+            <VolumeSpikeReportPage key={`vol_spike_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
           </ChartErrorBoundary>
         ) : active === 'research:candlestick_full_report' ? (
           <ChartErrorBoundary>
-            <CandlestickFullReportPage apiBase={apiBase} initialTicker={selectedProfileTicker} />
+            <CandlestickFullReportPage key={`candlestick_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
           </ChartErrorBoundary>
         ) : active === 'research:stocks_respecting_patterns' ? (
           <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
@@ -3358,6 +3358,9 @@ function ReportDetailModal({ ticker, onClose, dataset }) {
 function TableView({ data, loading, error, query, setQuery, onSearch, activeTable, onSelectFnoTicker, onSelectProfileTicker, dataset, searchHistory, addSearchHistory }) {
 
   const [sort, setSort] = useState({ key: '', asc: true })
+  const [watchlistFilter, setWatchlistFilter] = useState('ALL') // 'ALL' | 'WATCHLIST_ONLY' | 'FNO_ONLY' | watchlist_id
+  const [watchlistsData, setWatchlistsData] = useState([])
+  const [fnoSet, setFnoSet] = useState(new Set())
   const [selectedSignal, setSelectedSignal] = useState('ALL')
   const [selectedSector, setSelectedSector] = useState('ALL')
   const [insightFilter, setInsightFilter] = useState('ALL')
@@ -3371,6 +3374,44 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   const [pageSize, setPageSize] = useState(50)
   const [detailTicker, setDetailTicker] = useState(null)
   const [visualizerTicker, setVisualizerTicker] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/master/watchlists')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setWatchlistsData(Array.isArray(data) ? data : []))
+      .catch(() => {})
+
+    fetch('/api/fno-underlyings')
+      .then(res => res.ok ? res.json() : null)
+      .then(d => {
+        if (d) {
+          const set = new Set()
+          if (Array.isArray(d.stocks)) {
+            d.stocks.forEach(st => st.symbol && set.add(st.symbol.toUpperCase().trim()))
+          }
+          if (Array.isArray(d.indices)) {
+            d.indices.forEach(idx => idx.symbol && set.add(idx.symbol.toUpperCase().trim()))
+          }
+          setFnoSet(set)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const allWatchlistTickers = useMemo(() => {
+    if (!watchlistsData || watchlistsData.length === 0) return new Set()
+    const set = new Set()
+    watchlistsData.forEach(w => {
+      if (Array.isArray(w.tickers)) {
+        w.tickers.forEach(t => {
+          if (t && typeof t === 'string' && t.trim()) {
+            set.add(t.trim().toUpperCase())
+          }
+        })
+      }
+    })
+    return set
+  }, [watchlistsData])
 
   const displayColumns = useMemo(() => {
     if (!data?.columns) return []
@@ -3428,25 +3469,40 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
   // Discover all technical signal columns in dataset and extract distinct non-empty values
   const availableSignalColumns = useMemo(() => {
     if (!data?.rows || !displayColumns) return {}
+    const EXCLUDED_COLS = new Set([
+      'record_id', 'uniqueid', 'ticker', 'symbol', 'sector', 'stock_name',
+      'company_name', 'reasons', 'tech_reason', 'broken_pattern_details',
+      'run_time', 'timestamp', 'review_date', 'analysed_at', 'last_updated',
+      'latest_date', 'score', 'confidence', 'footprint_score', 'accumulation_score',
+      'distribution_score', 'overall_score', 'close', 'cmp', 'entry_price',
+      'stop_loss', 'target_price', 'rr_ratio', 'pcr', 'support', 'resistance',
+      'day_change', 'period_change', 'week_change', 'month_change', 'rsi', 'mfi',
+      'volume_ratio', 'donchian_upper', 'donchian_lower', 'avg_continuity_count',
+      'broken_pattern_count'
+    ])
+
     const signalCols = displayColumns.filter(col => {
-      if (col === 'record_id' || col === 'ticker' || col === 'symbol' || col === 'sector' || col === 'stock_name' || col === 'company_name') return false
       const k = col.toLowerCase()
+      if (EXCLUDED_COLS.has(k)) return false
       return (
         k.endsWith('_signal') ||
         k.endsWith('_call') ||
         k.endsWith('_cross') ||
         k.endsWith('_candle') ||
         k.endsWith('_surge') ||
+        k.endsWith('_status') ||
         k === 'phase' ||
+        k === 'status' ||
+        k === 'signal' ||
+        k === 'call' ||
+        k === 'bet' ||
+        k === 'bet_category' ||
+        k === 'fo_buildup' ||
+        k === 'current_hhhl' ||
         k === 'overall_signal' ||
         k === 'overall_call' ||
-        k === 'breakout_signal' ||
-        k === 'volume_surge' ||
-        k === 'adx_signal' ||
-        k === 'supertrend_signal' ||
-        k === 'ema_signal' ||
-        k === 'vwap_signal' ||
-        k === 'proximity_signal'
+        k === 'recommended_call' ||
+        k === 'setup_signal'
       )
     })
 
@@ -3468,6 +3524,7 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
 
   // Reset filters on table view / dataset switch
   useEffect(() => {
+    setWatchlistFilter('ALL')
     setSelectedSignal('ALL')
     setSelectedSector('ALL')
     setInsightFilter('ALL')
@@ -3480,9 +3537,10 @@ function TableView({ data, loading, error, query, setQuery, onSearch, activeTabl
     setPage(1)
   }, [data?.table, query])
 
-  const hasAnyActiveFilter = patGrowingFilter !== 'ALL' || otherIncomeFilter !== 'ALL' || peFilter !== 'ALL' || debtEquityFilter !== 'ALL' || passedFilter !== 'ALL' || selectedSector !== 'ALL' || insightFilter !== 'ALL' || selectedSignal !== 'ALL' || Object.values(dynamicSignalFilters).some(v => v && v !== 'ALL') || (query && query.trim() !== '')
+  const hasAnyActiveFilter = watchlistFilter !== 'ALL' || patGrowingFilter !== 'ALL' || otherIncomeFilter !== 'ALL' || peFilter !== 'ALL' || debtEquityFilter !== 'ALL' || passedFilter !== 'ALL' || selectedSector !== 'ALL' || insightFilter !== 'ALL' || selectedSignal !== 'ALL' || Object.values(dynamicSignalFilters).some(v => v && v !== 'ALL') || (query && query.trim() !== '')
 
   const resetAllFilters = () => {
+    setWatchlistFilter('ALL')
     setPatGrowingFilter('ALL')
     setOtherIncomeFilter('ALL')
     setPeFilter('ALL')
@@ -3531,23 +3589,28 @@ const matchesRuleFilter = (rowVal, filterVal) => {
   const rows = useMemo(() => {
     if (!data) return []
     let list = [...data.rows]
-    if (selectedSignal && selectedSignal !== 'ALL') {
-      list = list.filter(row => {
-        const sigCol = displayColumns.find(c => /signal|call|recommended_call|status|phase/i.test(c) && c !== 'record_id')
-        if (!sigCol) return true
-        const val = String(row[sigCol] ?? '').trim().toLowerCase()
-        const target = selectedSignal.toLowerCase()
-        if (target === 'positive') {
-          return val === 'positive' || val.includes('buy') || val.includes('bullish') || val === 'good' || val === 'better' || val === 'accumulation'
+    if (watchlistFilter !== 'ALL') {
+      if (watchlistFilter === 'WATCHLIST_ONLY') {
+        list = list.filter(row => {
+          const t = String(row.ticker ?? row.symbol ?? '').toUpperCase().trim()
+          return allWatchlistTickers.has(t)
+        })
+      } else if (watchlistFilter === 'FNO_ONLY') {
+        list = list.filter(row => {
+          const t = String(row.ticker ?? row.symbol ?? '').toUpperCase().trim()
+          const isFnoRow = row.is_fno === true || row.is_fno === 1 || String(row.is_fno).toLowerCase() === 'true' || String(row.is_fno) === '1'
+          return isFnoRow || fnoSet.has(t)
+        })
+      } else {
+        const targetWl = watchlistsData.find(w => String(w.id) === String(watchlistFilter))
+        if (targetWl && Array.isArray(targetWl.tickers)) {
+          const wlSet = new Set(targetWl.tickers.map(t => String(t).toUpperCase().trim()))
+          list = list.filter(row => {
+            const t = String(row.ticker ?? row.symbol ?? '').toUpperCase().trim()
+            return wlSet.has(t)
+          })
         }
-        if (target === 'negative') {
-          return val === 'negative' || val.includes('sell') || val.includes('bearish') || val === 'bad' || val === 'distribution'
-        }
-        if (target === 'mixed') {
-          return val === 'mixed' || val.includes('neutral') || val.includes('hold')
-        }
-        return val === target || (target === 'buy' && (val === 'buy' || val === 'bullish')) || (target === 'sell' && (val === 'sell' || val === 'bearish')) || (target === 'strong buy' && val === 'strong_bullish') || (target === 'strong sell' && val === 'strong_bearish')
-      })
+      }
     }
     if (selectedSector && selectedSector !== 'ALL') {
       list = list.filter(row => String(row.sector ?? '').trim().toLowerCase() === selectedSector.toLowerCase())
@@ -3588,7 +3651,7 @@ const matchesRuleFilter = (rowVal, filterVal) => {
       })
     }
     return list
-  }, [data, sort, selectedSignal, selectedSector, insightFilter, dynamicSignalFilters, displayColumns, patGrowingFilter, otherIncomeFilter, peFilter, debtEquityFilter, passedFilter])
+  }, [data, sort, watchlistFilter, watchlistsData, allWatchlistTickers, fnoSet, selectedSignal, selectedSector, insightFilter, dynamicSignalFilters, displayColumns, patGrowingFilter, otherIncomeFilter, peFilter, debtEquityFilter, passedFilter])
 
   const pagedRows = useMemo(() => {
     if (pageSize === 0) return rows
@@ -3597,29 +3660,7 @@ const matchesRuleFilter = (rowVal, filterVal) => {
 
   const totalPages = Math.ceil(rows.length / (pageSize || 1)) || 1
 
-  const hasSignalCol = useMemo(() => {
-    return displayColumns.some(c => /signal|call|recommended_call|status|phase/i.test(c) && c !== 'record_id')
-  }, [displayColumns])
 
-  const hasPositiveMixedSignals = useMemo(() => {
-    if (isCashFlowTable) return true
-    if (!data?.rows) return false
-    const sigCol = displayColumns.find(c => /signal|call|recommended_call|status|phase/i.test(c) && c !== 'record_id')
-    if (!sigCol) return false
-    return data.rows.some(r => {
-      const v = String(r[sigCol] ?? '').toUpperCase()
-      return v === 'POSITIVE' || v === 'MIXED' || v === 'NEGATIVE'
-    })
-  }, [data?.rows, displayColumns, isCashFlowTable])
-
-  const handleFilterClick = filterVal => {
-    if (selectedSignal === filterVal) {
-      setSelectedSignal('ALL')
-    } else {
-      setSelectedSignal(filterVal)
-    }
-    setPage(1)
-  }
 
   const formatRecordIdDate = val => {
     if (!val) return '—'
@@ -3673,8 +3714,11 @@ const matchesRuleFilter = (rowVal, filterVal) => {
       ps += Number(r.partial_success || 0)
       pf += Number(r.partial_fail || 0)
     })
-    const overallRate = tot > 0 ? (((p + (ps * 0.5)) / tot) * 100).toFixed(1) : '0.0'
-    return { tot, p, f, ps, pf, overallRate }
+    const strictTotal = p + f
+    const strictPassRate = strictTotal > 0 ? ((p / strictTotal) * 100).toFixed(1) : '0.0'
+    const evaluatedTotal = p + f + ps + pf
+    const overallRate = evaluatedTotal > 0 ? (((p + (ps * 0.5)) / evaluatedTotal) * 100).toFixed(1) : (tot > 0 ? (((p + (ps * 0.5)) / tot) * 100).toFixed(1) : '0.0')
+    return { tot, p, f, ps, pf, strictTotal, strictPassRate, overallRate, passFailRatio: `${p} Passed vs ${f} Failed` }
   }, [isCallEfficiency, data?.rows])
 
   return (
@@ -3749,7 +3793,9 @@ const matchesRuleFilter = (rowVal, filterVal) => {
                 onClick={() => {
                   const summaryText = `🎯 BSA SCREENER CALL EFFICIENCY WINNING POST 🎯\n` +
                     `----------------------------------------\n` +
-                    `📈 Overall Success Rate: ${effMetrics.overallRate}%\n` +
+                    `⚖️ Pass vs Fail Ratio: ${effMetrics.passFailRatio}\n` +
+                    `📈 Pass / Fail Success Rate: ${effMetrics.strictPassRate}% (${effMetrics.p}/${effMetrics.strictTotal})\n` +
+                    `🔥 Overall Weighted Success Rate: ${effMetrics.overallRate}%\n` +
                     `✅ Target Passed: ${effMetrics.p}\n` +
                     `❌ Stopped Out (Failed): ${effMetrics.f}\n` +
                     `⚡ Partial Success: ${effMetrics.ps}\n` +
@@ -3804,8 +3850,16 @@ const matchesRuleFilter = (rowVal, filterVal) => {
                     <td style={{ padding: '10px 14px', color: '#f97316', fontWeight: 600 }}>⚠️ Partial Fail (30d Expired in Loss)</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#f97316', fontFamily: "'DM Mono'" }}>{effMetrics.pf}</td>
                   </tr>
-                  <tr style={{ background: 'rgba(56, 189, 248, 0.06)' }}>
-                    <td style={{ padding: '10px 14px', color: '#38bdf8', fontWeight: 700 }}>🔥 Overall Success Rate %</td>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(56, 189, 248, 0.04)' }}>
+                    <td style={{ padding: '10px 14px', color: '#38bdf8', fontWeight: 700 }}>⚖️ Pass vs Fail Ratio</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#38bdf8', fontFamily: "'DM Mono'" }}>{effMetrics.passFailRatio}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(56, 189, 248, 0.06)' }}>
+                    <td style={{ padding: '10px 14px', color: '#38bdf8', fontWeight: 700 }}>📈 Pass / Fail Success Rate %</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#38bdf8', fontSize: 15, fontFamily: "'DM Mono'" }}>{effMetrics.strictPassRate}% ({effMetrics.p} / {effMetrics.strictTotal})</td>
+                  </tr>
+                  <tr style={{ background: 'rgba(56, 189, 248, 0.08)' }}>
+                    <td style={{ padding: '10px 14px', color: '#38bdf8', fontWeight: 700 }}>🔥 Overall Weighted Success Rate %</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: '#38bdf8', fontSize: 15, fontFamily: "'DM Mono'" }}>{effMetrics.overallRate}%</td>
                   </tr>
                 </tbody>
@@ -3874,6 +3928,43 @@ const matchesRuleFilter = (rowVal, filterVal) => {
             </div>
           )}
 
+          <div className="watchlist-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BookMarked size={15} style={{ color: watchlistFilter !== 'ALL' ? '#fbbf24' : '#7ec8f0' }} />
+            <select
+              className="watchlist-select"
+              value={watchlistFilter}
+              onChange={e => { setWatchlistFilter(e.target.value); setPage(1); }}
+              style={{
+                background: watchlistFilter !== 'ALL' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                border: watchlistFilter !== 'ALL' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.15)',
+                color: watchlistFilter !== 'ALL' ? '#fbbf24' : '#e1e6ed',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 13,
+                fontWeight: watchlistFilter !== 'ALL' ? 700 : 500,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL" style={{ background: '#1a202c', color: '#fff' }}>All Stocks ({data?.rows?.length || 0})</option>
+              <option value="WATCHLIST_ONLY" style={{ background: '#1a202c', color: '#fbbf24', fontWeight: 700 }}>
+                ⭐ Watchlist Stocks Only ({allWatchlistTickers.size})
+              </option>
+              <option value="FNO_ONLY" style={{ background: '#1a202c', color: '#38bdf8', fontWeight: 700 }}>
+                ⚡ F&O Stocks Only ({fnoSet.size || 219})
+              </option>
+              {watchlistsData && watchlistsData.length > 0 && (
+                <optgroup label="Specific Watchlists" style={{ background: '#1a202c', color: '#94a3b8' }}>
+                  {watchlistsData.map(w => (
+                    <option key={w.id} value={String(w.id)} style={{ background: '#1a202c', color: '#fff' }}>
+                      📋 {w.name} ({(w.tickers || []).length})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
           {availableSectors.length > 0 && (
             <div className="sector-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Filter size={15} style={{ color: '#7ec8f0' }} />
@@ -3932,35 +4023,13 @@ const matchesRuleFilter = (rowVal, filterVal) => {
             </div>
           )}
 
-          {hasSignalCol && (
-            <div className="filter-bar">
-              <button className={`filter-btn ${selectedSignal === 'ALL' ? 'active' : ''}`} onClick={() => { setSelectedSignal('ALL'); setPage(1); }}>All</button>
-              {hasPositiveMixedSignals ? (
-                <>
-                  <button className={`filter-btn buy ${selectedSignal === 'Positive' ? 'active' : ''}`} onClick={() => handleFilterClick('Positive')}>Positive</button>
-                  <button className={`filter-btn neutral ${selectedSignal === 'Mixed' ? 'active' : ''}`} onClick={() => handleFilterClick('Mixed')}>Mixed</button>
-                  <button className={`filter-btn sell ${selectedSignal === 'Negative' ? 'active' : ''}`} onClick={() => handleFilterClick('Negative')}>Negative</button>
-                </>
-              ) : (
-                <>
-                  <button className={`filter-btn strong-buy ${selectedSignal === 'Strong Buy' ? 'active' : ''}`} onClick={() => handleFilterClick('Strong Buy')}>Strong Buy</button>
-                  <button className={`filter-btn buy ${selectedSignal === 'Buy' ? 'active' : ''}`} onClick={() => handleFilterClick('Buy')}>Buy</button>
-                  <button className={`filter-btn neutral ${selectedSignal === 'Neutral' ? 'active' : ''}`} onClick={() => handleFilterClick('Neutral')}>Neutral</button>
-                  <button className={`filter-btn sell ${selectedSignal === 'Sell' ? 'active' : ''}`} onClick={() => handleFilterClick('Sell')}>Sell</button>
-                  <button className={`filter-btn strong-sell ${selectedSignal === 'Strong Sell' ? 'active' : ''}`} onClick={() => handleFilterClick('Strong Sell')}>Strong Sell</button>
-                </>
-              )}
-            </div>
-          )}
-
           {Object.keys(availableSignalColumns).length > 0 && (
-            <div className="signals-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'rgba(56, 189, 248, 0.06)', padding: '5px 10px', borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+            <div className="signals-filter-wrap" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(56, 189, 248, 0.08)', padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(56, 189, 248, 0.3)' }}>
               <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Sliders size={14} /> Signals Filter:
               </span>
               {Object.entries(availableSignalColumns).map(([colKey, options]) => {
-                const rawName = colKey.replaceAll('_', ' ').replace(/\bsignal\b/i, '').trim()
-                const colLabel = rawName ? rawName.toUpperCase() : colKey.toUpperCase()
+                const colLabel = colKey.replaceAll('_', ' ').toUpperCase()
                 return (
                   <select
                     key={colKey}
@@ -3972,20 +4041,21 @@ const matchesRuleFilter = (rowVal, filterVal) => {
                       setPage(1)
                     }}
                     style={{
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: '#e2e8f0',
+                      background: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      color: '#f1f5f9',
                       borderRadius: 6,
-                      padding: '4px 8px',
+                      padding: '5px 10px',
                       fontSize: 12,
+                      fontWeight: 600,
                       outline: 'none',
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="ALL" style={{ background: '#1a202c', color: '#fff' }}>{colLabel}: All ({options.length})</option>
+                    <option value="ALL" style={{ background: '#1a202c', color: '#fff' }}>All {colLabel} ({options.length})</option>
                     {options.map(opt => (
                       <option key={opt} value={opt} style={{ background: '#1a202c', color: '#fff' }}>
-                        {colLabel}: {opt}
+                        {opt}
                       </option>
                     ))}
                   </select>

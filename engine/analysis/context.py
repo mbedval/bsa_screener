@@ -41,6 +41,30 @@ class TickerContext:
                     ctx.sector = tm_row[1] or "General"
                     ctx.exchange = tm_row[2] or "NS"
                     ctx.is_fno = bool(tm_row[3]) if tm_row[3] is not None else False
+                else:
+                    try:
+                        cur.execute("SELECT index_name FROM fno_index_master WHERE symbol = %s", (ctx.ticker,))
+                        idx_row = cur.fetchone()
+                        if idx_row:
+                            ctx.company_name = idx_row[0] or ctx.ticker
+                            ctx.sector = "Index"
+                            ctx.exchange = "NS"
+                            ctx.is_fno = True
+                        else:
+                            cur.execute("SELECT name FROM indices_master WHERE symbol = %s", (ctx.ticker,))
+                            idx_row2 = cur.fetchone()
+                            if idx_row2:
+                                ctx.company_name = idx_row2[0] or ctx.ticker
+                                ctx.sector = "Index"
+                                ctx.exchange = "NS"
+                                ctx.is_fno = True
+                            elif ctx.ticker in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX", "SENSEX"]:
+                                ctx.company_name = ctx.ticker
+                                ctx.sector = "Index"
+                                ctx.exchange = "NS"
+                                ctx.is_fno = True
+                    except Exception:
+                        pass
 
                 # 2. OHLCV Daily
                 cur.execute("""
