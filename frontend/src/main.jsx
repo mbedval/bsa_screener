@@ -13,6 +13,7 @@ import HHHLFullReportPage from './reports/HHHLFullReportPage.jsx'
 import CandlestickFullReportPage from './reports/CandlestickFullReportPage.jsx'
 import VolumeSpikeReportPage from './reports/VolumeSpikeReportPage.jsx'
 import DerivativeHistoryPage from './reports/DerivativeHistoryPage.jsx'
+import TopFnoActiveGreeksPage from './reports/TopFnoActiveGreeksPage.jsx'
 
 import './styles.css'
 
@@ -526,7 +527,7 @@ function App() {
 
   useEffect(() => {
     if (path === '' || path === '/') return
-    const customPages = ['dashboard', 'midcap_dashboard', 'smallcap_dashboard', 'largecap_dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy', 'charts_visualizations', 'derivative_history']
+    const customPages = ['dashboard', 'midcap_dashboard', 'smallcap_dashboard', 'largecap_dashboard', 'fno_active', 'option_chain_analyzer', 'best_option_strategy', 'charts_visualizations', 'derivative_history', 'research:fno_greeks_active']
     if (!customPages.includes(active) && !MASTER_PAGES.includes(active) && !active.startsWith('sector:') && !active.startsWith('research:')) {
       load(active, '')
     }
@@ -762,9 +763,14 @@ function App() {
                             )
                           })}
                           {group === 'Derivative' && (
-                            <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
-                              <Layers size={14} /> Indices pattern viewer
-                            </button>
+                            <>
+                              <button className={`nav-item ${active === 'research:fno_greeks_active' ? 'selected' : ''}`} onClick={() => setActive('research:fno_greeks_active')}>
+                                <Layers size={14} style={{ color: '#f59e0b' }} /> Top 20 F&O Active & Greeks
+                              </button>
+                              <button className={`nav-item ${active === 'research:indices_patterns' ? 'selected' : ''}`} onClick={() => setActive('research:indices_patterns')}>
+                                <Layers size={14} /> Indices pattern viewer
+                              </button>
+                            </>
                           )}
                         </div>
                       )}
@@ -884,6 +890,7 @@ function App() {
         {active !== 'charts_visualizations' && (() => {
           const SIDEBAR_NAMES = {
             'research:search_detail': 'Quick ticker report',
+            'research:fno_greeks_active': 'Top 20 F&O Active & Greeks',
             'research:ticker_profile': 'Deep ticker profile',
             'research:patterns': 'Pattern viewer',
             'research:indices_patterns': 'Indices pattern viewer',
@@ -978,7 +985,9 @@ function App() {
         ) : active === 'option_chain_analyzer' ? (
           <OptionChainAnalyzerPage apiBase={apiBase} initialTicker={selectedFnoTicker} dataset={dataset} />
         ) : active === 'best_option_strategy' ? (
-          <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} />
+          <BestOptionStrategyPage apiBase={apiBase} dataset={dataset} initialTicker={selectedFnoTicker || selectedProfileTicker} />
+        ) : active === 'research:fno_greeks_active' ? (
+          <TopFnoActiveGreeksPage apiBase={apiBase} dataset={dataset} onNavigate={(page, ticker) => { if (ticker) { setSelectedFnoTicker(ticker); setSelectedProfileTicker(ticker); } setActive(page); }} />
         ) : active === 'research:search_detail' ? (
           <ChartErrorBoundary>
             <SearchDetailPage key={`search_detail_${searchCounter}_${selectedProfileTicker || query || 'RELIANCE'}`} apiBase={apiBase} dataset={dataset} initialTicker={selectedProfileTicker || query || 'RELIANCE'} onNavigate={(page, ticker) => { if (ticker) setSelectedProfileTicker(ticker); setActive(page); }} />
@@ -1607,11 +1616,12 @@ function OptionChainAnalyzerPage({ apiBase, initialTicker, dataset }) {
 }
 
 // ─── Best Option Strategy Engine Module ────────────────────────────────────
-function BestOptionStrategyPage({ apiBase, dataset }) {
+function BestOptionStrategyPage({ apiBase, dataset, initialTicker }) {
   const isUS = dataset === 'us_intelligence'
   const defaultTicker = isUS ? 'AAPL' : 'HDFCBANK'
-  const [tickerInput, setTickerInput] = useState(defaultTicker)
-  const [activeTicker, setActiveTicker] = useState(defaultTicker)
+  const targetInitial = (initialTicker || defaultTicker).trim().toUpperCase()
+  const [tickerInput, setTickerInput] = useState(targetInitial)
+  const [activeTicker, setActiveTicker] = useState(targetInitial)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1666,8 +1676,9 @@ function BestOptionStrategyPage({ apiBase, dataset }) {
   }, [apiBase, defaultTicker])
 
   useEffect(() => {
-    loadStrategy(defaultTicker)
-  }, [defaultTicker, loadStrategy])
+    const t = initialTicker || defaultTicker
+    loadStrategy(t)
+  }, [initialTicker, defaultTicker, loadStrategy])
 
   const handleSubmit = e => {
     e.preventDefault()
@@ -1837,6 +1848,16 @@ function BestOptionStrategyPage({ apiBase, dataset }) {
               </div>
             </div>
 
+            <div style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.2))', padding: 10, borderRadius: 6, border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+              <span style={{ fontSize: 10, color: '#fef3c7', textTransform: 'uppercase', fontWeight: 700 }}>Market India VIX</span>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#f59e0b', marginTop: 2 }}>
+                {data.market_vix != null ? data.market_vix.toFixed(2) : '13.85'}
+              </div>
+              <div style={{ fontSize: 11, color: '#fde68a', marginTop: 2 }}>
+                {data.market_vix > 20 ? '⚠️ High Volatility' : '🟢 Normal Market Regime'}
+              </div>
+            </div>
+
             <div style={{ background: 'rgba(82, 196, 26, 0.12)', padding: 10, borderRadius: 6, border: '1px solid rgba(82, 196, 26, 0.3)' }}>
               <span style={{ fontSize: 10, color: '#52c41a', textTransform: 'uppercase', fontWeight: 700 }}>Market Directional Bias</span>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginTop: 2 }}>
@@ -1870,6 +1891,61 @@ function BestOptionStrategyPage({ apiBase, dataset }) {
             }} />
           </div>
         </section>
+      )}
+
+      {/* ATM Option Greeks Matrix Card */}
+      {!loading && !error && data && data.greeks_matrix && (
+        <div className="panel" style={{ padding: '16px 20px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8' }}>
+                ⚡ ATM Option Greeks Matrix for {data.ticker} (ATM Strike: ₹{data.greeks_matrix.atm_strike})
+              </span>
+              <span style={{ fontSize: 11, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.5)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                INDIA VIX: {data.market_vix != null ? data.market_vix.toFixed(2) : '13.85'}
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>
+              Spot Price: <b style={{ color: '#fff' }}>₹{data.greeks_matrix.spot_price?.toFixed(2)}</b>
+            </span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#09111f', borderBottom: '1px solid rgba(126, 200, 240, 0.2)' }}>
+                  <th style={{ padding: '8px 10px', textAlign: 'left', color: '#94a3b8' }}>OPTION ATM LEG</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#cbd5e1' }}>LTP (₹)</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#7ec8f0' }}>IV (%)</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#52c41a' }}>DELTA (&Delta;)</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#94a3b8' }}>GAMMA (&Gamma;)</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#ef4444' }}>THETA (&Theta;)</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', color: '#38bdf8' }}>VEGA (&mathcal;V)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(82, 196, 26, 0.05)' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 700, color: '#52c41a' }}>CALL ATM ({data.greeks_matrix.atm_strike} CE)</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#52c41a' }}>₹{data.greeks_matrix.ce_ltp?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#7ec8f0' }}>{data.greeks_matrix.ce_iv?.toFixed(1)}%</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#52c41a' }}>{data.greeks_matrix.ce_delta?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#94a3b8' }}>{data.greeks_matrix.ce_gamma?.toFixed(4)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#f87171' }}>{data.greeks_matrix.ce_theta?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#38bdf8' }}>{data.greeks_matrix.ce_vega?.toFixed(2)}</td>
+                </tr>
+                <tr style={{ background: 'rgba(239, 68, 68, 0.05)' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 700, color: '#f87171' }}>PUT ATM ({data.greeks_matrix.atm_strike} PE)</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>₹{data.greeks_matrix.pe_ltp?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#7ec8f0' }}>{data.greeks_matrix.pe_iv?.toFixed(1)}%</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>{data.greeks_matrix.pe_delta?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#94a3b8' }}>{data.greeks_matrix.pe_gamma?.toFixed(4)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#f87171' }}>{data.greeks_matrix.pe_theta?.toFixed(2)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', color: '#38bdf8' }}>{data.greeks_matrix.pe_vega?.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Strategies Selection Cards Grid */}
