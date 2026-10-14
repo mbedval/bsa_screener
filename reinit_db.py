@@ -2,6 +2,7 @@
 import os
 import sys
 import subprocess
+import shutil
 import psycopg2
 from dotenv import load_dotenv
 
@@ -63,13 +64,22 @@ def main():
         try:
             print("1/2. Creating database schema tables from seeding.sql...")
             target_dsn = f"postgresql://{user}:{password}@{host}:{port}/{target_db}"
-            cmd = ["psql", "-d", target_db, "-h", host, "-U", user, "-f", "seeding.sql"]
-            env = os.environ.copy()
-            env["PGPASSWORD"] = password
-            res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-            if res.returncode != 0:
-                print(f"[×] Schema initialization failed:\n{res.stderr}")
-                sys.exit(1)
+            psql_bin = shutil.which("psql")
+            if psql_bin:
+                cmd = [psql_bin, "-d", target_db, "-h", host, "-U", user, "-f", "seeding.sql"]
+                env = os.environ.copy()
+                env["PGPASSWORD"] = password
+                res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+                if res.returncode != 0:
+                    print(f"[×] Schema initialization failed:\n{res.stderr}")
+                    sys.exit(1)
+            else:
+                conn = psycopg2.connect(target_dsn)
+                conn.autocommit = True
+                cur = conn.cursor()
+                with open("seeding.sql", "r", encoding="utf-8") as f:
+                    cur.execute(f.read())
+                conn.close()
             
             print("2/2. Seeding full master data from CSV datasets (_production.csv)...")
             from engine.database.seeder import load_csv_files

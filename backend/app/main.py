@@ -5222,8 +5222,9 @@ def get_cup_and_handle_report(dataset: str = "intelligence"):
         raise HTTPException(500, f"Error fetching cup and handle report: {e}")
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-if (FRONTEND_DIST / "assets").is_dir():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+assets_path = FRONTEND_DIST / "assets"
+assets_path.mkdir(parents=True, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 
 @app.get("/api/{dataset}/reports/elliot")
@@ -5289,8 +5290,12 @@ def portal(path: str):
         if file_path.is_file():
             return FileResponse(file_path)
     index = FRONTEND_DIST / "index.html"
-    if not index.exists():
-        raise HTTPException(503, "Frontend not built. Run 'npm --prefix frontend run build'.")
+    has_bundle = assets_path.is_dir() and any(assets_path.glob("index-*.js"))
+    if not index.exists() or not has_bundle:
+        raise HTTPException(
+            503,
+            "Frontend bundle not built or assets missing. Run 'npm --prefix frontend run build' or use run.bat.",
+        )
     return FileResponse(
         index,
         headers={
