@@ -15,9 +15,10 @@ export default function FIIBehaviorModule({ ticker }) {
         const res = await fetch(`/api/intelligence/research/fii-behavior/${ticker}`);
         const json = await res.json();
         if (active && json.success) {
-          setData(json.data);
+          const parsed = typeof json.data === 'string' ? JSON.parse(json.data) : json.data;
+          setData(parsed);
         } else if (active) {
-          setData({ error: json.message || "Failed to load data" });
+          setData({ error: json.detail || json.message || "Failed to load data" });
         }
       } catch (err) {
         if (active) setData({ error: err.message });
@@ -83,7 +84,9 @@ export default function FIIBehaviorModule({ ticker }) {
 
   const formatChange = (val) => {
     if (val === null || val === undefined) return '—';
-    return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
+    const num = Number(val);
+    if (isNaN(num)) return '—';
+    return `${num > 0 ? '+' : ''}${num.toFixed(2)}%`;
   };
 
   if (loading) {
@@ -106,7 +109,7 @@ export default function FIIBehaviorModule({ ticker }) {
     );
   }
 
-  const { changes, breadth, concentration_pct, trend, insights, current_weight, latest_date, top_holders } = data;
+  const { changes = {}, breadth = {}, concentration_pct, trend, insights, current_weight, latest_date, top_holders } = data;
 
   return (
     <div style={cardStyle}>
@@ -120,37 +123,37 @@ export default function FIIBehaviorModule({ ticker }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={badgeStyle('#10b981', 'rgba(16,185,129,0.1)')}>Trend: <b>{trend}</b></span>
-          <span style={badgeStyle('#a855f7', 'rgba(168,85,247,0.1)')}>Data: <b>{latest_date}</b></span>
+          <span style={badgeStyle('#10b981', 'rgba(16,185,129,0.1)')}>Trend: <b>{trend || '—'}</b></span>
+          <span style={badgeStyle('#a855f7', 'rgba(168,85,247,0.1)')}>Data: <b>{latest_date || '—'}</b></span>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 8 }}>
           <div style={{ color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Current FII Share</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#38bdf8' }}>{current_weight.toFixed(2)}%</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#38bdf8' }}>{current_weight != null ? Number(current_weight).toFixed(2) : '—'}%</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13 }}>
-            <div><span style={{ color: '#64748b' }}>3M:</span> <span style={{ color: getChangeColor(changes['3M']) }}>{formatChange(changes['3M'])}</span></div>
-            <div><span style={{ color: '#64748b' }}>6M:</span> <span style={{ color: getChangeColor(changes['6M']) }}>{formatChange(changes['6M'])}</span></div>
-            <div><span style={{ color: '#64748b' }}>1Y:</span> <span style={{ color: getChangeColor(changes['12M']) }}>{formatChange(changes['12M'])}</span></div>
+            <div><span style={{ color: '#64748b' }}>3M:</span> <span style={{ color: getChangeColor(changes?.['3M']) }}>{formatChange(changes?.['3M'])}</span></div>
+            <div><span style={{ color: '#64748b' }}>6M:</span> <span style={{ color: getChangeColor(changes?.['6M']) }}>{formatChange(changes?.['6M'])}</span></div>
+            <div><span style={{ color: '#64748b' }}>1Y:</span> <span style={{ color: getChangeColor(changes?.['12M']) }}>{formatChange(changes?.['12M'])}</span></div>
           </div>
         </div>
 
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 8 }}>
           <div style={{ color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Holder Breadth</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc' }}>{breadth.active_schemes}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc' }}>{breadth?.active_schemes ?? '—'}</div>
             <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>Active Schemes</div>
           </div>
           <div style={{ marginTop: 10, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#10b981' }}>Accumulating</span><span>{breadth.accumulating} ({breadth.acc_breadth_pct}%)</span>
+              <span style={{ color: '#10b981' }}>Accumulating</span><span>{breadth?.accumulating ?? 0} ({breadth?.acc_breadth_pct ?? 0}%)</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#ef4444' }}>Distributing</span><span>{breadth.distributing} ({breadth.dist_breadth_pct}%)</span>
+              <span style={{ color: '#ef4444' }}>Distributing</span><span>{breadth?.distributing ?? 0} ({breadth?.dist_breadth_pct ?? 0}%)</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#64748b' }}>Stable</span><span>{breadth.stable}</span>
+              <span style={{ color: '#64748b' }}>Stable</span><span>{breadth?.stable ?? 0}</span>
             </div>
           </div>
         </div>
@@ -159,13 +162,13 @@ export default function FIIBehaviorModule({ ticker }) {
           <div style={{ color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Flows & Concentration</div>
           <div style={{ marginTop: 10, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#38bdf8' }}>New Entrants</span><span style={{ fontWeight: 600 }}>{breadth.new_entrants}</span>
+              <span style={{ color: '#38bdf8' }}>New Entrants</span><span style={{ fontWeight: 600 }}>{breadth?.new_entrants ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#f59e0b' }}>Total Exits</span><span style={{ fontWeight: 600 }}>{breadth.exited}</span>
+              <span style={{ color: '#f59e0b' }}>Total Exits</span><span style={{ fontWeight: 600 }}>{breadth?.exited ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#cbd5e1' }}>Top 3 Holder Share</span><span style={{ fontWeight: 600 }}>{concentration_pct}%</span>
+              <span style={{ color: '#cbd5e1' }}>Top 3 Holder Share</span><span style={{ fontWeight: 600 }}>{concentration_pct ?? '—'}%</span>
             </div>
           </div>
         </div>

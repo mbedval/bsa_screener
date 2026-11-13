@@ -1009,25 +1009,17 @@ function App() {
         ) : active === 'research:elliot_recommendations' ? (
           <ElliotReport apiBase={apiBase} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:hhhl_full_report' ? (
-          <ChartErrorBoundary>
-            <HHHLFullReportPage key={`hhhl_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
-          </ChartErrorBoundary>
+          <HHHLFullReportPage key={`hhhl_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
         ) : active === 'research:volume_spike_report' ? (
-          <ChartErrorBoundary>
-            <VolumeSpikeReportPage key={`vol_spike_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
-          </ChartErrorBoundary>
+          <VolumeSpikeReportPage key={`vol_spike_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
         ) : active === 'research:candlestick_full_report' ? (
-          <ChartErrorBoundary>
-            <CandlestickFullReportPage key={`candlestick_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
-          </ChartErrorBoundary>
+          <CandlestickFullReportPage key={`candlestick_${selectedProfileTicker || 'RELIANCE'}`} apiBase={apiBase} initialTicker={selectedProfileTicker || 'RELIANCE'} />
         ) : active === 'research:stocks_respecting_patterns' ? (
           <StocksRespectingPatternsPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:sectorwise_followers' ? (
           <SectorwiseFollowersPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:retracement_patterns' ? (
-          <ChartErrorBoundary>
-            <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
-          </ChartErrorBoundary>
+          <RetracementPatternPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:watchlist_monitor' ? (
           <WatchlistMonitorPage apiBase={apiBase} dataset={dataset} onSelectTicker={(t) => handleLookupTickerSelect(t)} />
         ) : active === 'research:mf_behavior' ? (

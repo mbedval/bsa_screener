@@ -89,6 +89,23 @@ def _ensure_tables_exist(cur):
             historical_patterns JSONB,
             last_updated TIMESTAMP DEFAULT now()
         );
+        CREATE TABLE IF NOT EXISTS continuous_hhhl_scanner (
+            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+            close DOUBLE PRECISION,
+            current_hhhl INTEGER,
+            avg_continuity_count DOUBLE PRECISION,
+            broken_pattern_count INTEGER,
+            broken_pattern_details TEXT,
+            history_days_analyzed INTEGER,
+            history_start_date DATE,
+            cycle_start_date DATE,
+            historical_cycles JSONB,
+            updated_at TIMESTAMP DEFAULT now()
+        );
+        ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_days_analyzed INTEGER;
+        ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_start_date DATE;
+        ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS cycle_start_date DATE;
+        ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS historical_cycles JSONB;
     """)
 
 def analyze_and_summarize_ticker(ticker: str, context=None) -> bool:
@@ -247,6 +264,11 @@ def analyze_and_summarize_ticker(ticker: str, context=None) -> bool:
                     new_max = max(float(prev_max), close) if prev_max is not None else close
 
                     # Calculate call age in days (30 calendar days = 22 trading days horizon)
+                    if isinstance(created_at, str):
+                        try:
+                            created_at = datetime.fromisoformat(created_at[:19])
+                        except Exception:
+                            created_at = datetime.strptime(created_at[:19], "%Y-%m-%d %H:%M:%S")
                     days_active = (now - created_at).days if created_at else 0
                     
                     is_closed = False
@@ -371,6 +393,8 @@ def analyze_all_tickers(max_workers: int = 8, progress_callback=None, resume: bo
     else:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                _ensure_tables_exist(cur)
+                conn.commit()
                 cur.execute("SELECT ticker FROM ticker_master")
                 all_tickers = [row[0] for row in cur.fetchall()]
 

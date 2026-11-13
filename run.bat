@@ -25,11 +25,23 @@ shift
 goto parse_args
 :done_args
 
-:: Automatically build frontend production bundle if missing or rebuild requested
+:: Automatically build frontend production bundle if missing, outdated, or rebuild requested
 set "NEED_BUILD=0"
 if "!FORCE_BUILD!"=="1" set "NEED_BUILD=1"
+if not exist "%SCRIPT_DIR%\frontend\dist\index.html" set "NEED_BUILD=1"
 if not exist "%SCRIPT_DIR%\frontend\dist\assets\index-*.js" set "NEED_BUILD=1"
 if not exist "%SCRIPT_DIR%\frontend\dist\assets\index-*.css" set "NEED_BUILD=1"
+
+:: Verify that the specific bundle referenced by index.html actually exists in dist\assets
+if "!NEED_BUILD!"=="0" if exist "%SCRIPT_DIR%\frontend\dist\index.html" (
+    if exist "%SCRIPT_DIR%\.venv\Scripts\python.exe" (
+        "%SCRIPT_DIR%\.venv\Scripts\python.exe" -c "import re, pathlib, sys; p = pathlib.Path(r'%SCRIPT_DIR%\frontend\dist\index.html'); m = re.search(r'src=[\x22\x27]/assets/([^\x22\x27]+)[\x22\x27]', p.read_text(encoding='utf-8', errors='ignore')) if p.exists() else None; sys.exit(1 if (m and not (pathlib.Path(r'%SCRIPT_DIR%\frontend\dist\assets') / m.group(1)).exists()) else 0)"
+        if errorlevel 1 set "NEED_BUILD=1"
+    ) else (
+        python -c "import re, pathlib, sys; p = pathlib.Path(r'%SCRIPT_DIR%\frontend\dist\index.html'); m = re.search(r'src=[\x22\x27]/assets/([^\x22\x27]+)[\x22\x27]', p.read_text(encoding='utf-8', errors='ignore')) if p.exists() else None; sys.exit(1 if (m and not (pathlib.Path(r'%SCRIPT_DIR%\frontend\dist\assets') / m.group(1)).exists()) else 0)"
+        if errorlevel 1 set "NEED_BUILD=1"
+    )
+)
 
 if "!NEED_BUILD!"=="1" (
     echo [INFO] Frontend bundle missing or rebuild requested. Building frontend...

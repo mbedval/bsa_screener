@@ -103,15 +103,15 @@ def get_latest_trade_date(ticker_clean: str) -> datetime or None:
     """Query DB for the latest trade_date recorded for a ticker."""
     try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = %s", (ticker_clean,))
-                res = cur.fetchone()
-                if res and res[0]:
-                    val = res[0]
-                    if isinstance(val, str):
-                        return datetime.strptime(val, "%Y-%m-%d")
-                    elif hasattr(val, "strftime"):
-                        return datetime.combine(val, datetime.min.time()) if not isinstance(val, datetime) else val
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = ?", (ticker_clean,))
+            res = cur.fetchone()
+            if res and res[0]:
+                val = res[0]
+                if isinstance(val, str):
+                    return datetime.strptime(val, "%Y-%m-%d")
+                elif hasattr(val, "strftime"):
+                    return datetime.combine(val, datetime.min.time()) if not isinstance(val, datetime) else val
     except Exception:
         pass
     return None
@@ -188,23 +188,23 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
                         
                         try:
                             with get_db_connection() as conn:
-                                with conn.cursor() as cur:
-                                    cur.execute("UPDATE ticker_master SET exchange = %s WHERE ticker = %s", (alt_exchange, ticker_clean))
-                                    conn.commit()
+                                cur = conn.cursor()
+                                cur.execute("UPDATE ticker_master SET exchange = ? WHERE ticker = ?", (alt_exchange, ticker_clean))
+                                conn.commit()
                         except Exception as e:
                             logger.error(f"Failed to update exchange in DB: {e}")
 
             if df is None or df.empty:
                 logger.warning(f"\033[91mCheck if ticker name is correct and no ticker is found for {ticker_clean}\033[0m")
                 with get_db_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO excluded_tickers (ticker, reason, added_by, status, created_at)
-                            VALUES (%s, %s, %s, %s, %s)
-                            ON CONFLICT (ticker) DO UPDATE SET 
-                            reason = EXCLUDED.reason, status = EXCLUDED.status, created_at = EXCLUDED.created_at
-                        """, (ticker_clean, "No price data found (possibly delisted)", "SYSTEM", "EXCLUDED", now_str))
-                        conn.commit()
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO excluded_tickers (ticker, reason, added_by, status, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT (ticker) DO UPDATE SET 
+                        reason = EXCLUDED.reason, status = EXCLUDED.status, created_at = EXCLUDED.created_at
+                    """, (ticker_clean, "No price data found (possibly delisted)", "SYSTEM", "EXCLUDED", now_str))
+                    conn.commit()
                 return False
 
             # Localize timezones
@@ -226,82 +226,82 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
             sector = info.get("sector", "Unknown")
             exchange = "BO" if formatted.endswith(".BO") else "NS"
 
-            from psycopg2.extras import execute_values
+            from engine.database.connection import execute_values
 
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    # Upsert ticker_master metadata
-                    cur.execute("""
-                        INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (ticker) DO UPDATE SET
-                            company_name = EXCLUDED.company_name,
-                            sector = EXCLUDED.sector,
-                            exchange = EXCLUDED.exchange,
-                            updated_at = EXCLUDED.updated_at
-                    """, (ticker_clean, company_name, sector, exchange, now_str))
+                cur = conn.cursor()
+                # Upsert ticker_master metadata
+                cur.execute("""
+                    INSERT INTO ticker_master (ticker, company_name, sector, exchange, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        company_name = EXCLUDED.company_name,
+                        sector = EXCLUDED.sector,
+                        exchange = EXCLUDED.exchange,
+                        updated_at = EXCLUDED.updated_at
+                """, (ticker_clean, company_name, sector, exchange, now_str))
 
-                    # Batch upsert OHLCV and Indicators
-                    ohlcv_records = []
-                    indicators_records = []
-                    for idx, row in enriched.iterrows():
-                        date_str = idx.strftime("%Y-%m-%d")
-                        ohlcv_records.append((
-                            ticker_clean, date_str,
-                            _safe_float(row["Open"]), _safe_float(row["High"]),
-                            _safe_float(row["Low"]), _safe_float(row["Close"]),
-                            _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
-                            now_str
-                        ))
-                        indicators_records.append((
-                            ticker_clean, date_str,
-                            _safe_float(row.get("RSI14")), _safe_float(row.get("SMA20")),
-                            _safe_float(row.get("SMA50")), _safe_float(row.get("EMA12")),
-                            _safe_float(row.get("EMA26")), _safe_float(row.get("MACD_Line")),
-                            _safe_float(row.get("MACD_Signal")), _safe_float(row.get("MACD_Hist")),
-                            _safe_float(row.get("BB_Upper")), _safe_float(row.get("BB_Mid")),
-                            _safe_float(row.get("BB_Lower")), _safe_float(row.get("ATR14")),
-                            _safe_float(row.get("Tenkan_sen")), _safe_float(row.get("Kijun_sen")),
-                            _safe_float(row.get("Span_A")), _safe_float(row.get("Span_B")), now_str
-                        ))
+                # Batch upsert OHLCV and Indicators
+                ohlcv_records = []
+                indicators_records = []
+                for idx, row in enriched.iterrows():
+                    date_str = idx.strftime("%Y-%m-%d")
+                    ohlcv_records.append((
+                        ticker_clean, date_str,
+                        _safe_float(row["Open"]), _safe_float(row["High"]),
+                        _safe_float(row["Low"]), _safe_float(row["Close"]),
+                        _safe_float(row["Volume"]), _safe_float(row["VWAP"]),
+                        now_str
+                    ))
+                    indicators_records.append((
+                        ticker_clean, date_str,
+                        _safe_float(row.get("RSI14")), _safe_float(row.get("SMA20")),
+                        _safe_float(row.get("SMA50")), _safe_float(row.get("EMA12")),
+                        _safe_float(row.get("EMA26")), _safe_float(row.get("MACD_Line")),
+                        _safe_float(row.get("MACD_Signal")), _safe_float(row.get("MACD_Hist")),
+                        _safe_float(row.get("BB_Upper")), _safe_float(row.get("BB_Mid")),
+                        _safe_float(row.get("BB_Lower")), _safe_float(row.get("ATR14")),
+                        _safe_float(row.get("Tenkan_sen")), _safe_float(row.get("Kijun_sen")),
+                        _safe_float(row.get("Span_A")), _safe_float(row.get("Span_B")), now_str
+                    ))
 
-                    if ohlcv_records:
-                        execute_values(cur, """
-                            INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
-                            VALUES %s
-                            ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                                open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
-                                close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
-                                downloaded_at = EXCLUDED.downloaded_at
-                        """, ohlcv_records, page_size=500)
+                if ohlcv_records:
+                    execute_values(cur, """
+                        INSERT INTO ohlcv_daily (ticker, trade_date, open, high, low, close, volume, vwap, downloaded_at)
+                        VALUES ?
+                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                            open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                            close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
+                            downloaded_at = EXCLUDED.downloaded_at
+                    """, ohlcv_records, page_size=500)
 
-                    if indicators_records:
-                        execute_values(cur, """
-                            INSERT INTO indicators_daily (
-                                ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
-                                macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
-                                atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
-                            ) VALUES %s
-                            ON CONFLICT (ticker, trade_date) DO UPDATE SET
-                                rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
-                                ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
-                                macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
-                                bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
-                                atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
-                                span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
-                        """, indicators_records, page_size=500)
+                if indicators_records:
+                    execute_values(cur, """
+                        INSERT INTO indicators_daily (
+                            ticker, trade_date, rsi14, sma20, sma50, ema12, ema26,
+                            macd_line, macd_signal, macd_hist, bb_upper, bb_mid, bb_lower,
+                            atr14, tenkan_sen, kijun_sen, span_a, span_b, computed_at
+                        ) VALUES ?
+                        ON CONFLICT (ticker, trade_date) DO UPDATE SET
+                            rsi14 = EXCLUDED.rsi14, sma20 = EXCLUDED.sma20, sma50 = EXCLUDED.sma50,
+                            ema12 = EXCLUDED.ema12, ema26 = EXCLUDED.ema26, macd_line = EXCLUDED.macd_line,
+                            macd_signal = EXCLUDED.macd_signal, macd_hist = EXCLUDED.macd_hist,
+                            bb_upper = EXCLUDED.bb_upper, bb_mid = EXCLUDED.bb_mid, bb_lower = EXCLUDED.bb_lower,
+                            atr14 = EXCLUDED.atr14, tenkan_sen = EXCLUDED.tenkan_sen, kijun_sen = EXCLUDED.kijun_sen,
+                            span_a = EXCLUDED.span_a, span_b = EXCLUDED.span_b, computed_at = EXCLUDED.computed_at
+                    """, indicators_records, page_size=500)
 
-                    conn.commit()
+                conn.commit()
 
             # For technical score support we are using derivative information also,
             # so if derivative chain detail is not downloaded, do it for ticker flagged with fno
             is_fno = False
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker_clean,))
-                    row = cur.fetchone()
-                    if row:
-                        is_fno = row[0]
+                cur = conn.cursor()
+                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = ?", (ticker_clean,))
+                row = cur.fetchone()
+                if row:
+                    is_fno = row[0]
             if is_fno:
                 from engine.downloaders.derivatives import download_and_insert_derivatives
                 download_and_insert_derivatives(ticker_clean)
@@ -372,30 +372,30 @@ def download_fundamental_data(ticker_clean: str, formatted: str, yf_ticker_obj=N
         today = datetime.now().strftime("%Y-%m-%d")
 
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO fundamentals (
-                        ticker, fetched_date, market_cap, current_pe, avg_pe, last_pat, avg_pat,
-                        last_other_income, avg_other_income, debt_to_equity,
-                        is_pat_growing, is_other_income_ok, is_pe_ok, is_debt_equity_ok,
-                        fundamental_score, passed, details
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (ticker, fetched_date) DO UPDATE SET
-                        market_cap = EXCLUDED.market_cap,
-                        current_pe = EXCLUDED.current_pe, avg_pe = EXCLUDED.avg_pe,
-                        last_pat = EXCLUDED.last_pat, avg_pat = EXCLUDED.avg_pat,
-                        last_other_income = EXCLUDED.last_other_income, avg_other_income = EXCLUDED.avg_other_income,
-                        debt_to_equity = EXCLUDED.debt_to_equity, is_pat_growing = EXCLUDED.is_pat_growing,
-                        is_other_income_ok = EXCLUDED.is_other_income_ok, is_pe_ok = EXCLUDED.is_pe_ok,
-                        is_debt_equity_ok = EXCLUDED.is_debt_equity_ok, fundamental_score = EXCLUDED.fundamental_score,
-                        passed = EXCLUDED.passed, details = EXCLUDED.details
-                """, (
-                    ticker_clean, today, market_cap, current_pe, avg_pe, last_pat, avg_pat,
-                    last_other_inc, avg_other_inc, debt_to_equity,
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO fundamentals (
+                    ticker, fetched_date, market_cap, current_pe, avg_pe, last_pat, avg_pat,
+                    last_other_income, avg_other_income, debt_to_equity,
                     is_pat_growing, is_other_income_ok, is_pe_ok, is_debt_equity_ok,
-                    score, passed, "{}"
-                ))
-                conn.commit()
+                    fundamental_score, passed, details
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (ticker, fetched_date) DO UPDATE SET
+                    market_cap = EXCLUDED.market_cap,
+                    current_pe = EXCLUDED.current_pe, avg_pe = EXCLUDED.avg_pe,
+                    last_pat = EXCLUDED.last_pat, avg_pat = EXCLUDED.avg_pat,
+                    last_other_income = EXCLUDED.last_other_income, avg_other_income = EXCLUDED.avg_other_income,
+                    debt_to_equity = EXCLUDED.debt_to_equity, is_pat_growing = EXCLUDED.is_pat_growing,
+                    is_other_income_ok = EXCLUDED.is_other_income_ok, is_pe_ok = EXCLUDED.is_pe_ok,
+                    is_debt_equity_ok = EXCLUDED.is_debt_equity_ok, fundamental_score = EXCLUDED.fundamental_score,
+                    passed = EXCLUDED.passed, details = EXCLUDED.details
+            """, (
+                ticker_clean, today, market_cap, current_pe, avg_pe, last_pat, avg_pat,
+                last_other_inc, avg_other_inc, debt_to_equity,
+                is_pat_growing, is_other_income_ok, is_pe_ok, is_debt_equity_ok,
+                score, passed, "{}"
+            ))
+            conn.commit()
         return True
     except Exception as e:
         logger.error(f"Error fetching fundamentals for {ticker_clean}: {e}")
@@ -410,14 +410,14 @@ def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callba
         all_tickers = [t.upper().strip() for t in tickers]
     else:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT tm.ticker 
-                    FROM ticker_master tm
-                    LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
-                    WHERE et.ticker IS NULL
-                """)
-                all_tickers = [row[0] for row in cur.fetchall()]
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT tm.ticker 
+                FROM ticker_master tm
+                LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
+                WHERE et.ticker IS NULL
+            """)
+            all_tickers = [row[0] for row in cur.fetchall()]
 
     if not all_tickers:
         logger.warning("No tickers found in ticker_master!")

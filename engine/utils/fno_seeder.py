@@ -40,26 +40,26 @@ def seed_fno_tickers() -> int:
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS fno_stock_master (
-                        id SERIAL PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         symbol TEXT UNIQUE NOT NULL,
                         underlying_name TEXT NOT NULL,
                         instrument_type TEXT DEFAULT 'STOCK',
                         serial_number INTEGER,
-                        is_active BOOLEAN DEFAULT TRUE,
-                        entry_date TEXT DEFAULT CURRENT_DATE::text,
+                        is_active INTEGER DEFAULT 1,
+                        entry_date TEXT DEFAULT (date('now')),
                         exit_date TEXT,
-                        created_at TEXT DEFAULT NOW()::text
+                        created_at TEXT DEFAULT (datetime('now'))
                     );
                     CREATE TABLE IF NOT EXISTS fno_index_master (
-                        id SERIAL PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         symbol TEXT UNIQUE NOT NULL,
                         underlying_name TEXT NOT NULL,
                         instrument_type TEXT DEFAULT 'INDEX',
                         serial_number INTEGER,
-                        is_active BOOLEAN DEFAULT TRUE,
-                        entry_date TEXT DEFAULT CURRENT_DATE::text,
+                        is_active INTEGER DEFAULT 1,
+                        entry_date TEXT DEFAULT (date('now')),
                         exit_date TEXT,
-                        created_at TEXT DEFAULT NOW()::text
+                        created_at TEXT DEFAULT (datetime('now'))
                     );
                 """)
                 conn.commit()
@@ -81,19 +81,19 @@ def seed_fno_tickers() -> int:
                         target_table = "fno_index_master" if itype == "INDEX" else "fno_stock_master"
                         cur.execute(f"""
                             INSERT INTO {target_table} (symbol, underlying_name, instrument_type, is_active)
-                            VALUES (%s, %s, %s, TRUE)
+                            VALUES (?, ?, ?, 1)
                             ON CONFLICT (symbol) DO UPDATE SET
                                 underlying_name = EXCLUDED.underlying_name,
                                 instrument_type = EXCLUDED.instrument_type,
-                                is_active = TRUE
+                                is_active = 1
                         """, (symbol, name, itype))
                         count += 1
 
                         if target_table == "fno_stock_master":
                             cur.execute("""
                                 UPDATE ticker_master
-                                SET is_fno = TRUE
-                                WHERE ticker = %s
+                                SET is_fno = 1
+                                WHERE ticker = ?
                             """, (symbol,))
                             updated_count += 1
                 conn.commit()

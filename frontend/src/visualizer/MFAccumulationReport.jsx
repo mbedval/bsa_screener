@@ -122,10 +122,10 @@ export default function MFAccumulationReport({ onTickerClick }) {
                   {truncateText(row.company_name)}
                 </td>
                 <td style={tdStyle}>
-                  {Number(row.current_weight).toFixed(2)}%
+                  {row.current_weight != null ? `${Number(row.current_weight).toFixed(2)}%` : '—'}
                 </td>
                 <td style={{ ...tdStyle, color: '#34d399', fontWeight: 700 }}>
-                  +{Number(row.change_val).toFixed(2)}%
+                  {row.change_val != null ? `+${Number(row.change_val).toFixed(2)}%` : '—'}
                 </td>
               </tr>
             ))}

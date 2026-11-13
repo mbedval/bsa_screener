@@ -146,7 +146,7 @@ def main():
                         progress.update(task_id, advance=advance)
                 download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=True, dl_fundamentals=False, checkpoint_key="tech_download")
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.1 (Download Technicals) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 1.1 (Download Technicals) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_1_fund():
         p_start = time.time()
@@ -167,7 +167,7 @@ def main():
                         progress.update(task_id, advance=advance)
                 download_all_tickers(progress_callback=cb, resume=resume, force=args.force, tickers=valid_tickers, dl_technicals=False, dl_fundamentals=True, checkpoint_key="fund_download")
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.2 (Download Fundamentals) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 1.2 (Download Fundamentals) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_2():
         p_start = time.time()
@@ -185,7 +185,7 @@ def main():
             download_all_mf_holdings(progress_callback=cb, tickers=valid_tickers)
             download_all_fii_holdings(progress_callback=cb, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.3 (Download MF & FII) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 1.3 (Download MF & FII) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1_3():
         p_start = time.time()
@@ -206,7 +206,7 @@ def main():
                         progress.update(task_id, advance=advance)
                 download_all_derivatives(progress_callback=cb, resume=resume, tickers=valid_tickers)
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1.4 (Download F&O) completed in {p_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 1.4 (Download F&O) completed in {p_elapsed:.2f}s.")
 
     def run_phase_1():
         p_start = time.time()
@@ -216,7 +216,7 @@ def main():
         run_phase_1_2()
         run_phase_1_3()
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Phase 1 (Raw Data Ingestion) fully completed in {p_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 1 (Raw Data Ingestion) fully completed in {p_elapsed:.2f}s.")
 
     # ── Phase 2: Multi-Factor Scoring & Analysis Sub-Runners ────────────────
     def run_phase_2_1():
@@ -229,14 +229,12 @@ def main():
         from engine.analysis.cup_and_handle_scanner import scan_and_store_cup_and_handle, ensure_cup_and_handle_table
         from engine.analysis.retracement import generate_retracement_speculator_analysis
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        from psycopg2.extras import RealDictCursor
+# MIGRATED: from psycopg2.extras import RealDictCursor
 
         # Pre-initialize scanner tables once to prevent DDL lock contention under multi-threading
         try:
             ensure_hhhl_table_exists()
-            with get_db_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    ensure_cup_and_handle_table(cur)
+            ensure_cup_and_handle_table()
         except Exception as e:
             logger.warning(f"DDL pre-init warning in Phase 2.1: {e}")
         
@@ -314,9 +312,14 @@ def main():
         logger.info("[Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...")
         all_spot = get_spot_tickers()
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
-        from engine.analysis.patterns import scan_and_store_ticker_patterns
+        from engine.analysis.patterns import scan_and_store_ticker_patterns, ensure_chart_patterns_table
         from engine.analysis.stocks_respecting_patterns import generate_stocks_respecting_patterns
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        try:
+            ensure_chart_patterns_table()
+        except Exception as e:
+            logger.warning(f"DDL pre-init warning in Phase 2.4: {e}")
 
         def _worker_2_4(t):
             try:
@@ -422,131 +425,134 @@ def main():
         run_phase_2_7()
         run_phase_2_8()
         phase2_elapsed = time.time() - phase2_start
-        logger.info(f"[✓] Phase 2 (Analyze All) fully completed in {phase2_elapsed:.2f}s.")
+        logger.info(f"[OK] Phase 2 (Analyze All) fully completed in {phase2_elapsed:.2f}s.")
 
     def backup_historical_calls():
         logger.info("Executing Historical Calls Data Retaining & Backup Mechanism...")
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Ensure base historical_calls table exists with required columns
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS historical_calls (
-                        id SERIAL PRIMARY KEY,
-                        uniqueid TEXT,
-                        ticker TEXT NOT NULL,
-                        recommended_call TEXT,
-                        confidence DOUBLE PRECISION,
-                        cmp DOUBLE PRECISION,
-                        entry_price DOUBLE PRECISION,
-                        stop_loss DOUBLE PRECISION,
-                        target_price DOUBLE PRECISION,
-                        rr_ratio TEXT DEFAULT '1:2.00',
-                        status TEXT DEFAULT 'OPEN',
-                        timestamp TEXT,
-                        created_at TIMESTAMP DEFAULT now(),
-                        review_date DATE DEFAULT CURRENT_DATE,
-                        closed_at TIMESTAMP,
-                        final_cmp DOUBLE PRECISION,
-                        latest_cmp DOUBLE PRECISION,
-                        call_status TEXT DEFAULT 'OPEN',
-                        outcome TEXT DEFAULT 'OPEN',
-                        min_cmp DOUBLE PRECISION,
-                        max_cmp DOUBLE PRECISION,
-                        closest TEXT,
-                        closest_info TEXT
-                    );
-                """)
+            cur = conn.cursor()
+            # Ensure base historical_calls table exists with required columns
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS historical_calls (
+                    id SERIAL PRIMARY KEY,
+                    uniqueid TEXT,
+                    ticker TEXT NOT NULL,
+                    recommended_call TEXT,
+                    confidence REAL,
+                    cmp REAL,
+                    entry_price REAL,
+                    stop_loss REAL,
+                    target_price REAL,
+                    rr_ratio TEXT DEFAULT '1:2.00',
+                    status TEXT DEFAULT 'OPEN',
+                    timestamp TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    review_date DATE DEFAULT CURRENT_DATE,
+                    closed_at TIMESTAMP,
+                    final_cmp REAL,
+                    latest_cmp REAL,
+                    call_status TEXT DEFAULT 'OPEN',
+                    outcome TEXT DEFAULT 'OPEN',
+                    min_cmp REAL,
+                    max_cmp REAL,
+                    closest TEXT,
+                    closest_info TEXT
+                );
+            """)
 
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS historical_call_bkp (
-                        id SERIAL PRIMARY KEY,
-                        uniqueid TEXT,
-                        ticker TEXT NOT NULL,
-                        recommended_call TEXT,
-                        confidence DOUBLE PRECISION,
-                        cmp DOUBLE PRECISION,
-                        entry_price DOUBLE PRECISION,
-                        stop_loss DOUBLE PRECISION,
-                        target_price DOUBLE PRECISION,
-                        rr_ratio TEXT DEFAULT '1:2.00',
-                        status TEXT DEFAULT 'OPEN',
-                        timestamp TEXT,
-                        created_at TIMESTAMP DEFAULT now(),
-                        review_date DATE DEFAULT CURRENT_DATE,
-                        closed_at TIMESTAMP,
-                        final_cmp DOUBLE PRECISION,
-                        latest_cmp DOUBLE PRECISION,
-                        call_status TEXT DEFAULT 'OPEN',
-                        outcome TEXT DEFAULT 'OPEN',
-                        min_cmp DOUBLE PRECISION,
-                        max_cmp DOUBLE PRECISION,
-                        closest TEXT,
-                        closest_info TEXT,
-                        backed_up_at TIMESTAMP DEFAULT now()
-                    );
-                """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS historical_call_bkp (
+                    id SERIAL PRIMARY KEY,
+                    uniqueid TEXT,
+                    ticker TEXT NOT NULL,
+                    recommended_call TEXT,
+                    confidence REAL,
+                    cmp REAL,
+                    entry_price REAL,
+                    stop_loss REAL,
+                    target_price REAL,
+                    rr_ratio TEXT DEFAULT '1:2.00',
+                    status TEXT DEFAULT 'OPEN',
+                    timestamp TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    review_date DATE DEFAULT CURRENT_DATE,
+                    closed_at TIMESTAMP,
+                    final_cmp REAL,
+                    latest_cmp REAL,
+                    call_status TEXT DEFAULT 'OPEN',
+                    outcome TEXT DEFAULT 'OPEN',
+                    min_cmp REAL,
+                    max_cmp REAL,
+                    closest TEXT,
+                    closest_info TEXT,
+                    backed_up_at TEXT DEFAULT (datetime('now'))
+                );
+            """)
 
-                # Ensure all columns exist on both tables if created from older/incomplete schema
-                columns_schema = [
-                    ("uniqueid", "TEXT"),
-                    ("recommended_call", "TEXT"),
-                    ("confidence", "DOUBLE PRECISION"),
-                    ("cmp", "DOUBLE PRECISION"),
-                    ("entry_price", "DOUBLE PRECISION"),
-                    ("stop_loss", "DOUBLE PRECISION"),
-                    ("target_price", "DOUBLE PRECISION"),
-                    ("rr_ratio", "TEXT DEFAULT '1:2.00'"),
-                    ("status", "TEXT DEFAULT 'OPEN'"),
-                    ("timestamp", "TEXT"),
-                    ("created_at", "TIMESTAMP DEFAULT now()"),
-                    ("review_date", "DATE DEFAULT CURRENT_DATE"),
-                    ("closed_at", "TIMESTAMP"),
-                    ("final_cmp", "DOUBLE PRECISION"),
-                    ("latest_cmp", "DOUBLE PRECISION"),
-                    ("call_status", "TEXT DEFAULT 'OPEN'"),
-                    ("outcome", "TEXT DEFAULT 'OPEN'"),
-                    ("min_cmp", "DOUBLE PRECISION"),
-                    ("max_cmp", "DOUBLE PRECISION"),
-                    ("closest", "TEXT"),
-                    ("closest_info", "TEXT"),
-                ]
-                for tbl in ["historical_calls", "historical_call_bkp"]:
-                    for col_name, col_type in columns_schema:
-                        cur.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
-                conn.commit()
+            # Ensure all columns exist on both tables if created from older/incomplete schema
+            columns_schema = [
+                ("uniqueid", "TEXT"),
+                ("recommended_call", "TEXT"),
+                ("confidence", "REAL"),
+                ("cmp", "REAL"),
+                ("entry_price", "REAL"),
+                ("stop_loss", "REAL"),
+                ("target_price", "REAL"),
+                ("rr_ratio", "TEXT DEFAULT '1:2.00'"),
+                ("status", "TEXT DEFAULT 'OPEN'"),
+                ("timestamp", "TEXT"),
+                ("created_at", "TEXT DEFAULT (datetime('now'))"),
+                ("review_date", "DATE DEFAULT CURRENT_DATE"),
+                ("closed_at", "TIMESTAMP"),
+                ("final_cmp", "REAL"),
+                ("latest_cmp", "REAL"),
+                ("call_status", "TEXT DEFAULT 'OPEN'"),
+                ("outcome", "TEXT DEFAULT 'OPEN'"),
+                ("min_cmp", "REAL"),
+                ("max_cmp", "REAL"),
+                ("closest", "TEXT"),
+                ("closest_info", "TEXT"),
+            ]
+            for tbl in ["historical_calls", "historical_call_bkp"]:
+                cur.execute(f"PRAGMA table_info({tbl})")
+                existing = {row["name"] for row in cur.fetchall()}
+                for col_name, col_type in columns_schema:
+                    if col_name not in existing:
+                        cur.execute(f"ALTER TABLE {tbl} ADD COLUMN {col_name} {col_type};")
+            conn.commit()
 
-                cur.execute("""
-                    INSERT INTO historical_call_bkp (
-                        uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price,
-                        rr_ratio, status, timestamp, created_at, review_date, closed_at, final_cmp, latest_cmp,
-                        call_status, outcome, min_cmp, max_cmp, closest, closest_info
-                    )
-                    SELECT 
-                        hc.uniqueid, hc.ticker, hc.recommended_call, hc.confidence, hc.cmp, hc.entry_price, hc.stop_loss, hc.target_price,
-                        hc.rr_ratio, hc.status, hc.timestamp, hc.created_at, hc.review_date, hc.closed_at, hc.final_cmp, hc.latest_cmp,
-                        hc.call_status, hc.outcome, hc.min_cmp, hc.max_cmp, hc.closest, hc.closest_info
-                    FROM historical_calls hc
-                    WHERE hc.uniqueid IS NOT NULL 
-                      AND hc.uniqueid NOT IN (
-                          SELECT bkp.uniqueid 
-                          FROM historical_call_bkp bkp 
-                          WHERE bkp.uniqueid IS NOT NULL
-                      );
-                """)
-                copied = cur.rowcount
-                conn.commit()
+            cur.execute("""
+                INSERT INTO historical_call_bkp (
+                    uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price,
+                    rr_ratio, status, timestamp, created_at, review_date, closed_at, final_cmp, latest_cmp,
+                    call_status, outcome, min_cmp, max_cmp, closest, closest_info
+                )
+                SELECT 
+                    hc.uniqueid, hc.ticker, hc.recommended_call, hc.confidence, hc.cmp, hc.entry_price, hc.stop_loss, hc.target_price,
+                    hc.rr_ratio, hc.status, hc.timestamp, hc.created_at, hc.review_date, hc.closed_at, hc.final_cmp, hc.latest_cmp,
+                    hc.call_status, hc.outcome, hc.min_cmp, hc.max_cmp, hc.closest, hc.closest_info
+                FROM historical_calls hc
+                WHERE hc.uniqueid IS NOT NULL 
+                  AND hc.uniqueid NOT IN (
+                      SELECT bkp.uniqueid 
+                      FROM historical_call_bkp bkp 
+                      WHERE bkp.uniqueid IS NOT NULL
+                  );
+            """)
+            copied = cur.rowcount
+            conn.commit()
 
-                import csv
-                bkp_csv_path = ROOT_DIR / "data" / "historical_call_bkp.csv"
-                cur.execute("SELECT uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price, rr_ratio, status, timestamp, created_at, review_date, closed_at, final_cmp, latest_cmp, call_status, outcome, min_cmp, max_cmp, closest, closest_info FROM historical_call_bkp;")
-                rows = cur.fetchall()
-                cols = [desc[0] for desc in cur.description]
-                with open(bkp_csv_path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(cols)
-                    writer.writerows(rows)
+            import csv
+            bkp_csv_path = ROOT_DIR / "data" / "historical_call_bkp.csv"
+            cur.execute("SELECT uniqueid, ticker, recommended_call, confidence, cmp, entry_price, stop_loss, target_price, rr_ratio, status, timestamp, created_at, review_date, closed_at, final_cmp, latest_cmp, call_status, outcome, min_cmp, max_cmp, closest, closest_info FROM historical_call_bkp;")
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            with open(bkp_csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(cols)
+                writer.writerows(rows)
                     
-                logger.info(f"[✓] Backup complete! Synchronized {copied} new historical call records to 'historical_call_bkp' table and saved backup to {bkp_csv_path}.")
+            logger.info(f"[OK] Backup complete! Synchronized {copied} new historical call records to 'historical_call_bkp' table and saved backup to {bkp_csv_path}.")
     # ── Argument Pre-processing ─────────────────────────────────────────────
     if args.ticker:
         raw_t = args.ticker.upper().strip()
@@ -564,16 +570,16 @@ def main():
         try:
             from engine.database.connection import get_db_connection
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (args.ticker,))
-                    if not cur.fetchone():
-                        logger.info(f"Ticker {args.ticker} not found in ticker_master. Auto-adding it globally with exchange {args.exchange}...")
-                        cur.execute(
-                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
-                            (args.ticker, args.ticker, False, args.exchange)
-                        )
-                        conn.commit()
-                        logger.info(f"Successfully added {args.ticker} to ticker_master.")
+                cur = conn.cursor()
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = ?", (args.ticker,))
+                if not cur.fetchone():
+                    logger.info(f"Ticker {args.ticker} not found in ticker_master. Auto-adding it globally with exchange {args.exchange}...")
+                    cur.execute(
+                        "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (?, ?, ?, ?)",
+                        (args.ticker, args.ticker, False, args.exchange)
+                    )
+                    conn.commit()
+                    logger.info(f"Successfully added {args.ticker} to ticker_master.")
         except Exception as e:
             logger.error(f"Failed during global auto-add for ticker {args.ticker}: {e}")
 
@@ -635,7 +641,7 @@ def main():
         run_phase_1()
         run_phase_2()
         backup_historical_calls()
-        logger.info("[✓] Full pipeline execution completed successfully!")
+        logger.info("[OK] Full pipeline execution completed successfully!")
     elif args.mode == "spot-pipeline":
         logger.info("Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
         p_start = time.time()
@@ -648,7 +654,7 @@ def main():
         run_phase_2_7()
         run_phase_2_8()
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Spot pipeline execution completed successfully in {p_elapsed:.2f}s!")
+        logger.info(f"[OK] Spot pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "fno-pipeline":
         logger.info("Triggered F&O Derivatives & Technicals Pipeline...")
         if watchlist_tickers is None:
@@ -664,14 +670,14 @@ def main():
         run_phase_2_6()
         run_phase_2_8()
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] F&O Pipeline execution completed successfully in {p_elapsed:.2f}s!")
+        logger.info(f"[OK] F&O Pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "mf-pipeline":
         logger.info("Triggered Mutual Fund & FII Pipeline (download-mf -> analyze-mf)...")
         p_start = time.time()
         run_phase_1_2()
         run_phase_2_5()
         p_elapsed = time.time() - p_start
-        logger.info(f"[✓] Mutual Fund & FII pipeline execution completed successfully in {p_elapsed:.2f}s!")
+        logger.info(f"[OK] Mutual Fund & FII pipeline execution completed successfully in {p_elapsed:.2f}s!")
     elif args.mode == "backup":
         backup_historical_calls()
     elif args.mode == "news-analyze":
@@ -699,10 +705,10 @@ def main():
         from engine.database.connection import get_db_connection
         exists = False
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
-                if cur.fetchone():
-                    exists = True
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM ticker_master WHERE ticker = ?", (ticker,))
+            if cur.fetchone():
+                exists = True
         
         if not exists:
             logger.info(f"No match found for ticker: {ticker}")
@@ -721,25 +727,25 @@ def main():
         ]
         
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                for table in tables_to_delete_from:
-                    try:
-                        cur.execute(f"DELETE FROM {table} WHERE ticker = %s", (ticker,))
-                        deleted = cur.rowcount
-                        if deleted > 0:
-                            logger.info(f"Deleted {deleted} rows from {table}")
-                    except Exception as e:
-                        logger.warning(f"Could not delete from {table}: {e}")
-                        conn.rollback()
-                        continue
-                
-                # Delete from master last
+            cur = conn.cursor()
+            for table in tables_to_delete_from:
                 try:
-                    cur.execute("DELETE FROM ticker_master WHERE ticker = %s", (ticker,))
-                    logger.info(f"Deleted {ticker} from ticker_master")
+                    cur.execute(f"DELETE FROM {table} WHERE ticker = ?", (ticker,))
+                    deleted = cur.rowcount
+                    if deleted > 0:
+                        logger.info(f"Deleted {deleted} rows from {table}")
                 except Exception as e:
-                    logger.error(f"Could not delete from ticker_master: {e}")
+                    logger.warning(f"Could not delete from {table}: {e}")
                     conn.rollback()
+                    continue
+                
+            # Delete from master last
+            try:
+                cur.execute("DELETE FROM ticker_master WHERE ticker = ?", (ticker,))
+                logger.info(f"Deleted {ticker} from ticker_master")
+            except Exception as e:
+                logger.error(f"Could not delete from ticker_master: {e}")
+                conn.rollback()
                 
             conn.commit()
             
@@ -753,22 +759,22 @@ def main():
         from engine.database.connection import get_db_connection
         exists = False
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
-                if cur.fetchone():
-                    exists = True
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM ticker_master WHERE ticker = ?", (ticker,))
+            if cur.fetchone():
+                exists = True
         if exists:
             logger.info(f"Ticker {ticker} all ready exist in ticker_master.")
             sys.exit(0)
         
         logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
-                    (ticker, ticker, False, getattr(args, "exchange", "NSE"))
-                )
-                conn.commit()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (?, ?, ?, ?)",
+                (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+            )
+            conn.commit()
         logger.info(f"Successfully added {ticker} to ticker_master. Running ingestion and analysis...")
         
         # Ingestion and Analysis
@@ -776,11 +782,11 @@ def main():
         if dl_ok:
             is_fno = False
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
-                    row = cur.fetchone()
-                    if row:
-                        is_fno = row[0]
+                cur = conn.cursor()
+                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = ?", (ticker,))
+                row = cur.fetchone()
+                if row:
+                    is_fno = row[0]
             if is_fno:
                 download_and_insert_derivatives(ticker)
                 
@@ -811,11 +817,11 @@ def main():
             from engine.database.connection import get_db_connection
             is_fno = False
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
-                    row = cur.fetchone()
-                    if row:
-                        is_fno = row[0]
+                cur = conn.cursor()
+                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = ?", (ticker,))
+                row = cur.fetchone()
+                if row:
+                    is_fno = row[0]
             if is_fno:
                 download_and_insert_derivatives(ticker)
                 
@@ -842,9 +848,9 @@ def main():
         has_summary = False
         try:
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1 FROM analysis_summaries WHERE ticker = %s", (ticker,))
-                    has_summary = cur.fetchone() is not None
+                cur = conn.cursor()
+                cur.execute("SELECT 1 FROM analysis_summaries WHERE ticker = ?", (ticker,))
+                has_summary = cur.fetchone() is not None
         except Exception:
             pass
 
@@ -853,26 +859,26 @@ def main():
             
             # 0. Check if ticker exists in ticker_master, if not, add it
             with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
-                    if not cur.fetchone():
-                        logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
-                        cur.execute(
-                            "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (%s, %s, %s, %s)",
-                            (ticker, ticker, False, getattr(args, "exchange", "NSE"))
-                        )
-                        conn.commit()
-                        logger.info(f"Successfully added {ticker} to ticker_master.")
+                cur = conn.cursor()
+                cur.execute("SELECT 1 FROM ticker_master WHERE ticker = ?", (ticker,))
+                if not cur.fetchone():
+                    logger.info(f"Ticker {ticker} not found in ticker_master. Adding it...")
+                    cur.execute(
+                        "INSERT INTO ticker_master (ticker, company_name, is_fno, exchange) VALUES (?, ?, ?, ?)",
+                        (ticker, ticker, False, getattr(args, "exchange", "NSE"))
+                    )
+                    conn.commit()
+                    logger.info(f"Successfully added {ticker} to ticker_master.")
             
             dl_ok = download_ticker_data(ticker)
             if dl_ok:
                 is_fno = False
                 with get_db_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker,))
-                        row = cur.fetchone()
-                        if row:
-                            is_fno = row[0]
+                    cur = conn.cursor()
+                    cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = ?", (ticker,))
+                    row = cur.fetchone()
+                    if row:
+                        is_fno = row[0]
                 if is_fno:
                     download_and_insert_derivatives(ticker)
                 analyze_and_summarize_ticker(ticker)

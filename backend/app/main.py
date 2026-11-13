@@ -1,6 +1,9 @@
-import logging
+﻿import logging
+import sqlite3
+import json
 import json
 import math
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -14,8 +17,6 @@ except ImportError:
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from psycopg import sql
-from psycopg.errors import OperationalError
 
 from .catalog import FIXED_TABLES, MASTER_TABLES, RAW_DATA_TABLES, SYSTEM_TABLES, display_name
 from .config import settings
@@ -23,6 +24,14 @@ from .database import get_connection
 from .master import router as master_router
 
 logger = logging.getLogger("bsa_main")
+
+def _in_clause(items: list) -> tuple[str, list]:
+    """Build a safe IN (?, ?, ...) clause for SQLite from a list."""
+    if not items:
+        return "('')", []
+    placeholders = ",".join(["?"] * len(items))
+    return f"({placeholders})", list(items)
+
 
 app = FastAPI(title="BSA Data Portal API", version="2.0.0")
 app.add_middleware(
@@ -34,8 +43,8 @@ app.add_middleware(
 )
 app.include_router(master_router)
 DATASETS = {
-    "rawdata": settings.rawdata_postgres_dsn,
-    "intelligence": settings.bsa_postgres_dsn,
+    "rawdata": None,
+    "intelligence": None,
 }
 
 
@@ -47,15 +56,16 @@ def get_dsn(dataset: str) -> str:
 
 
 def database_error(error: Exception) -> HTTPException:
-    return HTTPException(status_code=503, detail=f"PostgreSQL is unavailable: {error}")
+    return HTTPException(status_code=503, detail=f"Database is unavailable: {error}")
 
 
 def table_names(dsn: str) -> list[str]:
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT tablename AS table_name FROM pg_tables WHERE schemaname = %s", (settings.database_schema,))
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name AS table_name FROM sqlite_master WHERE type='table'")
             return [row["table_name"] for row in cur.fetchall()]
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -84,24 +94,24 @@ def database_info_for(dsn: str) -> dict[str, Any]:
             except Exception:
                 pass
 
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT current_database() AS name, current_user AS user_name, inet_server_addr() AS server_addr")
-            current = cur.fetchone()
-            cur.execute("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")
-            databases = [row["datname"] for row in cur.fetchall()]
-            cur.execute("SELECT tablename AS table_name FROM pg_tables WHERE schemaname = %s ORDER BY tablename", (settings.database_schema,))
+        with get_connection() as conn:
+            cur = conn.cursor()
+            # SQLite: no server-level database list
+            databases = [settings.sqlite_path]
+            cur.execute("SELECT name AS table_name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = [row["table_name"] for row in cur.fetchall()]
             
             # Fetch latest data download / calculation completion time
             last_download = None
             try:
                 cur.execute("""
-                    SELECT 
-                        GREATEST(
-                            (SELECT MAX(trade_date)::timestamp FROM ohlcv_daily),
-                            (SELECT MAX(updated_at)::timestamp FROM analysis_summaries),
-                            (SELECT MAX(trade_date)::timestamp FROM indicators_daily)
-                        ) AS last_download_time
+                    SELECT MAX(dt) AS last_download_time FROM (
+                        SELECT MAX(trade_date) AS dt FROM ohlcv_daily
+                        UNION ALL
+                        SELECT MAX(updated_at) FROM analysis_summaries
+                        UNION ALL
+                        SELECT MAX(trade_date) FROM indicators_daily
+                    ) t
                 """)
                 row = cur.fetchone()
                 if row and row.get("last_download_time"):
@@ -110,17 +120,16 @@ def database_info_for(dsn: str) -> dict[str, Any]:
             except Exception as e:
                 logger.warning(f"Could not fetch last download timestamp: {e}")
 
-            host_val = parsed_host or settings.postgres_host or current.get("server_addr")
             return {
-                "database": current["name"],
-                "user": current["user_name"],
-                "host": str(host_val) if host_val else settings.postgres_host,
-                "schema": settings.database_schema,
+                "database": settings.sqlite_path,
+                "user": "sqlite",
+                "host": "localhost (SQLite file-based)",
+                "schema": "main",
                 "available_databases": databases,
                 "tables": tables,
                 "last_data_download": last_download,
             }
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -136,7 +145,8 @@ ANALYSIS_REPORT_TABLE_NAMES = {
 
 def is_analysis_executed(dsn: str) -> bool:
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("SELECT 1 FROM analysis_summaries LIMIT 1;")
             return cur.fetchone() is not None
     except Exception:
@@ -166,7 +176,14 @@ def get_columns_for_virtual_table(table_name: str) -> list[str]:
     return col_map.get(table_name, ["ticker", "last_updated"])
 
 
-def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: str | None, ticker: str | None, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+def table_data_for(dsn: str, table_name: str, limit: int = 5000, offset: int = 0, search: str | None = None, ticker: str | None = None, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+    if hasattr(limit, "default"):
+        limit = limit.default
+    limit = int(limit) if limit is not None else 5000
+    if hasattr(offset, "default"):
+        offset = offset.default
+    offset = int(offset) if offset is not None else 0
+
     if table_name.startswith("master:"):
         table_name = table_name.split("master:", 1)[1]
 
@@ -185,19 +202,20 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     all_tables = table_names(dsn)
     if table_name == "delivery_spikes":
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["ticker", "stock_name", "sector", "current_price", "latest_volume", "avg_volume_20d", "volume_ratio", "is_spike", "insight", "latest_date"]
                 
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("v.ticker ILIKE %s"))
+                    conditions.append("v.ticker LIKE ?")
                     params.append(f"%{ticker}%")
                 if search:
                     searchable = ["v.ticker", "t.company_name", "t.sector", "v.insight"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
                 
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
                 
                 base_cte = """
                 WITH vol_stats AS (
@@ -215,8 +233,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                         COALESCE(t.sector, 'General') AS sector,
                         v.close AS current_price,
                         v.volume AS latest_volume,
-                        ROUND(v.avg_vol_20::numeric, 0) AS avg_volume_20d,
-                        ROUND((v.volume / NULLIF(v.avg_vol_20, 0))::numeric, 2) AS volume_ratio,
+                        ROUND(v.avg_vol_20, 0) AS avg_volume_20d,
+                        ROUND((v.volume / NULLIF(v.avg_vol_20, 0)), 2) AS volume_ratio,
                         CASE WHEN (v.volume / NULLIF(v.avg_vol_20, 0)) >= 1.5 THEN 1 ELSE 0 END AS is_spike,
                         CASE 
                             WHEN (v.volume / NULLIF(v.avg_vol_20, 0)) >= 2.0 THEN 'Massive Volume Expansion (2x+)'
@@ -229,45 +247,46 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     WHERE v.rn = 1
                 )
                 """
-                count_sql = sql.SQL(base_cte + " SELECT count(*) AS total FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker ") + where_clause
+                count_sql = base_cte + " SELECT count(*) AS total FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker " + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
-                data_sql = sql.SQL(base_cte + " SELECT v.* FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker ") + where_clause + sql.SQL(" ORDER BY v.volume_ratio DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = base_cte + " SELECT v.* FROM ranked v JOIN ticker_master t ON v.ticker = t.ticker " + where_clause + " ORDER BY v.volume_ratio DESC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
 
                 return {"table": "delivery_spikes", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     if table_name == "sector_report":
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["ticker", "stock_name", "sector", "current_price", "pe", "pat", "debt_to_equity", "fundamental_score", "hybrid_score", "overall_signal", "last_updated"]
                 
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("t.ticker ILIKE %s"))
+                    conditions.append("t.ticker LIKE ?")
                     params.append(f"%{ticker}%")
                 if search:
                     searchable = ["t.ticker", "t.company_name", "t.sector", "s.name"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
                 
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
                 
                 base_from = """
                 FROM ticker_master t
                 LEFT JOIN (
-                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                    SELECT * FROM fundamentals f2 WHERE fetched_date = (SELECT MAX(f3.fetched_date) FROM fundamentals f3 WHERE f3.ticker = f2.ticker)
                 ) f ON t.ticker = f.ticker
                 LEFT JOIN analysis_summaries a ON t.ticker = a.ticker
                 LEFT JOIN ticker_sector ts ON t.ticker = ts.ticker
                 LEFT JOIN sectors s ON ts.sector_id = s.id
                 """
                 
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
@@ -283,19 +302,18 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     COALESCE(f.fundamental_score, 0) AS fundamental_score,
                     COALESCE(a.hybrid_score, 0) AS hybrid_score,
                     COALESCE(a.overall_signal, 'HOLD') AS overall_signal,
-                    COALESCE(a.updated_at::text, f.fetched_date, t.updated_at::text) AS last_updated
+                    COALESCE(a.updated_at, f.fetched_date, t.updated_at) AS last_updated
                 """
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY hybrid_score DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY hybrid_score DESC, t.ticker ASC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
 
                 return {"table": "sector_report", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     if table_name == "option_chain_analyzer":
         return generate_ticker_option_chain(dsn, ticker or "NIFTY")
-
     if table_name == "best_option_strategy":
         return evaluate_best_option_strategies(dsn, ticker or "NIFTY")
 
@@ -310,16 +328,17 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
     # 2. FNO Active
     if table_name == "fno_active":
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["rank", "ticker", "contract_name", "contract_type", "strike_price", "ltp", "volume", "oi", "underlying_price", "bet_category", "last_updated"]
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["ticker", "option_type", "expiry_date"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{}::text ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE volume > 0 ") + (sql.SQL(" AND ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL(""))
+                where_clause = " WHERE volume > 0 " + (" AND " + " AND ".join(conditions) if conditions else "")
                 
                 base_cte = """
                 WITH ranked_fno AS (
@@ -337,140 +356,143 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                         last_updated
                     FROM raw_fno_derivatives
                 """
-                count_sql = sql.SQL("SELECT count(*) AS total FROM raw_fno_derivatives ") + where_clause
+                count_sql = "SELECT count(*) AS total FROM raw_fno_derivatives " + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
                 
-                data_sql = sql.SQL(base_cte + " ) SELECT * FROM ranked_fno ") + (sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")) + sql.SQL(" ORDER BY rank ASC LIMIT %s OFFSET %s")
+                data_sql = base_cte + "  SELECT * FROM ranked_fno " + (" WHERE " + " AND ".join(conditions) if conditions else "") + " ORDER BY rank ASC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": "fno_active", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 3. QuickTrade
     if table_name in ("quicktrade", "quicktrade_timestamp"):
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["run_time", "ticker", "company_name", "close", "overall_score", "confidence", "overall_signal", "sector", "entry_price", "stop_loss", "target_price", "reasons"]
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("a.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["a.ticker", "t.company_name", "t.sector", "a.overall_signal", "a.reasons"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 base_from = " FROM analysis_summaries a JOIN ticker_master t ON a.ticker = t.ticker "
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
                 select_sql = """
                 SELECT 
-                    to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                    strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                     a.ticker,
                     t.company_name,
                     a.close,
-                    ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 1) AS overall_score,
-                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
+                    ROUND((((a.hybrid_score + 1.0) / 2.0) * 100), 1) AS overall_score,
+                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END), 1) AS confidence,
                     a.overall_signal,
                     COALESCE(t.sector, 'General') AS sector,
-                    ROUND(a.close::numeric, 2) AS entry_price,
-                    ROUND((a.close * 0.96)::numeric, 2) AS stop_loss,
-                    ROUND((a.close * 1.08)::numeric, 2) AS target_price,
+                    ROUND(a.close, 2) AS entry_price,
+                    ROUND((a.close * 0.96), 2) AS stop_loss,
+                    ROUND((a.close * 1.08), 2) AS target_price,
                     a.reasons
                 """
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY a.hybrid_score DESC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 4. Operator Footprint
     if table_name == "operatorfootprint":
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["run_time", "ticker", "close", "phase", "confidence", "footprint_score", "accumulation_score", "distribution_score"]
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("a.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["a.ticker", "a.news_footprint"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 base_from = " FROM analysis_summaries a "
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
                 select_sql = """
                 SELECT 
-                    to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                    strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                     a.ticker,
                     a.close,
                     CASE WHEN a.behavioral_score > 0.3 THEN 'Accumulation' WHEN a.behavioral_score < -0.3 THEN 'Distribution' ELSE 'Consolidation' END AS phase,
-                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 0) AS confidence,
-                    ROUND((((a.behavioral_score + 1.0) / 2.0) * 100)::numeric, 0) AS footprint_score,
-                    CASE WHEN a.behavioral_score > 0 THEN ROUND((a.behavioral_score * 100)::numeric, 0) ELSE 0 END AS accumulation_score,
-                    CASE WHEN a.behavioral_score < 0 THEN ROUND((ABS(a.behavioral_score) * 100)::numeric, 0) ELSE 0 END AS distribution_score
+                    ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END), 0) AS confidence,
+                    ROUND((((a.behavioral_score + 1.0) / 2.0) * 100), 0) AS footprint_score,
+                    CASE WHEN a.behavioral_score > 0 THEN ROUND((a.behavioral_score * 100), 0) ELSE 0 END AS accumulation_score,
+                    CASE WHEN a.behavioral_score < 0 THEN ROUND((ABS(a.behavioral_score) * 100), 0) ELSE 0 END AS distribution_score
                 """
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.behavioral_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY a.behavioral_score DESC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": "operatorfootprint", "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 5. Technical Scanners (screener, breakout, trend_trading, reversal_trading, support_resistance, swinger, monthly_swinger, technical_hub, continuous_hh_hl)
     if table_name in ("screener", "screener_timestamp", "technical_hub", "technical-hub", "breakout", "trend_trading", "reversal_trading", "support_resistance", "swinger", "monthly_swinger", "continuous_hh_hl"):
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 max_ind_date = None
                 max_ohlcv_date = None
                 try:
-                    cur.execute("SELECT MAX(trade_date) FROM indicators_daily")
+                    cur.execute("SELECT MAX(trade_date) AS max FROM indicators_daily")
                     r1 = cur.fetchone()
                     if r1: max_ind_date = r1["max"] if isinstance(r1, dict) else r1[0]
-                    cur.execute("SELECT MAX(trade_date) FROM ohlcv_daily")
+                    cur.execute("SELECT MAX(trade_date) AS max FROM ohlcv_daily")
                     r2 = cur.fetchone()
                     if r2: max_ohlcv_date = r2["max"] if isinstance(r2, dict) else r2[0]
                 except Exception:
                     pass
 
                 if max_ind_date and max_ohlcv_date:
-                    cte = sql.SQL("""
+                    cte = """
                     WITH latest_ind AS (
-                        SELECT * FROM indicators_daily WHERE trade_date = %s
+                        SELECT * FROM indicators_daily WHERE trade_date = ?
                     ),
                     latest_ohlcv AS (
-                        SELECT * FROM ohlcv_daily WHERE trade_date = %s
+                        SELECT * FROM ohlcv_daily WHERE trade_date = ?
                     )
-                    """)
+                    """
                     cte_params = [max_ind_date, max_ohlcv_date]
                 else:
-                    cte = sql.SQL("""
+                    cte = """
                     WITH latest_ind AS (
-                        SELECT DISTINCT ON (ticker) * FROM indicators_daily ORDER BY ticker, trade_date DESC
+                        SELECT * FROM indicators_daily WHERE (ticker || trade_date) IN (SELECT ticker || MAX(trade_date) FROM indicators_daily GROUP BY ticker)
                     ),
                     latest_ohlcv AS (
-                        SELECT DISTINCT ON (ticker) * FROM ohlcv_daily ORDER BY ticker, trade_date DESC
+                        SELECT * FROM ohlcv_daily WHERE (ticker || trade_date) IN (SELECT ticker || MAX(trade_date) FROM ohlcv_daily GROUP BY ticker)
                     )
-                    """)
+                    """
                     cte_params = []
 
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("a.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["a.ticker", "a.overall_signal", "a.reasons"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 if table_name == "continuous_hh_hl":
                     base_from = """ FROM continuous_hhhl_scanner c
@@ -480,7 +502,7 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                 else:
                     base_from = " FROM analysis_summaries a LEFT JOIN latest_ind i ON a.ticker = i.ticker LEFT JOIN latest_ohlcv o ON a.ticker = o.ticker "
 
-                count_sql = cte + sql.SQL(" SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = cte + " SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, [*cte_params, *params])
                 total = cur.fetchone()["total"]
 
@@ -488,108 +510,108 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     cols = ["run_time", "ticker", "close", "day_change", "period_change", "ema_signal", "vwap_signal", "supertrend_signal", "rsi", "volume_ratio", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS period_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS period_change,
                         CASE WHEN a.close > i.ema26 THEN 'BULLISH' ELSE 'BEARISH' END AS ema_signal,
                         CASE WHEN a.close > o.vwap THEN 'ABOVE VWAP' ELSE 'BELOW VWAP' END AS vwap_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
-                        ROUND(i.rsi14::numeric, 1) AS rsi,
+                        ROUND(i.rsi14, 1) AS rsi,
                         1.25 AS volume_ratio,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 elif table_name == "breakout":
                     cols = ["run_time", "ticker", "close", "day_change", "donchian_upper", "donchian_lower", "breakout_signal", "volume_surge", "adx_signal", "supertrend_signal", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
-                        ROUND(i.bb_upper::numeric, 2) AS donchian_upper,
-                        ROUND(i.bb_lower::numeric, 2) AS donchian_lower,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
+                        ROUND(i.bb_upper, 2) AS donchian_upper,
+                        ROUND(i.bb_lower, 2) AS donchian_lower,
                         CASE WHEN a.close >= i.bb_upper THEN 'UPWARD BREAKOUT' WHEN a.close <= i.bb_lower THEN 'DOWNWARD BREAKOUT' ELSE 'RANGEBOUND' END AS breakout_signal,
                         CASE WHEN o.volume > 1.5 * i.sma20 THEN 'HIGH SURGE' ELSE 'NORMAL' END AS volume_surge,
                         CASE WHEN i.rsi14 > 60 THEN 'STRONG TREND' ELSE 'MODERATE' END AS adx_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BUY' ELSE 'SELL' END AS supertrend_signal,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 elif table_name == "trend_trading":
                     cols = ["run_time", "ticker", "close", "day_change", "ichimoku_signal", "supertrend_signal", "ema20_signal", "adx_signal", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
                         CASE WHEN a.close > i.sma50 THEN 'BULL CLOUD' ELSE 'BEAR CLOUD' END AS ichimoku_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
                         CASE WHEN a.close > i.ema26 THEN 'ABOVE EMA20' ELSE 'BELOW EMA20' END AS ema20_signal,
                         CASE WHEN i.rsi14 > 55 THEN 'STRONG' ELSE 'NEUTRAL' END AS adx_signal,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 elif table_name == "reversal_trading":
                     cols = ["run_time", "ticker", "close", "day_change", "rsi", "mfi", "bollinger_signal", "fibonacci_signal", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
-                        ROUND(i.rsi14::numeric, 1) AS rsi,
-                        ROUND(i.rsi14::numeric, 1) AS mfi,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
+                        ROUND(i.rsi14, 1) AS rsi,
+                        ROUND(i.rsi14, 1) AS mfi,
                         CASE WHEN a.close <= i.bb_lower THEN 'OVERSOLD / BOUNCE' WHEN a.close >= i.bb_upper THEN 'OVERBOUGHT' ELSE 'NORMAL' END AS bollinger_signal,
                         CASE WHEN i.rsi14 < 35 THEN 'BUY ZONE' WHEN i.rsi14 > 70 THEN 'SELL ZONE' ELSE 'NEUTRAL' END AS fibonacci_signal,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 elif table_name == "support_resistance":
                     cols = ["run_time", "ticker", "close", "day_change", "fibonacci_signal", "volume_profile_signal", "pivot_signal", "ichimoku_signal", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
                         CASE WHEN a.close > i.sma50 THEN 'ABOVE 50 SMA' ELSE 'BELOW 50 SMA' END AS fibonacci_signal,
                         CASE WHEN a.close > o.vwap THEN 'POC SUPPORT' ELSE 'POC RESISTANCE' END AS volume_profile_signal,
                         CASE WHEN a.close > i.sma50 THEN 'S1 HOLDING' ELSE 'R1 REJECTED' END AS pivot_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS ichimoku_signal,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 elif table_name == "continuous_hh_hl":
                     cols = ["run_time", "ticker", "close", "day_change", "current_hhhl", "avg_continuity_count", "broken_pattern_count", "broken_pattern_details", "overall_call", "score"]
                     select_sql = """
                     SELECT
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         c.close,
-                        ROUND((((c.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS day_change,
+                        ROUND((((c.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS day_change,
                         c.current_hhhl,
                         c.avg_continuity_count,
                         c.broken_pattern_count,
                         c.broken_pattern_details,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.technical_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.technical_score + 1.0) / 2.0) * 100), 0) AS score
                     """
                 else: # swinger / monthly_swinger
                     cols = ["run_time", "ticker", "close", "week_change", "ema_signal", "vwap_signal", "supertrend_signal", "rsi", "ichimoku_signal", "ema26_signal", "sma100_signal", "macd_signal", "obv_signal", "volume_ratio", "overall_call", "score"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS run_time,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS run_time,
                         a.ticker,
                         a.close,
-                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100)::numeric, 2) AS week_change,
+                        ROUND((((a.close - o.open) / NULLIF(o.open, 0)) * 100), 2) AS week_change,
                         CASE WHEN a.close > i.ema26 THEN 'BUY' ELSE 'SELL' END AS ema_signal,
                         CASE WHEN a.close > o.vwap THEN 'BULLISH' ELSE 'BEARISH' END AS vwap_signal,
                         CASE WHEN a.close > i.kijun_sen THEN 'BULLISH' ELSE 'BEARISH' END AS supertrend_signal,
-                        ROUND(i.rsi14::numeric, 1) AS rsi,
+                        ROUND(i.rsi14, 1) AS rsi,
                         CASE WHEN a.close > i.sma50 THEN 'BULLISH' ELSE 'BEARISH' END AS ichimoku_signal,
                         CASE WHEN a.close > i.sma20 THEN 'ABOVE 20SMA' ELSE 'BELOW 20SMA' END AS ema26_signal,
                         CASE WHEN a.close > i.sma50 THEN 'BULLISH' ELSE 'BEARISH' END AS sma100_signal,
@@ -597,31 +619,32 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                         CASE WHEN a.close > o.vwap THEN 'ACCUMULATION' ELSE 'DISTRIBUTION' END AS obv_signal,
                         1.25 AS volume_ratio,
                         a.overall_signal AS overall_call,
-                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100)::numeric, 0) AS score
+                        ROUND((((a.hybrid_score + 1.0) / 2.0) * 100), 0) AS score
                     """
 
-                data_sql = cte + sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = cte + select_sql + base_from + where_clause + " ORDER BY a.hybrid_score DESC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*cte_params, *params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 6. Calls (historical_calls, intraday_call)
     if table_name in ("historical_calls", "intraday_call"):
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("a.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("a.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["a.ticker", "a.overall_signal", "a.reasons"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 base_from = " FROM analysis_summaries a JOIN ticker_master t ON a.ticker = t.ticker "
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
@@ -629,41 +652,41 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     cols = ["uniqueid", "ticker", "recommended_call", "confidence", "cmp", "stop_loss", "target_price", "rr_ratio", "status", "timestamp", "review_date", "latest_cmp", "call_status", "closest"]
                     conditions, params = [], []
                     if ticker:
-                        conditions.append(sql.SQL("h.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                        conditions.append("h.ticker LIKE ?"); params.append(f"%{ticker}%")
                     if search:
                         searchable = ["h.ticker", "h.recommended_call", "h.outcome", "h.status"]
-                        conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.Identifier(c)) for c in searchable) + sql.SQL(")"))
+                        conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                         params.extend([f"%{search}%"] * len(searchable))
                     if start_date:
-                        conditions.append(sql.SQL("h.created_at >= %s::timestamp")); params.append(f"{start_date} 00:00:00")
+                        conditions.append("h.created_at >= ?"); params.append(f"{start_date} 00:00:00")
                     if end_date:
-                        conditions.append(sql.SQL("h.created_at <= %s::timestamp")); params.append(f"{end_date} 23:59:59")
+                        conditions.append("h.created_at <= ?"); params.append(f"{end_date} 23:59:59")
                     
-                    where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
-                    base_from = sql.SQL(" FROM historical_calls h JOIN ticker_master t ON h.ticker = t.ticker ")
+                    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+                    base_from = " FROM historical_calls h JOIN ticker_master t ON h.ticker = t.ticker "
 
-                    count_sql = sql.SQL("SELECT count(*) AS total ") + base_from + where_clause
+                    count_sql = "SELECT count(*) AS total " + base_from + where_clause
                     cur.execute(count_sql, params)
                     total = cur.fetchone()["total"]
 
-                    select_sql = sql.SQL("""
+                    select_sql = """
                     SELECT 
-                        to_char(h.created_at, 'YYMMDDHH24MISS') AS uniqueid,
+                        strftime('%y%m%d%H%M%S', h.created_at) AS uniqueid,
                         h.ticker,
                         h.recommended_call,
-                        ROUND(h.confidence::numeric, 1) AS confidence,
+                        ROUND(h.confidence, 1) AS confidence,
                         h.entry_price AS cmp,
                         h.stop_loss,
                         h.target_price,
                         h.rr_ratio,
                         h.status,
-                        to_char(h.created_at, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
-                        to_char(h.created_at, 'YYYY-MM-DD') AS review_date,
+                        strftime('%Y-%m-%d %H:%M:%S', h.created_at) AS timestamp,
+                        strftime('%Y-%m-%d', h.created_at) AS review_date,
                         COALESCE(h.final_cmp, h.entry_price) AS latest_cmp,
                         h.outcome AS call_status,
                         COALESCE(h.closest_info, '(CSL: 0.0%%, CTL: 0.0%%)') AS closest
-                    """)
-                    data_sql = select_sql + base_from + where_clause + sql.SQL(" ORDER BY h.created_at DESC LIMIT %s OFFSET %s")
+                    """
+                    data_sql = select_sql + base_from + where_clause + " ORDER BY h.created_at DESC LIMIT ? OFFSET ?"
                     cur.execute(data_sql, [*params, limit, offset])
                     rows = cur.fetchall()
                     return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
@@ -671,52 +694,53 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     cols = ["uniqueid", "ticker", "signal", "bet", "confidence", "entry_price", "stop_loss", "target_price", "cmp", "actionable_insight", "fo_buildup", "tech_reason", "analysed_at", "pcr", "support", "resistance"]
                     select_sql = """
                     SELECT 
-                        to_char(a.updated_at, 'YYMMDDHH24MISS') AS uniqueid,
+                        strftime('%y%m%d%H%M%S', a.updated_at) AS uniqueid,
                         a.ticker,
                         a.overall_signal AS signal,
                         CASE WHEN a.overall_signal IN ('BUY', 'STRONG BUY') THEN '+' ELSE '-' END AS bet,
-                        ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END)::numeric, 1) AS confidence,
-                        ROUND(a.close::numeric, 2) AS entry_price,
-                        ROUND((a.close * 0.98)::numeric, 2) AS stop_loss,
-                        ROUND((a.close * 1.03)::numeric, 2) AS target_price,
+                        ROUND((CASE WHEN a.confidence <= 1.0 THEN a.confidence * 100 ELSE a.confidence END), 1) AS confidence,
+                        ROUND(a.close, 2) AS entry_price,
+                        ROUND((a.close * 0.98), 2) AS stop_loss,
+                        ROUND((a.close * 1.03), 2) AS target_price,
                         a.close AS cmp,
                         a.reasons AS actionable_insight,
                         'Positive Build' AS fo_buildup,
                         a.reasons AS tech_reason,
-                        to_char(a.updated_at, 'YYYY-MM-DD HH24:MI:SS') AS analysed_at,
+                        strftime('%Y-%m-%d %H:%M:%S', a.updated_at) AS analysed_at,
                         '1.10' AS pcr,
-                        ROUND((a.close * 0.98)::numeric, 2) AS support,
-                        ROUND((a.close * 1.03)::numeric, 2) AS resistance
+                        ROUND((a.close * 0.98), 2) AS support,
+                        ROUND((a.close * 1.03), 2) AS resistance
                     """
 
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY a.hybrid_score DESC NULLS LAST LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY a.hybrid_score DESC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 7. Cash Flow Summary
     if table_name in ("cash_flow_summary", "fundamental_hub", "fundamental-hub"):
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = ["ticker", "stock_name", "sector", "curr_fcf_cr", "avg_fcf_cr", "max_fcf_cr", "status", "last_updated"]
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("t.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("t.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["t.ticker", "t.company_name", "t.sector"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 base_from = """
                 FROM ticker_master t
                 LEFT JOIN (
-                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                    SELECT * FROM fundamentals f2 WHERE fetched_date = (SELECT MAX(f3.fetched_date) FROM fundamentals f3 WHERE f3.ticker = f2.ticker)
                 ) f ON t.ticker = f.ticker
                 """
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
@@ -725,12 +749,12 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     t.ticker,
                     t.company_name AS stock_name,
                     COALESCE(t.sector, 'General') AS sector,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0)::numeric, 2) END AS curr_fcf_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS avg_fcf_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS max_fcf_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0)::numeric, 2) END AS curr_fcf,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS avg_fcf,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0)::numeric, 2) END AS max_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0), 2) END AS curr_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0), 2) END AS avg_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0), 2) END AS max_fcf_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) / 10000000.0), 2) END AS curr_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(((COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0), 2) END AS avg_fcf,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((GREATEST(COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0), COALESCE(f.avg_pat, 0) + COALESCE(f.avg_other_income, 0)) / 10000000.0), 2) END AS max_fcf,
                     CASE 
                         WHEN f.ticker IS NULL THEN 'N/A'
                         WHEN (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) < 0 THEN 'NEGATIVE' 
@@ -739,17 +763,18 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     END AS status,
                     COALESCE(f.fetched_date, 'N/A') AS last_updated
                 """
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY (COALESCE(f.last_pat, 0) + COALESCE(f.last_other_income, 0)) DESC, t.ticker ASC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     # 8. Fundamentals & Raw Fundamentals
     if table_name in ("fundamentals", "raw_fundamentals", "raw-fundamentals"):
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cols = [
                     "ticker", "stock_name", "sector", "market_cap_cr",
                     "current_pe", "avg_pe", "last_pat_cr", "avg_pat_cr",
@@ -759,21 +784,21 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                 ]
                 conditions, params = [], []
                 if ticker:
-                    conditions.append(sql.SQL("t.ticker ILIKE %s")); params.append(f"%{ticker}%")
+                    conditions.append("t.ticker LIKE ?"); params.append(f"%{ticker}%")
                 if search:
                     searchable = ["t.ticker", "t.company_name", "t.sector"]
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(sql.SQL("{} ILIKE %s").format(sql.SQL(c)) for c in searchable) + sql.SQL(")"))
+                    conditions.append("(" + " OR ".join("{} LIKE ?".format(c) for c in searchable) + ")")
                     params.extend([f"%{search}%"] * len(searchable))
 
-                where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
                 base_from = """
                 FROM ticker_master t
                 LEFT JOIN (
-                    SELECT DISTINCT ON (ticker) * FROM fundamentals ORDER BY ticker, fetched_date DESC
+                    SELECT * FROM fundamentals f2 WHERE fetched_date = (SELECT MAX(f3.fetched_date) FROM fundamentals f3 WHERE f3.ticker = f2.ticker)
                 ) f ON t.ticker = f.ticker
                 """
-                count_sql = sql.SQL("SELECT count(*) AS total " + base_from) + where_clause
+                count_sql = "SELECT count(*) AS total " + base_from + where_clause
                 cur.execute(count_sql, params)
                 total = cur.fetchone()["total"]
 
@@ -782,14 +807,14 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     t.ticker,
                     t.company_name AS stock_name,
                     COALESCE(t.sector, 'General') AS sector,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.market_cap, 0.0) / 10000000.0)::numeric, 2) END AS market_cap_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.current_pe, 0.0)::numeric, 2) END AS current_pe,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.avg_pe, 0.0)::numeric, 2) END AS avg_pe,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_pat, 0.0) / 10000000.0)::numeric, 2) END AS last_pat_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_pat, 0.0) / 10000000.0)::numeric, 2) END AS avg_pat_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_other_income, 0.0) / 10000000.0)::numeric, 2) END AS last_other_income_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_other_income, 0.0) / 10000000.0)::numeric, 2) END AS avg_other_income_cr,
-                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.debt_to_equity, 0.0)::numeric, 2) END AS debt_to_equity,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.market_cap, 0.0) / 10000000.0), 2) END AS market_cap_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.current_pe, 0.0), 2) END AS current_pe,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.avg_pe, 0.0), 2) END AS avg_pe,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_pat, 0.0) / 10000000.0), 2) END AS last_pat_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_pat, 0.0) / 10000000.0), 2) END AS avg_pat_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.last_other_income, 0.0) / 10000000.0), 2) END AS last_other_income_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND((COALESCE(f.avg_other_income, 0.0) / 10000000.0), 2) END AS avg_other_income_cr,
+                    CASE WHEN f.ticker IS NULL THEN NULL ELSE ROUND(COALESCE(f.debt_to_equity, 0.0), 2) END AS debt_to_equity,
                     CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_pat_growing END AS is_pat_growing,
                     CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_other_income_ok END AS is_other_income_ok,
                     CASE WHEN f.ticker IS NULL THEN NULL ELSE f.is_pe_ok END AS is_pe_ok,
@@ -799,22 +824,23 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     COALESCE(f.fetched_date, 'N/A') AS last_updated
                 """
                 effective_limit = max(limit, 5000)
-                data_sql = sql.SQL(select_sql + base_from) + where_clause + sql.SQL(" ORDER BY f.fundamental_score DESC NULLS LAST, t.ticker ASC LIMIT %s OFFSET %s")
+                data_sql = select_sql + base_from + where_clause + " ORDER BY f.fundamental_score DESC, t.ticker ASC LIMIT ? OFFSET ?"
                 cur.execute(data_sql, [*params, effective_limit, offset])
                 rows = cur.fetchall()
                 return {"table": table_name, "columns": cols, "rows": rows, "total": total, "limit": effective_limit, "offset": offset}
-        except OperationalError as error:
+        except Exception as error:
             raise database_error(error)
 
     if table_name not in all_tables:
         raise HTTPException(404, f"Table '{table_name}' was not found in schema '{settings.database_schema}'.")
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position", (settings.database_schema, table_name))
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name AS column_name FROM pragma_table_info(?) ORDER BY cid", (table_name,))
             columns = [row["column_name"] for row in cur.fetchall()]
             conditions, params = [], []
             if ticker and "ticker" in columns:
-                conditions.append(sql.SQL("ticker ILIKE %s")); params.append(f"%{ticker}%")
+                conditions.append("ticker LIKE ?"); params.append(f"%{ticker}%")
             if search:
                 clean_search = search.strip()
                 search_terms = [clean_search]
@@ -837,10 +863,10 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     or_parts = []
                     for term in search_terms:
                         for c in searchable:
-                            or_parts.append(sql.SQL("{}::text ILIKE %s").format(sql.Identifier(c)))
+                            or_parts.append("{} LIKE ?".format(c))
                             params.append(f"%{term}%")
-                    conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(or_parts) + sql.SQL(")"))
-            where = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+                    conditions.append("(" + " OR ".join(or_parts) + ")")
+            where = " WHERE " + " AND ".join(conditions) if conditions else ""
             order_column = next((c for c in ("run_time", "timestamp", "analysed_at", "last_updated", "latest_date", "trade_date", "date", "updated_at") if c in columns), columns[0])
             
             # For analysis/scanner/fundamental/technical tables with a 'ticker' or 'symbol' column,
@@ -848,30 +874,23 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
             distinct_col = "ticker" if "ticker" in columns else ("symbol" if "symbol" in columns else None)
             
             if distinct_col and not ticker and table_name != "raw_fno_derivatives":
-                base_cte = sql.SQL("""
+                where_sql_g = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+                subq_g = f"""
                     WITH distinct_rows AS (
-                        SELECT DISTINCT ON ({}) *
-                        FROM {}.{}
-                        {}
-                        ORDER BY {}, {} DESC NULLS LAST
+                        SELECT * FROM {table_name} {where_sql_g}
+                        GROUP BY {distinct_col}
+                        HAVING MAX({order_column})
                     )
-                """).format(
-                    sql.Identifier(distinct_col),
-                    sql.Identifier(settings.database_schema),
-                    sql.Identifier(table_name),
-                    where,
-                    sql.Identifier(distinct_col),
-                    sql.Identifier(order_column)
-                )
-                cur.execute(base_cte + sql.SQL("SELECT count(*) AS total FROM distinct_rows"), params)
+                """
+                cur.execute(subq_g + "SELECT count(*) AS total FROM distinct_rows", params)
                 total = cur.fetchone()["total"]
-                query = base_cte + sql.SQL("SELECT * FROM distinct_rows ORDER BY {} DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(order_column))
+                query = subq_g + f"SELECT * FROM distinct_rows ORDER BY {order_column} DESC LIMIT ? OFFSET ?"
                 cur.execute(query, [*params, limit, offset])
             else:
-                base = sql.SQL(" FROM {}.{} ").format(sql.Identifier(settings.database_schema), sql.Identifier(table_name))
-                cur.execute(sql.SQL("SELECT count(*) AS total") + base + where, params)
+                where_sql_g = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+                cur.execute(f"SELECT count(*) AS total FROM {table_name} {where_sql_g}", params)
                 total = cur.fetchone()["total"]
-                query = sql.SQL("SELECT *") + base + where + sql.SQL(" ORDER BY {} DESC NULLS LAST LIMIT %s OFFSET %s").format(sql.Identifier(order_column))
+                query = f"SELECT * FROM {table_name} {where_sql_g} ORDER BY {order_column} DESC LIMIT ? OFFSET ?"
                 cur.execute(query, [*params, limit, offset])
             
             raw_rows = cur.fetchall()
@@ -886,7 +905,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                 if symbols:
                     # 1. From analysis_summaries
                     try:
-                        cur.execute("SELECT ticker, close FROM analysis_summaries WHERE ticker = ANY(%s)", (symbols,))
+                        in_ph, in_params = _in_clause(symbols)
+                        cur.execute(f"SELECT ticker, close FROM analysis_summaries WHERE ticker IN {in_ph}", in_params)
                         for pr in cur.fetchall():
                             if pr["close"]:
                                 prices_map[pr["ticker"].upper()] = round(float(pr["close"]), 2)
@@ -897,7 +917,8 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     missing = [s for s in symbols if s not in prices_map]
                     if missing:
                         try:
-                            cur.execute("SELECT DISTINCT ON (ticker) ticker, underlying_price FROM raw_fno_derivatives WHERE ticker = ANY(%s) AND underlying_price > 0 ORDER BY ticker, last_updated DESC", (missing,))
+                            in_ph_m, in_params_m = _in_clause(missing)
+                            cur.execute(f"SELECT ticker, underlying_price FROM raw_fno_derivatives WHERE ticker IN {in_ph_m} AND underlying_price > 0 GROUP BY ticker HAVING MAX(last_updated)", in_params_m)
                             for pr in cur.fetchall():
                                 if pr["underlying_price"]:
                                     prices_map[pr["ticker"].upper()] = round(float(pr["underlying_price"]), 2)
@@ -908,12 +929,11 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                     missing = [s for s in symbols if s not in prices_map]
                     if missing:
                         try:
-                            cur.execute("""
-                                SELECT DISTINCT ON (ticker) ticker, close 
-                                FROM ohlcv_daily 
-                                WHERE ticker = ANY(%s) AND close > 0 
-                                ORDER BY ticker, trade_date DESC
-                            """, (missing,))
+                            in_ph_ms, in_params_ms = _in_clause(missing)
+                            cur.execute(
+                                f"SELECT ticker, close FROM ohlcv_daily WHERE ticker IN {in_ph_ms} AND close > 0 GROUP BY ticker HAVING MAX(trade_date)",
+                                in_params_ms
+                            )
                             for pr in cur.fetchall():
                                 if pr["close"]:
                                     prices_map[pr["ticker"].upper()] = round(float(pr["close"]), 2)
@@ -934,7 +954,7 @@ def table_data_for(dsn: str, table_name: str, limit: int, offset: int, search: s
                 rows = raw_rows
 
             return {"table": table_name, "columns": columns, "rows": rows, "total": total, "limit": limit, "offset": offset}
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -943,7 +963,8 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
     results = []
     try:
         curr_sym = "₹"
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT 
                     a.ticker,
@@ -1018,13 +1039,14 @@ def top_trades_for(dsn: str) -> list[dict[str, Any]]:
         db_prices = {}
         try:
             fallback_tickers = [item["ticker"] for item in candidates_meta]
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cur.execute("""
                     SELECT ticker, close FROM (
                         SELECT ticker, close, ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY trade_date DESC) as rn 
-                        FROM ohlcv_daily WHERE ticker = ANY(%s) AND close > 0
+                        FROM ohlcv_daily WHERE ticker IN ({",".join(["?"]*len(fallback_tickers))}) AND close > 0
                     ) sub WHERE rn = 1
-                """, (fallback_tickers,))
+                """, fallback_tickers)
                 for r in cur.fetchall():
                     db_prices[r["ticker"].upper()] = float(r["close"])
         except Exception:
@@ -1174,7 +1196,8 @@ def classify_market_cap(
     results = []
     try:
         curr_sym = "₹"
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Attempt to use index_memberships column to identify mid-cap stocks
             cur.execute("""
                 SELECT 
@@ -1193,14 +1216,14 @@ def classify_market_cap(
                 WHERE a.close > 0
                   AND (
                       EXISTS (
-                          SELECT 1 FROM unnest(t.index_memberships) AS m
-                          WHERE m ILIKE '%MIDCAP%' OR m ILIKE '%MIDCPNIFTY%' OR m ILIKE '%MIDSELECT%'
+                          SELECT 1 FROM json_each(COALESCE(t.index_memberships,'[]')) AS m
+                          WHERE m.value LIKE '%MIDCAP%' OR m.value LIKE '%MIDCPNIFTY%' OR m.value LIKE '%MIDSELECT%'
                       )
-                      OR a.ticker = ANY(%s)
+                      OR a.ticker IN ({",".join(["?"]*len(MIDCAP_UNIVERSE))})
                   )
                 ORDER BY a.hybrid_score DESC
                 LIMIT 15
-            """, (MIDCAP_UNIVERSE,))
+            """, MIDCAP_UNIVERSE)
             rows = cur.fetchall()
 
             if not rows:
@@ -1220,10 +1243,10 @@ def classify_market_cap(
                     FROM analysis_summaries a
                     LEFT JOIN ticker_master t ON a.ticker = t.ticker
                     WHERE a.close > 0
-                      AND a.ticker = ANY(%s)
+                      AND a.ticker IN ({",".join(["?"]*len(MIDCAP_UNIVERSE))})
                     ORDER BY a.hybrid_score DESC
                     LIMIT 15
-                """, (MIDCAP_UNIVERSE,))
+                """, MIDCAP_UNIVERSE)
                 rows = cur.fetchall()
 
             for idx, r in enumerate(rows, 1):
@@ -1280,13 +1303,14 @@ def classify_market_cap(
         db_prices = {}
         try:
             fallback_tickers = [item["ticker"] for item in midcap_fallback]
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cur.execute("""
                     SELECT ticker, close FROM (
                         SELECT ticker, close, ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY trade_date DESC) as rn 
-                        FROM ohlcv_daily WHERE ticker = ANY(%s) AND close > 0
+                        FROM ohlcv_daily WHERE ticker IN ({",".join(["?"]*len(fallback_tickers))}) AND close > 0
                     ) sub WHERE rn = 1
-                """, (fallback_tickers,))
+                """, fallback_tickers)
                 for r in cur.fetchall():
                     db_prices[r["ticker"].upper()] = float(r["close"])
         except Exception:
@@ -1327,7 +1351,8 @@ def top_smallcap_trades_for(dsn: str) -> list[dict[str, Any]]:
     results = []
     try:
         curr_sym = "₹"
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT 
                     a.ticker,
@@ -1345,14 +1370,14 @@ def top_smallcap_trades_for(dsn: str) -> list[dict[str, Any]]:
                 WHERE a.close > 0
                   AND (
                       EXISTS (
-                          SELECT 1 FROM unnest(t.index_memberships) AS m
-                          WHERE m ILIKE '%SMALLCAP%' OR m ILIKE '%NIFTYSC%'
+                          SELECT 1 FROM json_each(COALESCE(t.index_memberships,'[]')) AS m
+                          WHERE m.value LIKE '%SMALLCAP%' OR m.value LIKE '%NIFTYSC%'
                       )
-                      OR a.ticker = ANY(%s)
+                      OR a.ticker IN ({",".join(["?"]*len(SMALLCAP_UNIVERSE))})
                   )
                 ORDER BY a.hybrid_score DESC
                 LIMIT 15
-            """, (SMALLCAP_UNIVERSE,))
+            """, SMALLCAP_UNIVERSE)
             rows = cur.fetchall()
 
             if not rows:
@@ -1371,10 +1396,10 @@ def top_smallcap_trades_for(dsn: str) -> list[dict[str, Any]]:
                     FROM analysis_summaries a
                     LEFT JOIN ticker_master t ON a.ticker = t.ticker
                     WHERE a.close > 0
-                      AND a.ticker = ANY(%s)
+                      AND a.ticker IN ({",".join(["?"]*len(SMALLCAP_UNIVERSE))})
                     ORDER BY a.hybrid_score DESC
                     LIMIT 15
-                """, (SMALLCAP_UNIVERSE,))
+                """, SMALLCAP_UNIVERSE)
                 rows = cur.fetchall()
 
             for idx, r in enumerate(rows, 1):
@@ -1430,13 +1455,14 @@ def top_smallcap_trades_for(dsn: str) -> list[dict[str, Any]]:
         db_prices = {}
         try:
             fallback_tickers = [item["ticker"] for item in smallcap_fallback]
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cur.execute("""
                     SELECT ticker, close FROM (
                         SELECT ticker, close, ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY trade_date DESC) as rn 
-                        FROM ohlcv_daily WHERE ticker = ANY(%s) AND close > 0
+                        FROM ohlcv_daily WHERE ticker IN ({",".join(["?"]*len(fallback_tickers))}) AND close > 0
                     ) sub WHERE rn = 1
-                """, (fallback_tickers,))
+                """, fallback_tickers)
                 for r in cur.fetchall():
                     db_prices[r["ticker"].upper()] = float(r["close"])
         except Exception:
@@ -1477,7 +1503,8 @@ def top_largecap_trades_for(dsn: str) -> list[dict[str, Any]]:
     results = []
     try:
         curr_sym = "₹"
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT 
                     a.ticker,
@@ -1495,16 +1522,16 @@ def top_largecap_trades_for(dsn: str) -> list[dict[str, Any]]:
                 WHERE a.close > 0
                   AND (
                       EXISTS (
-                          SELECT 1 FROM unnest(t.index_memberships) AS m
-                          WHERE m ILIKE '%NIFTY50%' OR m ILIKE '%NIFTY_50%'
-                               OR m ILIKE '%LARGECAP%' OR m ILIKE '%LARGE_CAP%'
-                               OR m ILIKE '%NIFTY100%'
+                          SELECT 1 FROM json_each(COALESCE(t.index_memberships,'[]')) AS m
+                          WHERE m.value LIKE '%NIFTY50%' OR m.value LIKE '%NIFTY_50%'
+                               OR m.value LIKE '%LARGECAP%' OR m.value LIKE '%LARGE_CAP%'
+                               OR m.value LIKE '%NIFTY100%'
                       )
-                      OR a.ticker = ANY(%s)
+                      OR a.ticker IN ({",".join(["?"]*len(LARGECAP_UNIVERSE))})
                   )
                 ORDER BY a.hybrid_score DESC
                 LIMIT 15
-            """, (LARGECAP_UNIVERSE,))
+            """, LARGECAP_UNIVERSE)
             rows = cur.fetchall()
 
             if not rows:
@@ -1523,10 +1550,10 @@ def top_largecap_trades_for(dsn: str) -> list[dict[str, Any]]:
                     FROM analysis_summaries a
                     LEFT JOIN ticker_master t ON a.ticker = t.ticker
                     WHERE a.close > 0
-                      AND a.ticker = ANY(%s)
+                      AND a.ticker IN ({",".join(["?"]*len(LARGECAP_UNIVERSE))})
                     ORDER BY a.hybrid_score DESC
                     LIMIT 15
-                """, (LARGECAP_UNIVERSE,))
+                """, LARGECAP_UNIVERSE)
                 rows = cur.fetchall()
 
             for idx, r in enumerate(rows, 1):
@@ -1582,13 +1609,14 @@ def top_largecap_trades_for(dsn: str) -> list[dict[str, Any]]:
         db_prices = {}
         try:
             fallback_tickers = [item["ticker"] for item in largecap_fallback]
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cur.execute("""
                     SELECT ticker, close FROM (
                         SELECT ticker, close, ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY trade_date DESC) as rn 
-                        FROM ohlcv_daily WHERE ticker = ANY(%s) AND close > 0
+                        FROM ohlcv_daily WHERE ticker IN ({",".join(["?"]*len(fallback_tickers))}) AND close > 0
                     ) sub WHERE rn = 1
-                """, (fallback_tickers,))
+                """, fallback_tickers)
                 for r in cur.fetchall():
                     db_prices[r["ticker"].upper()] = float(r["close"])
         except Exception:
@@ -1628,9 +1656,10 @@ def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
     """Synthesizes Penny Stocks / Micro-Cap & Small-Cap Institutional Picks — tickers belonging to Smallcap, Microcap, or low CMP segment."""
     results = []
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Check if mf_holdings table exists
-            cur.execute("SELECT 1 FROM pg_tables WHERE schemaname = %s AND tablename = 'mf_holdings'", (settings.database_schema,))
+            cur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mf_holdings'")
             has_mf = cur.fetchone() is not None
 
             if has_mf:
@@ -1662,7 +1691,7 @@ def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
                     FROM qualifying_mf q
                     JOIN ticker_master t ON q.ticker = t.ticker
                     LEFT JOIN analysis_summaries a ON q.ticker = a.ticker
-                    ORDER BY a.hybrid_score DESC NULLS LAST, q.fund_count DESC
+                    ORDER BY a.hybrid_score DESC, q.fund_count DESC
                     LIMIT 40
                 """
                 cur.execute(query)
@@ -1692,11 +1721,11 @@ def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
                     JOIN ticker_master t ON a.ticker = t.ticker
                     WHERE a.close > 0 AND (
                         a.close < 100.0 
-                        OR ARRAY_TO_STRING(t.index_memberships, ',') ILIKE '%SMALLCAP%' 
-                        OR ARRAY_TO_STRING(t.index_memberships, ',') ILIKE '%MICROCAP%'
-                        OR ARRAY_TO_STRING(t.index_memberships, ',') ILIKE '%SME%'
+                        OR t.index_memberships LIKE '%SMALLCAP%' 
+                        OR t.index_memberships LIKE '%MICROCAP%'
+                        OR t.index_memberships LIKE '%SME%'
                     )
-                    ORDER BY a.hybrid_score DESC NULLS LAST, a.close ASC
+                    ORDER BY a.hybrid_score DESC, a.close ASC
                     LIMIT 30
                 """)
                 rows = cur.fetchall()
@@ -1705,12 +1734,13 @@ def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
             ticker_list = [r["ticker"] for r in rows]
             if ticker_list:
                 try:
-                    cur.execute("""
-                        SELECT DISTINCT ON (f.ticker) f.ticker, COALESCE(f.market_cap, 0.0) / 10000000.0 AS mcap_cr, f.current_pe, f.last_pat
+                    in_ph_tl, in_params_tl = _in_clause(ticker_list)
+                    cur.execute(f"""
+                        SELECT f.ticker, COALESCE(f.market_cap, 0.0) / 10000000.0 AS mcap_cr, f.current_pe, f.last_pat
                         FROM fundamentals f
-                        WHERE f.ticker = ANY(%s)
-                        ORDER BY f.ticker, f.fetched_date DESC
-                    """, (ticker_list,))
+                        WHERE f.ticker IN {in_ph_tl}
+                        AND f.fetched_date = (SELECT MAX(fetched_date) FROM fundamentals WHERE ticker = f.ticker)
+                    """, in_params_tl)
                     for f_row in cur.fetchall():
                         mcap_val = float(f_row.get("mcap_cr") or 0.0)
                         if mcap_val > 0:
@@ -1726,7 +1756,7 @@ def top_penny_trades_for(dsn: str) -> list[dict[str, Any]]:
                     if missing_tickers:
                         try:
                             cur.execute("""
-                                SELECT ticker, market_cap FROM raw_fundamentals WHERE ticker = ANY(%s)
+                                SELECT ticker, market_cap FROM raw_fundamentals WHERE ticker IN ({",".join(["?"]*len(tickers))})
                             """, (missing_tickers,))
                             for rf_row in cur.fetchall():
                                 raw_m = float(rf_row.get("market_cap") or 0.0)
@@ -1854,8 +1884,8 @@ BENCHMARK_PRICES = {
 
 
 def get_live_ticker_price(ticker: str, dsn: str | None = None) -> float | None:
-    from app.price_engine import resolve_ticker_price
-    return resolve_ticker_price(ticker, dsn or settings.bsa_postgres_dsn, settings.rawdata_postgres_dsn)
+    from .price_engine import resolve_ticker_price
+    return resolve_ticker_price(ticker, dsn or None, None)
 
 
 TICKER_STRIKE_STEP_MAP = {
@@ -2096,48 +2126,49 @@ def generate_ticker_option_chain(dsn: str, ticker: str = "NIFTY") -> dict[str, A
 
     if dsn and dsn.strip():
         try:
-            with get_connection(dsn) as conn, conn.cursor() as cur:
+            with get_connection() as conn:
+                cur = conn.cursor()
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS public.raw_ticker_option_chain_temp (
-                        id SERIAL PRIMARY KEY,
+                    CREATE TABLE IF NOT EXISTS raw_ticker_option_chain_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ticker TEXT NOT NULL,
-                        underlying_price DOUBLE PRECISION,
-                        strike_price DOUBLE PRECISION,
+                        underlying_price REAL,
+                        strike_price REAL,
                         moneyness TEXT,
-                        ce_ltp DOUBLE PRECISION,
-                        ce_pchange DOUBLE PRECISION,
-                        ce_volume BIGINT,
-                        ce_oi BIGINT,
-                        ce_delta DOUBLE PRECISION,
-                        ce_gamma DOUBLE PRECISION,
-                        ce_theta DOUBLE PRECISION,
-                        ce_vega DOUBLE PRECISION,
-                        ce_iv DOUBLE PRECISION,
-                        pe_ltp DOUBLE PRECISION,
-                        pe_pchange DOUBLE PRECISION,
-                        pe_volume BIGINT,
-                        pe_oi BIGINT,
-                        pe_delta DOUBLE PRECISION,
-                        pe_gamma DOUBLE PRECISION,
-                        pe_theta DOUBLE PRECISION,
-                        pe_vega DOUBLE PRECISION,
-                        pe_iv DOUBLE PRECISION,
-                        win_probability DOUBLE PRECISION,
+                        ce_ltp REAL,
+                        ce_pchange REAL,
+                        ce_volume INTEGER,
+                        ce_oi INTEGER,
+                        ce_delta REAL,
+                        ce_gamma REAL,
+                        ce_theta REAL,
+                        ce_vega REAL,
+                        ce_iv REAL,
+                        pe_ltp REAL,
+                        pe_pchange REAL,
+                        pe_volume INTEGER,
+                        pe_oi INTEGER,
+                        pe_delta REAL,
+                        pe_gamma REAL,
+                        pe_theta REAL,
+                        pe_vega REAL,
+                        pe_iv REAL,
+                        win_probability REAL,
                         recommended_action TEXT,
                         holding_duration TEXT,
                         decay_risk_note TEXT,
                         last_updated TEXT
                     )
                 """)
-                cur.execute("DELETE FROM public.raw_ticker_option_chain_temp WHERE ticker = %s", (ticker,))
+                cur.execute("DELETE FROM raw_ticker_option_chain_temp WHERE ticker = ?", (ticker,))
                 for r in chain_rows:
                     cur.execute("""
-                        INSERT INTO public.raw_ticker_option_chain_temp (
+                        INSERT INTO raw_ticker_option_chain_temp (
                             ticker, underlying_price, strike_price, moneyness,
                             ce_ltp, ce_pchange, ce_volume, ce_oi, ce_delta, ce_gamma, ce_theta, ce_vega, ce_iv,
                             pe_ltp, pe_pchange, pe_volume, pe_oi, pe_delta, pe_gamma, pe_theta, pe_vega, pe_iv,
                             win_probability, recommended_action, holding_duration, decay_risk_note, last_updated
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         r["ticker"], r["underlying_price"], r["strike_price"], r["moneyness"],
                         r["ce_ltp"], r["ce_pchange"], r["ce_volume"], r["ce_oi"], r["ce_delta"], r["ce_gamma"], r["ce_theta"], r["ce_vega"], r["ce_iv"],
@@ -2339,9 +2370,9 @@ def evaluate_best_option_strategies(dsn: str, ticker: str = "NIFTY") -> dict[str
 
 def get_market_vix(dsn: str | None = None) -> float:
     try:
-        from app.price_engine import resolve_ticker_price
+        from .price_engine import resolve_ticker_price
         for sym in ["^INDIAVIX", "INDIAVIX", "INDIA VIX"]:
-            price = resolve_ticker_price(sym, dsn or settings.bsa_postgres_dsn, settings.rawdata_postgres_dsn)
+            price = resolve_ticker_price(sym, dsn or None, None)
             if price is not None and 5.0 <= price <= 50.0:
                 return round(price, 2)
     except Exception as e:
@@ -2399,7 +2430,8 @@ def get_fno_active_greeks(dsn: str) -> dict[str, Any]:
     ]
 
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT symbol AS ticker, underlying_name AS stock_name
                 FROM fno_stock_master
@@ -2484,13 +2516,14 @@ def get_fno_active_greeks(dsn: str) -> dict[str, Any]:
 def overview_for(dsn: str) -> dict[str, Any]:
     names = set(table_names(dsn)); wanted = ["historical_calls", "intraday_call", "quicktrade_timestamp", "screener_timestamp"]; counts = {}
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             for name in wanted:
                 if name in names:
-                    cur.execute(sql.SQL("SELECT count(*) AS count FROM {}.{}").format(sql.Identifier(settings.database_schema), sql.Identifier(name)))
+                    cur.execute("SELECT count(*) AS count FROM {}.{}".format("main", name))
                     counts[name] = cur.fetchone()["count"]
             return {"counts": counts, "tables": len(names), "as_of": date.today().isoformat()}
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -2532,17 +2565,17 @@ def top_penny_trades(dataset: str) -> list[dict[str, Any]]:
 
 @app.get("/api/intelligence/option-chain")
 def intelligence_option_chain(ticker: str = Query("NIFTY")) -> dict[str, Any]:
-    return generate_ticker_option_chain(settings.bsa_postgres_dsn, ticker)
+    return generate_ticker_option_chain(None, ticker)
 
 
 @app.get("/api/intelligence/best-strategy")
 def intelligence_best_strategy(ticker: str = Query("NIFTY")) -> dict[str, Any]:
-    return evaluate_best_option_strategies(settings.bsa_postgres_dsn, ticker)
+    return evaluate_best_option_strategies(None, ticker)
 
 
 @app.get("/api/intelligence/fno-active-greeks")
 def intelligence_fno_active_greeks() -> dict[str, Any]:
-    return get_fno_active_greeks(settings.bsa_postgres_dsn)
+    return get_fno_active_greeks(None)
 
 
 @app.get("/api/{dataset}/option-chain")
@@ -2593,21 +2626,22 @@ def table_data(
 def intelligence_sector_tickers(sector_name: str) -> dict[str, Any]:
     """Return all tickers mapped to a sector (looked up from rawdata_db master)."""
     try:
-        with get_connection(settings.rawdata_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute(
                 """
                 SELECT tm.ticker, tm.company_name, tm.is_fno, tm.index_memberships
                 FROM ticker_master tm
                 JOIN ticker_sector ts ON ts.ticker = tm.ticker
                 JOIN sectors s ON s.id = ts.sector_id
-                WHERE LOWER(s.name) = LOWER(%s)
+                WHERE LOWER(s.name) = LOWER(?)
                 ORDER BY tm.ticker
                 """,
                 (sector_name,),
             )
             tickers = cur.fetchall()
         return {"sector": sector_name, "tickers": tickers, "count": len(tickers)}
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -2620,21 +2654,22 @@ def intelligence_sector_scans(
     """Return rows from a scan table filtered to tickers in a given sector."""
     # First fetch tickers for this sector from rawdata_db
     try:
-        with get_connection(settings.rawdata_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute(
                 """
                 SELECT tm.ticker FROM ticker_master tm
                 JOIN ticker_sector ts ON ts.ticker = tm.ticker
                 JOIN sectors s ON s.id = ts.sector_id
-                WHERE LOWER(s.name) = LOWER(%s)
+                WHERE LOWER(s.name) = LOWER(?)
                 """,
                 (sector_name,),
             )
             tickers = [row["ticker"] for row in cur.fetchall()]
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
-    if not tickers or not is_analysis_executed(settings.bsa_postgres_dsn):
+    if not tickers:
         return {"sector": sector_name, "scan_table": scan_table, "tickers": tickers, "rows": [], "total": 0}
 
     # Then query the scan table in bsa_db filtered to those tickers
@@ -2642,34 +2677,26 @@ def intelligence_sector_scans(
     if scan_table not in allowed:
         raise HTTPException(400, f"Scan table '{scan_table}' is not allowed for sector queries.")
 
-    bsa_tables = table_names(settings.bsa_postgres_dsn)
+    with __import__("sqlite3").connect(__import__("os").environ.get("SQLITE_PATH", "data/bsa_db.sqlite3")) as _c:
+        bsa_tables = [r[0] for r in _c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     if scan_table not in bsa_tables:
-        raise HTTPException(404, f"Table '{scan_table}' not found in intelligence database.")
+        raise HTTPException(404, f"Table '{scan_table}' not found in database.")
 
     try:
-        with get_connection(settings.bsa_postgres_dsn) as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position",
-                (settings.database_schema, scan_table),
-            )
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name AS column_name FROM pragma_table_info(?) ORDER BY cid", (scan_table,))
             columns = [row["column_name"] for row in cur.fetchall()]
             order_col = next(
                 (c for c in ("run_time", "timestamp", "analysed_at", "last_updated") if c in columns),
-                columns[0],
+                columns[0] if columns else "rowid",
             )
-            placeholders = sql.SQL(", ").join(sql.Placeholder() * len(tickers))
-            query = (
-                sql.SQL("SELECT * FROM {schema}.{tbl} WHERE ticker = ANY(%s) ORDER BY {order} DESC NULLS LAST LIMIT %s")
-                .format(
-                    schema=sql.Identifier(settings.database_schema),
-                    tbl=sql.Identifier(scan_table),
-                    order=sql.Identifier(order_col),
-                )
-            )
-            cur.execute(query, [tickers, limit])
+            in_ph, in_params = _in_clause(tickers)
+            query = f"SELECT * FROM {scan_table} WHERE ticker IN {in_ph} ORDER BY {order_col} DESC LIMIT ?"
+            cur.execute(query, in_params + [limit])
             rows = cur.fetchall()
         return {"sector": sector_name, "scan_table": scan_table, "tickers": tickers, "rows": rows, "total": len(rows)}
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -2677,7 +2704,8 @@ def intelligence_sector_scans(
 def sectors_summary() -> list[dict]:
     """Summary of all sectors with ticker count — used by intelligence sidebar."""
     try:
-        with get_connection(settings.rawdata_postgres_dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute(
                 """
                 SELECT s.id, s.name, COUNT(ts.ticker) AS ticker_count
@@ -2688,7 +2716,7 @@ def sectors_summary() -> list[dict]:
                 """
             )
             return cur.fetchall()
-    except OperationalError as error:
+    except Exception as error:
         raise database_error(error)
 
 
@@ -2713,8 +2741,9 @@ def trigger_analysis(ticker: str = None, background_tasks: BackgroundTasks = Non
         # 2. Check F&O and download derivatives if applicable
         is_fno = False
         try:
-            with get_connection(settings.rawdata_postgres_dsn) as conn, conn.cursor() as cur:
-                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = %s", (ticker_clean,))
+            with get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT is_fno FROM ticker_master WHERE ticker = ?", (ticker_clean,))
                 row = cur.fetchone()
                 if row:
                     is_fno = row["is_fno"]
@@ -2777,11 +2806,12 @@ def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
     clean_t = ticker.upper().strip()
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT company_name, sector, is_fno
                 FROM ticker_master
-                WHERE ticker = %s
+                WHERE ticker = ?
             """, (clean_t,))
             meta = cur.fetchone() or {"company_name": clean_t, "sector": "General", "is_fno": False}
 
@@ -2808,7 +2838,7 @@ def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
                     i.span_b
                 FROM ohlcv_daily o
                 LEFT JOIN indicators_daily i ON o.ticker = i.ticker AND o.trade_date = i.trade_date
-                WHERE o.ticker = %s
+                WHERE o.ticker = ?
                 ORDER BY o.trade_date ASC
             """, (clean_t,))
             rows = cur.fetchall()
@@ -2817,7 +2847,7 @@ def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
             cur.execute("""
                 SELECT close, technical_score, fundamental_score, behavioral_score, hybrid_score, overall_signal, confidence, reasons, projection_22d, option_insights, news_footprint
                 FROM analysis_summaries
-                WHERE ticker = %s
+                WHERE ticker = ?
             """, (clean_t,))
             summary_row = cur.fetchone()
 
@@ -2884,7 +2914,7 @@ def get_stock_chart_data(ticker: str, dataset: str = "intelligence"):
                 cur.execute("""
                     SELECT strike_price, option_type, volume, ltp
                     FROM raw_fno_derivatives
-                    WHERE ticker = %s
+                    WHERE ticker = ?
                     ORDER BY strike_price ASC
                 """, (clean_t,))
                 fno_rows = cur.fetchall()
@@ -2917,13 +2947,14 @@ def get_sector_overview(dataset: str = "intelligence"):
     """Provides sector breakdown, average performance, and breadth distribution for market heatmaps."""
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT 
                     COALESCE(t.sector, 'General') AS sector,
                     COUNT(a.ticker) AS stock_count,
-                    ROUND(AVG(a.hybrid_score)::numeric, 2) AS avg_score,
-                    ROUND(AVG(a.close)::numeric, 2) AS avg_price,
+                    ROUND(AVG(a.hybrid_score), 2) AS avg_score,
+                    ROUND(AVG(a.close), 2) AS avg_price,
                     SUM(CASE WHEN a.overall_signal IN ('BUY', 'STRONG BUY') THEN 1 ELSE 0 END) AS bullish_count,
                     SUM(CASE WHEN a.overall_signal IN ('SELL', 'STRONG SELL') THEN 1 ELSE 0 END) AS bearish_count,
                     SUM(CASE WHEN a.overall_signal = 'HOLD' THEN 1 ELSE 0 END) AS neutral_count
@@ -2954,13 +2985,14 @@ def get_patterns_catalog(
     dsn = get_dsn(dataset)
     try:
         counts_map = {}
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             if indices_only:
                 cur.execute("""
                     SELECT p.pattern_code, p.timeframe, COUNT(DISTINCT p.ticker) AS ticker_count, COUNT(*) AS total_occurrences
                     FROM chart_patterns p
                     LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
-                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - ?
                       AND (
                           tm.sector = 'Market Index'
                           OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
@@ -2972,11 +3004,11 @@ def get_patterns_catalog(
                     SELECT p.pattern_code, p.timeframe, COUNT(DISTINCT p.ticker) AS ticker_count, COUNT(*) AS total_occurrences
                     FROM chart_patterns p
                     LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
-                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                    WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - ?
                       AND (
                           tm.is_fno = true 
                           OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
-                          OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
+                          OR EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name = 'fno_master'))
                       )
                     GROUP BY p.pattern_code, p.timeframe
                 """, (days,))
@@ -2984,7 +3016,7 @@ def get_patterns_catalog(
                 cur.execute("""
                     SELECT pattern_code, timeframe, COUNT(DISTINCT ticker) AS ticker_count, COUNT(*) AS total_occurrences
                     FROM chart_patterns
-                    WHERE detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - (INTERVAL '1 day' * %s)
+                    WHERE detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - ?
                     GROUP BY pattern_code, timeframe
                 """, (days,))
             for row in cur.fetchall():
@@ -3064,7 +3096,8 @@ def get_pattern_occurrences(
 
         codes = [c.strip().lower() for c in pattern_code_val.split(",") if c.strip()]
 
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             sql = """
                 SELECT 
                     p.id,
@@ -3075,9 +3108,9 @@ def get_pattern_occurrences(
                     p.pattern_name,
                     p.category,
                     p.timeframe,
-                    to_char(p.detected_date, 'YYYY-MM-DD') AS detected_date,
-                    to_char(p.start_date, 'YYYY-MM-DD') AS start_date,
-                    to_char(p.end_date, 'YYYY-MM-DD') AS end_date,
+                    strftime('%Y-%m-%d', p.detected_date) AS detected_date,
+                    strftime('%Y-%m-%d', p.start_date) AS start_date,
+                    strftime('%Y-%m-%d', p.end_date) AS end_date,
                     p.high_price,
                     p.low_price,
                     p.close_price,
@@ -3085,19 +3118,20 @@ def get_pattern_occurrences(
                     p.details
                 FROM chart_patterns p
                 LEFT JOIN ticker_master tm ON p.ticker = tm.ticker
-                WHERE UPPER(p.timeframe) = UPPER(%s)
+                WHERE UPPER(p.timeframe) = UPPER(?)
             """
             params = [timeframe_val]
 
             if search_clean:
                 s_param = f"%{search_clean.upper()}%"
-                sql += " AND (UPPER(p.ticker) LIKE %s OR UPPER(tm.company_name) LIKE %s OR UPPER(p.pattern_name) LIKE %s)"
+                sql += " AND (UPPER(p.ticker) LIKE ? OR UPPER(tm.company_name) LIKE ? OR UPPER(p.pattern_name) LIKE ?)"
                 params.extend([s_param, s_param, s_param])
             else:
                 if codes:
-                    sql += " AND LOWER(p.pattern_code) = ANY(%s)"
-                    params.append(codes)
-                sql += " AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns WHERE UPPER(timeframe) = UPPER(%s)) - (INTERVAL '1 day' * %s)"
+                    pcode_ph = ','.join(['?'] * len(codes))
+                    sql += f" AND LOWER(p.pattern_code) IN ({pcode_ph})"
+                    params.extend(codes)
+                sql += " AND p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns WHERE UPPER(timeframe) = UPPER(?)) - ?"
                 params.extend([timeframe_val, days_val])
 
             if indices_only_val:
@@ -3106,10 +3140,10 @@ def get_pattern_occurrences(
                 sql += """ AND (
                     tm.is_fno = true 
                     OR p.ticker IN ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50', 'BANKEX')
-                    OR EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fno_master' AND EXISTS (SELECT 1 FROM fno_master fm WHERE fm.symbol = p.ticker))
+                    OR EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name = 'fno_master'))
                 )"""
 
-            sql += " ORDER BY p.detected_date DESC, p.strength_score DESC LIMIT %s"
+            sql += " ORDER BY p.detected_date DESC, p.strength_score DESC LIMIT ?"
             params.append(limit_val)
 
             cur.execute(sql, params)
@@ -3136,16 +3170,17 @@ def get_ticker_patterns(ticker: str, dataset: str = "intelligence"):
     clean_t = ticker.upper().strip()
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT 
                     id, ticker, pattern_code, pattern_name, category, timeframe,
-                    to_char(detected_date, 'YYYY-MM-DD') AS detected_date,
-                    to_char(start_date, 'YYYY-MM-DD') AS start_date,
-                    to_char(end_date, 'YYYY-MM-DD') AS end_date,
+                    strftime('%Y-%m-%d', detected_date) AS detected_date,
+                    strftime('%Y-%m-%d', start_date) AS start_date,
+                    strftime('%Y-%m-%d', end_date) AS end_date,
                     high_price, low_price, close_price, strength_score, details
                 FROM chart_patterns
-                WHERE ticker = %s
+                WHERE ticker = ?
                 ORDER BY detected_date DESC
             """, (clean_t,))
             rows = cur.fetchall()
@@ -3166,7 +3201,8 @@ def get_fno_underlyings(dataset: str = "intelligence"):
     indices = []
     recent_searches = []
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # 1. Fetch stock F&O underlyings
             try:
                 cur.execute("""
@@ -3204,8 +3240,8 @@ def get_fno_underlyings(dataset: str = "intelligence"):
                 cur.execute("""
                     SELECT ticker, MAX(last_updated) AS max_upd
                     FROM raw_fno_derivatives 
-                    WHERE last_updated >= (NOW() - INTERVAL '8 hours')::text
-                       OR last_updated >= (CURRENT_DATE - INTERVAL '8 hours')::text
+                    WHERE last_updated >= datetime('now', '-8 hours')
+                       OR last_updated >= datetime('now', '-8 hours')
                     GROUP BY ticker
                     ORDER BY max_upd DESC
                     LIMIT 3
@@ -3239,7 +3275,8 @@ def get_research_tickers(dataset: str = "intelligence"):
     """Return all tickers from ticker_master for the Research Board dropdown."""
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 SELECT ticker, company_name, sector
                 FROM ticker_master
@@ -3277,10 +3314,11 @@ def get_research_compare(
     clean_t = ticker.upper().strip()
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Meta
             cur.execute(
-                "SELECT company_name, sector FROM ticker_master WHERE ticker = %s",
+                "SELECT company_name, sector FROM ticker_master WHERE ticker = ?",
                 (clean_t,),
             )
             meta_row = cur.fetchone()
@@ -3293,8 +3331,8 @@ def get_research_compare(
                     FROM ohlcv_daily o
                     LEFT JOIN indicators_daily i
                         ON o.ticker = i.ticker AND o.trade_date = i.trade_date
-                    WHERE o.ticker = %s
-                      AND o.trade_date BETWEEN %s AND %s
+                    WHERE o.ticker = ?
+                      AND o.trade_date BETWEEN ? AND ?
                     ORDER BY o.trade_date ASC
                 """, (clean_t, start, end))
                 return cur.fetchall()
@@ -3348,7 +3386,8 @@ def get_sector_wise_top10(dataset: str = "intelligence"):
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("""
                 WITH sector_ranked AS (
                     SELECT 
@@ -3376,12 +3415,14 @@ def get_sector_wise_top10(dataset: str = "intelligence"):
                     JOIN ticker_master tm ON a.ticker = tm.ticker
                     LEFT JOIN ticker_sector ts ON ts.ticker = a.ticker
                     LEFT JOIN sectors s ON s.id = ts.sector_id
-                    LEFT JOIN LATERAL (
-                        SELECT volume FROM ohlcv_daily WHERE ticker = a.ticker ORDER BY trade_date DESC LIMIT 1
-                    ) o ON true
-                    LEFT JOIN LATERAL (
-                        SELECT rsi14, sma20, sma50 FROM indicators_daily WHERE ticker = a.ticker ORDER BY trade_date DESC LIMIT 1
-                    ) ind ON true
+                    LEFT JOIN (
+                        SELECT ticker, volume FROM ohlcv_daily o2
+                        WHERE trade_date = (SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = o2.ticker)
+                    ) o ON o.ticker = a.ticker
+                    LEFT JOIN (
+                        SELECT ticker, rsi14, sma20, sma50 FROM indicators_daily i2
+                        WHERE trade_date = (SELECT MAX(trade_date) FROM indicators_daily WHERE ticker = i2.ticker)
+                    ) ind ON ind.ticker = a.ticker
                 )
                 SELECT * FROM sector_ranked
                 WHERE rnk <= 10
@@ -3418,10 +3459,18 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("""
+        with get_connection() as conn:
+            cur = conn.cursor()
+            lc_ph = ",".join(["?"] * len(LARGECAP_UNIVERSE))
+            mc_ph = ",".join(["?"] * len(MIDCAP_UNIVERSE))
+            sc_ph = ",".join(["?"] * len(SMALLCAP_UNIVERSE))
+            cap_params = (
+                list(LARGECAP_UNIVERSE) + list(MIDCAP_UNIVERSE) + list(SMALLCAP_UNIVERSE) +
+                list(LARGECAP_UNIVERSE) + list(MIDCAP_UNIVERSE) + list(SMALLCAP_UNIVERSE)
+            )
+            cur.execute(f"""
                 WITH cap_ranked AS (
-                    SELECT 
+                    SELECT
                         a.ticker,
                         COALESCE(tm.company_name, a.ticker) AS company_name,
                         COALESCE(NULLIF(sec_lat.name, ''), NULLIF(tm.sector, ''), 'General') AS sector,
@@ -3438,46 +3487,46 @@ def get_market_cap_wise_top10(dataset: str = "intelligence"):
                         a.confidence,
                         a.reasons,
                         COALESCE(tm.is_fno, false) AS is_fno,
-                        CASE 
-                            WHEN tm.exchange ILIKE '%%SME%%' OR a.ticker ILIKE '%%-SM%%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
-                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
-                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
-                            WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
+                        CASE
+                            WHEN tm.exchange LIKE '%SME%' OR a.ticker LIKE '%-SM%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
+                            WHEN a.ticker IN ({lc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%NIFTY50%' OR m.value LIKE '%LARGE%') THEN 'Large Cap'
+                            WHEN a.ticker IN ({mc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%MID%') THEN 'Mid Cap'
+                            WHEN a.ticker IN ({sc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%SMALL%') THEN 'Small Cap'
                             ELSE 'Micro Cap'
                         END AS market_cap,
                         ROW_NUMBER() OVER (
-                            PARTITION BY 
-                                CASE 
-                                    WHEN tm.exchange ILIKE '%%SME%%' OR a.ticker ILIKE '%%-SM%%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
-                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%NIFTY50%%' OR m ILIKE '%%LARGE%%') THEN 'Large Cap'
-                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%MID%%') THEN 'Mid Cap'
-                                    WHEN a.ticker = ANY(%s) OR EXISTS (SELECT 1 FROM unnest(tm.index_memberships) AS m WHERE m ILIKE '%%SMALL%%') THEN 'Small Cap'
+                            PARTITION BY
+                                CASE
+                                    WHEN tm.exchange LIKE '%SME%' OR a.ticker LIKE '%-SM%' OR (a.close < 50 AND o.volume < 20000) THEN 'SME'
+                                    WHEN a.ticker IN ({lc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%NIFTY50%' OR m.value LIKE '%LARGE%') THEN 'Large Cap'
+                                    WHEN a.ticker IN ({mc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%MID%') THEN 'Mid Cap'
+                                    WHEN a.ticker IN ({sc_ph}) OR EXISTS (SELECT 1 FROM json_each(COALESCE(tm.index_memberships,'[]')) AS m WHERE m.value LIKE '%SMALL%') THEN 'Small Cap'
                                     ELSE 'Micro Cap'
                                 END
                             ORDER BY COALESCE(a.hybrid_score, 0) DESC, COALESCE(o.volume, 0) DESC
                         ) AS rnk
                     FROM analysis_summaries a
                     JOIN ticker_master tm ON a.ticker = tm.ticker
-                    LEFT JOIN LATERAL (
-                        SELECT s.name 
-                        FROM ticker_sector ts
-                        JOIN sectors s ON s.id = ts.sector_id
-                        WHERE ts.ticker = a.ticker
-                        ORDER BY ts.sector_id ASC
-                        LIMIT 1
-                    ) sec_lat ON true
-                    LEFT JOIN LATERAL (
-                        SELECT volume FROM ohlcv_daily WHERE ticker = a.ticker ORDER BY trade_date DESC LIMIT 1
-                    ) o ON true
-                    LEFT JOIN LATERAL (
-                        SELECT rsi14, sma20, sma50 FROM indicators_daily WHERE ticker = a.ticker ORDER BY trade_date DESC LIMIT 1
-                    ) ind ON true
+                    LEFT JOIN (
+                        SELECT ts2.ticker, s2.name
+                        FROM ticker_sector ts2
+                        JOIN sectors s2 ON s2.id = ts2.sector_id
+                        GROUP BY ts2.ticker HAVING MIN(ts2.sector_id)
+                    ) sec_lat ON sec_lat.ticker = a.ticker
+                    LEFT JOIN (
+                        SELECT ticker, volume FROM ohlcv_daily o2
+                        WHERE trade_date = (SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = o2.ticker)
+                    ) o ON o.ticker = a.ticker
+                    LEFT JOIN (
+                        SELECT ticker, rsi14, sma20, sma50 FROM indicators_daily i2
+                        WHERE trade_date = (SELECT MAX(trade_date) FROM indicators_daily WHERE ticker = i2.ticker)
+                    ) ind ON ind.ticker = a.ticker
                     WHERE a.close > 0
                 )
                 SELECT * FROM cap_ranked
                 WHERE rnk <= 10
                 ORDER BY market_cap, rnk
-            """, (LARGECAP_UNIVERSE, MIDCAP_UNIVERSE, SMALLCAP_UNIVERSE, LARGECAP_UNIVERSE, MIDCAP_UNIVERSE, SMALLCAP_UNIVERSE))
+            """, cap_params)
             rows = cur.fetchall()
             
             market_cap_data = {}
@@ -3526,17 +3575,16 @@ def get_stocks_respecting_patterns(
     }
 
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Check if pre-calculated table exists and has records
             cur.execute("""
-                SELECT COUNT(*)::int AS cnt 
-                FROM information_schema.tables 
-                WHERE table_name = 'stocks_respecting_patterns'
+                SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name = 'stocks_respecting_patterns'
             """)
             has_table = cur.fetchone()["cnt"] > 0
 
             if has_table:
-                cur.execute("SELECT COUNT(*)::int AS cnt FROM stocks_respecting_patterns")
+                cur.execute("SELECT COUNT(*) AS cnt FROM stocks_respecting_patterns")
                 table_cnt = cur.fetchone()["cnt"]
 
                 if table_cnt > 0:
@@ -3562,9 +3610,7 @@ def get_stocks_respecting_patterns(
 
             # Check if chart_patterns table exists
             cur.execute("""
-                SELECT COUNT(*)::int AS cnt 
-                FROM information_schema.tables 
-                WHERE table_name = 'chart_patterns'
+                SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name = 'chart_patterns'
             """)
             has_patterns_table = cur.fetchone()["cnt"] > 0
 
@@ -3580,13 +3626,13 @@ def get_stocks_respecting_patterns(
                             WITH pattern_subset AS (
                                 SELECT p.ticker, p.pattern_name, p.category, p.close_price, p.detected_date
                                 FROM chart_patterns p
-                                WHERE p.detected_date >= (SELECT COALESCE(MAX(detected_date), CURRENT_DATE) FROM chart_patterns) - INTERVAL '{days} days'
+                                WHERE p.detected_date >= date((SELECT COALESCE(MAX(detected_date), date('now')) FROM chart_patterns), '-{days} days')
                             )
                             SELECT 
                                 p.ticker,
                                 COALESCE(m.company_name, p.ticker) AS company_name,
                                 COALESCE(m.sector, 'General') AS sector,
-                                COUNT(*)::int AS total_patterns,
+                                CAST(COUNT(*) AS INTEGER) AS total_patterns,
                                 SUM(
                                     CASE 
                                         WHEN p.category = 'BULLISH' AND sub.max_high > (p.close_price * 1.003) THEN 1
@@ -3594,7 +3640,7 @@ def get_stocks_respecting_patterns(
                                         WHEN p.category = 'NEUTRAL' AND (ABS(sub.latest_close - p.close_price) / NULLIF(p.close_price, 0)) * 100.0 >= 0.5 THEN 1
                                         ELSE 0
                                     END
-                                )::int AS pass_count,
+                                ) AS pass_count,
                                 (COUNT(*) - SUM(
                                     CASE 
                                         WHEN p.category = 'BULLISH' AND sub.max_high > (p.close_price * 1.003) THEN 1
@@ -3602,7 +3648,7 @@ def get_stocks_respecting_patterns(
                                         WHEN p.category = 'NEUTRAL' AND (ABS(sub.latest_close - p.close_price) / NULLIF(p.close_price, 0)) * 100.0 >= 0.5 THEN 1
                                         ELSE 0
                                     END
-                                ))::int AS fail_count,
+                                )) AS fail_count,
                                 ROUND(
                                     (SUM(
                                         CASE 
@@ -3611,8 +3657,8 @@ def get_stocks_respecting_patterns(
                                             WHEN p.category = 'NEUTRAL' AND (ABS(sub.latest_close - p.close_price) / NULLIF(p.close_price, 0)) * 100.0 >= 0.5 THEN 1
                                             ELSE 0
                                         END
-                                    )::numeric / COUNT(*)::numeric) * 100.0, 1
-                                )::float AS pass_rate,
+                                    ) / COUNT(*)) * 100.0, 1
+                                ) AS pass_rate,
                                 ROUND(
                                     AVG(
                                         CASE 
@@ -3620,18 +3666,19 @@ def get_stocks_respecting_patterns(
                                             WHEN p.category = 'BEARISH' THEN ((p.close_price - sub.min_low) / NULLIF(p.close_price, 0)) * 100.0
                                             ELSE (ABS(sub.latest_close - p.close_price) / NULLIF(p.close_price, 0)) * 100.0
                                         END
-                                    )::numeric, 2
-                                )::float AS avg_return_pct
+                                    ), 2
+                                ) AS avg_return_pct
                             FROM pattern_subset p
                             LEFT JOIN ticker_master m ON UPPER(p.ticker) = UPPER(m.ticker)
-                            LEFT JOIN LATERAL (
-                                SELECT 
-                                    COALESCE(MAX(o.high), p.close_price) AS max_high,
-                                    COALESCE(MIN(o.low), p.close_price) AS min_low,
-                                    COALESCE((SELECT o2.close FROM ohlcv_daily o2 WHERE o2.ticker = p.ticker AND o2.trade_date::date > p.detected_date::date ORDER BY o2.trade_date::date DESC LIMIT 1), p.close_price) AS latest_close
-                                FROM ohlcv_daily o 
-                                WHERE o.ticker = p.ticker AND o.trade_date::date > p.detected_date::date AND o.trade_date::date <= p.detected_date::date + INTERVAL '10 days'
-                            ) sub ON TRUE
+                            LEFT JOIN (
+                                SELECT p2.ticker,
+                                    COALESCE(MAX(o.high), p2.close_price) AS max_high,
+                                    COALESCE(MIN(o.low), p2.close_price) AS min_low,
+                                    (SELECT o3.close FROM ohlcv_daily o3 WHERE o3.ticker = p2.ticker AND o3.trade_date > p2.detected_date ORDER BY o3.trade_date DESC LIMIT 1) AS latest_close
+                                FROM chart_patterns p2
+                                LEFT JOIN ohlcv_daily o ON o.ticker = p2.ticker AND o.trade_date > p2.detected_date
+                                GROUP BY p2.ticker, p2.close_price
+                            ) sub ON sub.ticker = p.ticker
                             GROUP BY p.ticker, m.company_name, m.sector
                             ORDER BY pass_count DESC, pass_rate DESC, total_patterns DESC
                             LIMIT 25
@@ -3648,7 +3695,7 @@ def get_stocks_respecting_patterns(
                            a.technical_score, a.hybrid_score, a.overall_signal
                     FROM analysis_summaries a
                     JOIN ticker_master t ON a.ticker = t.ticker
-                    ORDER BY a.hybrid_score DESC NULLS LAST
+                    ORDER BY a.hybrid_score DESC
                     LIMIT 25
                 """)
                 top_analysis = cur.fetchall()
@@ -3702,19 +3749,18 @@ def get_sectorwise_followers(
     dsn = get_dsn(dataset)
     try:
         needs_generation = False
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Check if sector_lead_follow_groups table exists
             cur.execute("""
-                SELECT COUNT(*)::int AS cnt 
-                FROM information_schema.tables 
-                WHERE table_name = 'sector_lead_follow_groups'
+                SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name = 'sector_lead_follow_groups'
             """)
             has_table = cur.fetchone()["cnt"] > 0
 
             if not has_table:
                 needs_generation = True
             else:
-                cur.execute("SELECT COUNT(*)::int AS cnt FROM sector_lead_follow_groups")
+                cur.execute("SELECT COUNT(*) AS cnt FROM sector_lead_follow_groups")
                 if cur.fetchone()["cnt"] == 0:
                     needs_generation = True
 
@@ -3722,7 +3768,8 @@ def get_sectorwise_followers(
             from engine.analysis.sector_followers import generate_sector_followers_analysis
             generate_sector_followers_analysis()
 
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Query all records including pre-calculated technical_score and fundamental_score
             cur.execute("""
                 SELECT sector, ticker, company_name, role, rally_order, lead_ticker, lag_days,
@@ -3755,7 +3802,7 @@ def get_sectorwise_followers(
 
 
 from engine.reports.pdf_htf_indicators import calculate_htf_indicators
-from app.database import get_connection
+from .database import get_connection
 
 @app.get("/api/research/htf-setup/{ticker}")
 def get_htf_setup(ticker: str):
@@ -3818,19 +3865,20 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
     clean_t = ticker.upper().strip()
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # 1. Query ticker_master
             cur.execute("""
                 SELECT ticker, company_name, sector, is_fno
                 FROM ticker_master
-                WHERE UPPER(ticker) = %s 
-                   OR UPPER(ticker) LIKE %s 
-                   OR UPPER(company_name) LIKE %s
+                WHERE UPPER(ticker) = ? 
+                   OR UPPER(ticker) LIKE ? 
+                   OR UPPER(company_name) LIKE ?
                 ORDER BY 
                     CASE 
-                        WHEN UPPER(ticker) = %s THEN 1 
-                        WHEN UPPER(ticker) LIKE %s THEN 2
-                        WHEN UPPER(company_name) = %s THEN 3
+                        WHEN UPPER(ticker) = ? THEN 1 
+                        WHEN UPPER(ticker) LIKE ? THEN 2
+                        WHEN UPPER(company_name) = ? THEN 3
                         ELSE 4 
                     END, ticker ASC
                 LIMIT 1
@@ -3847,7 +3895,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
                 FROM (
                     SELECT high, low 
                     FROM ohlcv_daily 
-                    WHERE ticker = %s 
+                    WHERE ticker = ? 
                     ORDER BY trade_date DESC 
                     LIMIT 252
                 ) as sub
@@ -3864,7 +3912,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT current_pe, last_pat, debt_to_equity, fundamental_score, cash_flow_status, pat_trend, fetched_date
                         FROM fundamentals
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                         ORDER BY fetched_date DESC LIMIT 1
                     """, (actual_ticker,))
                     f_row = cur.fetchone()
@@ -3880,7 +3928,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT close, technical_score, fundamental_score, behavioral_score, hybrid_score, overall_signal, confidence, reasons, updated_at
                         FROM analysis_summaries
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                     """, (actual_ticker,))
                     a_row = cur.fetchone()
                     if a_row:
@@ -3893,7 +3941,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
             for tbl in ["screener", "breakout", "trend_trading", "reversal_trading", "support_resistance", "quicktrade"]:
                 try:
                     with conn.transaction():
-                        cur.execute(sql.SQL("SELECT * FROM {} WHERE ticker = %s LIMIT 1").format(sql.Identifier(tbl)), (actual_ticker,))
+                        cur.execute("SELECT * FROM {} WHERE ticker = ? LIMIT 1".format(tbl), (actual_ticker,))
                         row = cur.fetchone()
                         if row:
                             scanners[tbl] = dict(row)
@@ -3903,7 +3951,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
             hhhl_insight = None
             try:
                 with conn.transaction():
-                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = %s", (actual_ticker,))
+                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = ?", (actual_ticker,))
                     row = cur.fetchone()
                     if row:
                         hhhl_insight = dict(row)
@@ -3917,7 +3965,7 @@ def get_ticker_profile(ticker: str, dataset: str = "intelligence"):
             cup_and_handle = None
             try:
                 with conn.transaction():
-                    cur.execute("SELECT * FROM cup_and_handle_scanner WHERE ticker = %s", (actual_ticker,))
+                    cur.execute("SELECT * FROM cup_and_handle_scanner WHERE ticker = ?", (actual_ticker,))
                     row = cur.fetchone()
                     if row:
                         cup_and_handle = dict(row)
@@ -3952,17 +4000,18 @@ def get_mf_accumulation_report(dataset: str = "intelligence", period: str = "1M"
         
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             query = f"""
                 SELECT m.ticker, 
                        t.company_name,
-                       (m.data->>'current_weight')::float as current_weight, 
-                       (m.data->'changes'->>'{period}')::float as change_val
+                       (m.data->>'current_weight') as current_weight, 
+                       (m.data->'changes'->>'{period}') as change_val
                 FROM mf_behavior m
                 LEFT JOIN ticker_master t ON m.ticker = t.ticker
                 WHERE m.data->'changes'->>'{period}' IS NOT NULL
-                  AND (m.data->'changes'->>'{period}')::numeric > 0
-                ORDER BY (m.data->'changes'->>'{period}')::numeric DESC
+                  AND (m.data->'changes'->>'{period}') > 0
+                ORDER BY (m.data->'changes'->>'{period}') DESC
                 LIMIT 25
             """
             cur.execute(query)
@@ -3983,17 +4032,18 @@ def get_mf_exit_report(dataset: str = "intelligence", period: str = "1M"):
         
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             query = f"""
                 SELECT m.ticker, 
                        t.company_name,
-                       (m.data->>'current_weight')::float as current_weight, 
-                       (m.data->'changes'->>'{period}')::float as change_val
+                       (m.data->>'current_weight') as current_weight, 
+                       (m.data->'changes'->>'{period}') as change_val
                 FROM mf_behavior m
                 LEFT JOIN ticker_master t ON m.ticker = t.ticker
                 WHERE m.data->'changes'->>'{period}' IS NOT NULL
-                  AND (m.data->'changes'->>'{period}')::numeric < 0
-                ORDER BY (m.data->'changes'->>'{period}')::numeric ASC
+                  AND (m.data->'changes'->>'{period}') < 0
+                ORDER BY (m.data->'changes'->>'{period}') ASC
                 LIMIT 25
             """
             cur.execute(query)
@@ -4012,30 +4062,31 @@ def get_super_stocks_report(dataset: str = "intelligence", min_proj_pct: float =
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             query = """
                 SELECT t.ticker,
                        t.company_name,
                        ans.fundamental_score,
                        rsp.breakout_stage,
-                       (m.data->'changes'->>'1M')::float as mf_1m_change,
-                       (fii.data->'changes'->>'3M')::float as fii_3m_change,
-                       ROUND((((ans.projection_22d::jsonb ->> -1)::numeric - ans.close) / NULLIF(ans.close, 0) * 100)::numeric, 2)::float as projection_22d_pct
+                       (m.data->'changes'->>'1M') as mf_1m_change,
+                       (fii.data->'changes'->>'3M') as fii_3m_change,
+                       ROUND((((ans.projection_22d::jsonb ->> -1) - ans.close) / NULLIF(ans.close, 0) * 100), 2) as projection_22d_pct
                 FROM ticker_master t
                 JOIN analysis_summaries ans ON t.ticker = ans.ticker
                 JOIN retracement_speculator_patterns rsp ON t.ticker = rsp.ticker
                 LEFT JOIN mf_behavior m ON t.ticker = m.ticker
                 LEFT JOIN fii_behavior fii ON t.ticker = fii.ticker
-                WHERE rsp.breakout_stage ILIKE '%%Breakout%%'
+                WHERE rsp.breakout_stage LIKE '%Breakout%'
                   AND m.data->'changes'->>'1M' IS NOT NULL
-                  AND (m.data->'changes'->>'1M')::numeric > 0
+                  AND (m.data->'changes'->>'1M') > 0
                   AND fii.data->'changes'->>'3M' IS NOT NULL
-                  AND (fii.data->'changes'->>'3M')::numeric > 0
+                  AND (fii.data->'changes'->>'3M') > 0
                   AND ans.projection_22d IS NOT NULL 
                   AND ans.projection_22d != ''
                   AND ans.projection_22d != '[]'
-                  AND (((ans.projection_22d::jsonb ->> -1)::numeric - ans.close) / NULLIF(ans.close, 0) * 100) >= %s
-                ORDER BY ans.fundamental_score DESC NULLS LAST
+                  AND (((ans.projection_22d::jsonb ->> -1) - ans.close) / NULLIF(ans.close, 0) * 100) >= ?
+                ORDER BY ans.fundamental_score DESC
             """
             cur.execute(query, (min_proj_pct,))
             rows = cur.fetchall()
@@ -4053,11 +4104,13 @@ def get_historical_mf_behavior(ticker: str, dataset: str = "intelligence"):
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT data FROM mf_behavior WHERE ticker = %s", (ticker.upper().strip(),))
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT data FROM mf_behavior WHERE ticker = ?", (ticker.upper().strip(),))
             res = cur.fetchone()
             if res and res["data"]:
-                return {"success": True, "data": res["data"]}
+                data_val = json.loads(res["data"]) if isinstance(res["data"], str) else res["data"]
+                return {"success": True, "data": data_val}
             else:
                 return {"success": False, "message": "No historical MF data found for ticker."}
     except Exception as e:
@@ -4073,11 +4126,13 @@ def get_historical_fii_behavior(ticker: str, dataset: str = "intelligence"):
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT data FROM fii_behavior WHERE ticker = %s", (ticker.upper().strip(),))
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT data FROM fii_behavior WHERE ticker = ?", (ticker.upper().strip(),))
             res = cur.fetchone()
             if res and res["data"]:
-                return {"success": True, "data": res["data"]}
+                data_val = json.loads(res["data"]) if isinstance(res["data"], str) else res["data"]
+                return {"success": True, "data": data_val}
             else:
                 return {"success": False, "message": "No historical FII data found for ticker."}
     except Exception as e:
@@ -4092,19 +4147,20 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
     clean_t = ticker.upper().strip()
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # 1. Ticker Master record
             cur.execute("""
                 SELECT ticker, company_name, is_fno, sector, index_memberships, exchange, updated_at
                 FROM ticker_master
-                WHERE UPPER(ticker) = %s 
-                   OR UPPER(ticker) LIKE %s 
-                   OR UPPER(company_name) LIKE %s
+                WHERE UPPER(ticker) = ? 
+                   OR UPPER(ticker) LIKE ? 
+                   OR UPPER(company_name) LIKE ?
                 ORDER BY 
                     CASE 
-                        WHEN UPPER(ticker) = %s THEN 1 
-                        WHEN UPPER(ticker) LIKE %s THEN 2
-                        WHEN UPPER(company_name) = %s THEN 3
+                        WHEN UPPER(ticker) = ? THEN 1 
+                        WHEN UPPER(ticker) LIKE ? THEN 2
+                        WHEN UPPER(company_name) = ? THEN 3
                         ELSE 4 
                     END, ticker ASC
                 LIMIT 1
@@ -4122,7 +4178,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 FROM (
                     SELECT high, low 
                     FROM ohlcv_daily 
-                    WHERE ticker = %s 
+                    WHERE ticker = ? 
                     ORDER BY trade_date DESC 
                     LIMIT 252
                 ) as sub
@@ -4140,7 +4196,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     SELECT DISTINCT s.name 
                     FROM ticker_sector ts
                     JOIN sectors s ON s.id = ts.sector_id
-                    WHERE ts.ticker = %s
+                    WHERE ts.ticker = ?
                     ORDER BY s.name ASC
                 """, (actual_ticker,))
                 s_rows = cur.fetchall()
@@ -4162,7 +4218,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 cur.execute("""
                     SELECT COALESCE(f.market_cap, 0.0) / 10000000.0 AS mcap_cr, current_pe, last_pat 
                     FROM fundamentals f
-                    WHERE ticker = %s 
+                    WHERE ticker = ? 
                     ORDER BY fetched_date DESC LIMIT 1
                 """, (actual_ticker,))
                 f_mcap_row = cur.fetchone()
@@ -4178,7 +4234,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
 
                 if mcap_cr <= 0:
                     try:
-                        cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1", (actual_ticker,))
+                        cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = ? ORDER BY trade_date DESC LIMIT 1", (actual_ticker,))
                         c_mcap_row = cur.fetchone()
                         if c_mcap_row and c_mcap_row.get("close"):
                             c_price = float(c_mcap_row["close"])
@@ -4209,12 +4265,12 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             try:
                 with conn.transaction():
                     cur.execute("""
-                        SELECT close, close AS entry_price, round((close * 0.965)::numeric, 2) AS stop_loss, round((close * 1.075)::numeric, 2) AS target_price, 
-                               round((technical_score * 100)::numeric, 1) AS overall_score, 
-                               to_char(updated_at, 'DD/MM/YYYY') AS record_date, reasons AS rationale,
+                        SELECT close, close AS entry_price, round((close * 0.965), 2) AS stop_loss, round((close * 1.075), 2) AS target_price, 
+                               round((technical_score * 100), 1) AS overall_score, 
+                               strftime('%d/%m/%Y', updated_at) AS record_date, reasons AS rationale,
                                overall_signal, confidence
                         FROM analysis_summaries
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                     """, (actual_ticker,))
                     a_row = cur.fetchone()
                     if a_row:
@@ -4227,9 +4283,9 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     with conn.transaction():
                         cur.execute("""
                             SELECT close, entry_price, stop_loss, target_price, confidence,
-                                   to_char(analysed_at, 'DD/MM/YYYY') AS record_date, tech_reason AS rationale, signal AS overall_signal
+                                   strftime('%d/%m/%Y', analysed_at) AS record_date, tech_reason AS rationale, signal AS overall_signal
                             FROM intraday_call
-                            WHERE ticker = %s
+                            WHERE ticker = ?
                             ORDER BY analysed_at DESC LIMIT 1
                         """, (actual_ticker,))
                         ic_row = cur.fetchone()
@@ -4252,7 +4308,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT trend_signal, macd_signal, rsi14, sma20, sma50
                         FROM screener
-                        WHERE ticker = %s LIMIT 1
+                        WHERE ticker = ? LIMIT 1
                     """, (actual_ticker,))
                     sc_row = cur.fetchone()
                     if sc_row:
@@ -4278,7 +4334,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT breakout_type, volume_surge, trend_status, adx_signal, reversal_pattern, bollinger_status
                         FROM breakout
-                        WHERE ticker = %s LIMIT 1
+                        WHERE ticker = ? LIMIT 1
                     """, (actual_ticker,))
                     brk_row = cur.fetchone()
                     if brk_row:
@@ -4293,7 +4349,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             else:
                 try:
                     with conn.transaction():
-                        cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1", (actual_ticker,))
+                        cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = ? ORDER BY trade_date DESC LIMIT 1", (actual_ticker,))
                         c_row = cur.fetchone()
                         if c_row and c_row.get("close"):
                             actual_close_price = float(c_row["close"])
@@ -4314,7 +4370,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT pivot, s1, s2, r1, r2, close
                         FROM support_resistance
-                        WHERE ticker = %s LIMIT 1
+                        WHERE ticker = ? LIMIT 1
                     """, (actual_ticker,))
                     sr_row = cur.fetchone()
                     if sr_row:
@@ -4339,12 +4395,12 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                                 trade_date, open, high, low, close, volume,
                                 AVG(volume) OVER(ORDER BY trade_date ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING) AS avg_20d
                             FROM ohlcv_daily
-                            WHERE ticker = %s
+                            WHERE ticker = ?
                         )
                         SELECT 
-                            trade_date::text AS trade_date,
+                            trade_date AS trade_date,
                             open, high, low, close, volume,
-                            ROUND((volume / NULLIF(avg_20d, 0))::numeric, 2) AS ratio
+                            ROUND((volume / NULLIF(avg_20d, 0)), 2) AS ratio
                         FROM vol_avg
                         WHERE avg_20d IS NOT NULL AND volume > (1.3 * avg_20d)
                         ORDER BY trade_date DESC
@@ -4405,7 +4461,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT current_pe, avg_pe, last_pat, avg_pat, last_other_income, avg_other_income, market_cap
                         FROM fundamentals
-                        WHERE ticker = %s ORDER BY fetched_date DESC LIMIT 1
+                        WHERE ticker = ? ORDER BY fetched_date DESC LIMIT 1
                     """, (actual_ticker,))
                     f_row = cur.fetchone()
 
@@ -4413,7 +4469,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     rf_row = None
                     if not f_row:
                         cur.execute("""
-                            SELECT pe, pat, market_cap, sector FROM raw_fundamentals WHERE ticker = %s LIMIT 1
+                            SELECT pe, pat, market_cap, sector FROM raw_fundamentals WHERE ticker = ? LIMIT 1
                         """, (actual_ticker,))
                         rf_row = cur.fetchone()
 
@@ -4427,7 +4483,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                                 AVG(f.last_pat) FILTER (WHERE f.last_pat > 0) AS sector_pat
                             FROM fundamentals f
                             JOIN ticker_master tm ON f.ticker = tm.ticker
-                            WHERE tm.sector = %s
+                            WHERE tm.sector = ?
                         """, (sec_name,))
                         s_row = cur.fetchone()
                         if s_row:
@@ -4479,7 +4535,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             recommendations = []
             try:
                 with conn.transaction():
-                    cur.execute("SELECT * FROM broker_recommendations WHERE ticker = %s ORDER BY id DESC", (actual_ticker,))
+                    cur.execute("SELECT * FROM broker_recommendations WHERE ticker = ? ORDER BY id DESC", (actual_ticker,))
                     rec_rows = cur.fetchall()
                     recommendations = [dict(r) for r in rec_rows]
             except Exception:
@@ -4493,22 +4549,22 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT 
                             p.id, p.ticker, p.pattern_code, p.pattern_name, p.category, p.timeframe,
-                            to_char(p.detected_date::date, 'YYYY-MM-DD') AS detected_date,
+                            strftime('%Y-%m-%d', p.detected_date) AS detected_date,
                             p.close_price AS entry_close,
                             COALESCE(
-                              (SELECT MAX(o.high) FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date::date > p.detected_date::date AND o.trade_date::date <= p.detected_date::date + INTERVAL '10 days'),
+                              (SELECT MAX(o.high) FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date > p.detected_date AND o.trade_date <= p.detected_date ),
                               p.close_price
                             ) AS max_subsequent_high,
                             COALESCE(
-                              (SELECT MIN(o.low) FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date::date > p.detected_date::date AND o.trade_date::date <= p.detected_date::date + INTERVAL '10 days'),
+                              (SELECT MIN(o.low) FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date > p.detected_date AND o.trade_date <= p.detected_date ),
                               p.close_price
                             ) AS min_subsequent_low,
                             COALESCE(
-                              (SELECT o.close FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date::date > p.detected_date::date ORDER BY o.trade_date::date DESC LIMIT 1),
+                              (SELECT o.close FROM ohlcv_daily o WHERE o.ticker = p.ticker AND o.trade_date > p.detected_date ORDER BY o.trade_date DESC LIMIT 1),
                               p.close_price
                             ) AS latest_close
                         FROM chart_patterns p
-                        WHERE p.ticker = %s
+                        WHERE p.ticker = ?
                         ORDER BY p.detected_date DESC
                         LIMIT 15
                     """, (actual_ticker,))
@@ -4573,7 +4629,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
                         FROM mf_holdings
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                         ORDER BY rank ASC, holding_pct DESC
                     """, (actual_ticker,))
                     mf_rows = cur.fetchall()
@@ -4586,9 +4642,9 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             try:
                 with conn.transaction():
                     cur.execute("""
-                        SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at
+                        SELECT ticker, about_company, product_services, sectors, opportunities, risk, is_multibagger, additional_note, updated_at
                         FROM opportunities_risk
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                     """, (actual_ticker,))
                     opp_row = cur.fetchone()
                     if opp_row:
@@ -4602,8 +4658,8 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 with conn.transaction():
                     cur.execute("""
                         SELECT 
-                            (SELECT (data->'changes'->>'1M')::float FROM mf_behavior WHERE ticker = %s) as mf_1m,
-                            (SELECT (data->'changes'->>'1M')::float FROM fii_behavior WHERE ticker = %s) as fii_1m
+                            (SELECT (data->'changes'->>'1M') FROM mf_behavior WHERE ticker = ?) as mf_1m,
+                            (SELECT (data->'changes'->>'1M') FROM fii_behavior WHERE ticker = ?) as fii_1m
                     """, (actual_ticker, actual_ticker))
                     inst_row = cur.fetchone()
                     if inst_row:
@@ -4625,7 +4681,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT breakout_stage, consolidation_days 
                         FROM retracement_speculator_patterns 
-                        WHERE ticker = %s
+                        WHERE ticker = ?
                     """, (actual_ticker,))
                     ret_row = cur.fetchone()
                     if ret_row:
@@ -4637,13 +4693,18 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
             hhhl_insight = None
             try:
                 with conn.transaction():
-                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = %s", (actual_ticker,))
+                    cur.execute("SELECT * FROM continuous_hhhl_scanner WHERE ticker = ?", (actual_ticker,))
                     row = cur.fetchone()
                     if row:
                         hhhl_insight = dict(row)
                         for date_field in ["history_start_date", "cycle_start_date", "updated_at"]:
                             if hhhl_insight.get(date_field):
                                 hhhl_insight[date_field] = str(hhhl_insight[date_field])
+                        if isinstance(hhhl_insight.get("historical_cycles"), str):
+                            try:
+                                hhhl_insight["historical_cycles"] = json.loads(hhhl_insight["historical_cycles"])
+                            except Exception:
+                                hhhl_insight["historical_cycles"] = []
             except Exception as e:
                 logger.error(f"Error querying hhhl_insight for {actual_ticker}: {e}")
 
@@ -4655,7 +4716,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                         SELECT w.name 
                         FROM watchlist w
                         JOIN watchlist_items wi ON w.id = wi.watchlist_id
-                        WHERE wi.ticker = %s
+                        WHERE wi.ticker = ?
                         ORDER BY w.name
                     """, (actual_ticker,))
                     watchlists = [row["name"] for row in cur.fetchall()]
@@ -4669,7 +4730,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                     cur.execute("""
                         SELECT id, symbol, action, lot_size, action_date, created_at
                         FROM derivative_history
-                        WHERE symbol = %s
+                        WHERE symbol = ?
                         ORDER BY action_date DESC, id DESC
                     """, (actual_ticker,))
                     derivative_history = [dict(r) for r in cur.fetchall()]
@@ -4690,6 +4751,7 @@ def search_ticker_master_only(ticker: str, dataset: str = "intelligence"):
                 "volume_spikes": volume_spikes,
                 "fundamentals": fundamentals,
                 "pattern_history": pattern_history,
+                "candlestick_pattern_history": pattern_history,
                 "pattern_stats": pattern_stats,
                 "mf_holdings": mf_holdings,
                 "opportunities_risk": opportunities_risk,
@@ -4712,7 +4774,7 @@ def get_mf_holdings(ticker: str, dataset: str = 'intelligence'):
             cur.execute("""
                 SELECT rank, fund_name, holding_pct, shares_held, disclosure_date, downloaded_at
                 FROM mf_holdings
-                WHERE ticker = %s
+                WHERE ticker = ?
                 ORDER BY rank ASC, holding_pct DESC
             """, (actual_ticker,))
             rows = cur.fetchall()
@@ -4743,7 +4805,7 @@ class RecommendationIn(BaseModel):
 def get_recommendations(ticker: str, dataset: str = 'intelligence'):
     try:
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
-            cur.execute("SELECT * FROM broker_recommendations WHERE ticker = %s ORDER BY id DESC", (ticker.upper(),))
+            cur.execute("SELECT * FROM broker_recommendations WHERE ticker = ? ORDER BY id DESC", (ticker.upper(),))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
     except Exception as e:
@@ -4778,21 +4840,21 @@ def create_recommendation(body: RecommendationIn, dataset: str = 'intelligence')
             values = []
 
             if 'ticker' in cols:
-                insert_fields.append('ticker'); insert_placeholders.append('%s'); values.append(body.ticker.upper())
+                insert_fields.append('ticker'); insert_placeholders.append('?'); values.append(body.ticker.upper())
             if date_col in cols and date_col != 'created_at':
-                insert_fields.append(date_col); insert_placeholders.append('%s'); values.append(body.rec_date)
+                insert_fields.append(date_col); insert_placeholders.append('?'); values.append(body.rec_date)
             if 'recommender' in cols:
-                insert_fields.append('recommender'); insert_placeholders.append('%s'); values.append(body.recommender)
+                insert_fields.append('recommender'); insert_placeholders.append('?'); values.append(body.recommender)
             if 'cmp' in cols:
-                insert_fields.append('cmp'); insert_placeholders.append('%s'); values.append(body.cmp)
+                insert_fields.append('cmp'); insert_placeholders.append('?'); values.append(body.cmp)
             if 'stop_loss' in cols:
-                insert_fields.append('stop_loss'); insert_placeholders.append('%s'); values.append(body.stop_loss)
+                insert_fields.append('stop_loss'); insert_placeholders.append('?'); values.append(body.stop_loss)
             if 'target' in cols:
-                insert_fields.append('target'); insert_placeholders.append('%s'); values.append(body.target)
+                insert_fields.append('target'); insert_placeholders.append('?'); values.append(body.target)
             if 'time_period' in cols:
-                insert_fields.append('time_period'); insert_placeholders.append('%s'); values.append(body.time_period)
+                insert_fields.append('time_period'); insert_placeholders.append('?'); values.append(body.time_period)
             if 'description' in cols:
-                insert_fields.append('description'); insert_placeholders.append('%s'); values.append(body.description)
+                insert_fields.append('description'); insert_placeholders.append('?'); values.append(body.description)
 
             query = f"INSERT INTO broker_recommendations ({', '.join(insert_fields)}) VALUES ({', '.join(insert_placeholders)}) RETURNING id"
             cur.execute(query, values)
@@ -4808,7 +4870,7 @@ def create_recommendation(body: RecommendationIn, dataset: str = 'intelligence')
 def delete_recommendation(id: int, dataset: str = 'intelligence'):
     try:
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
-            cur.execute("DELETE FROM broker_recommendations WHERE id = %s", (id,))
+            cur.execute("DELETE FROM broker_recommendations WHERE id = ?", (id,))
             conn.commit()
             return {'success': True}
     except Exception as e:
@@ -4823,8 +4885,10 @@ def delete_recommendations_batch(payload: dict, dataset: str = 'intelligence'):
         if not ids:
             return {'deleted_count': 0}
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
-            cur.execute("DELETE FROM broker_recommendations WHERE id = ANY(%s) RETURNING id", (ids,))
-            deleted = cur.fetchall()
+            placeholders = ','.join(['?'] * len(ids))
+            cur.execute(f"DELETE FROM broker_recommendations WHERE id IN ({placeholders})", ids)
+            deleted_ids = list(ids)
+            deleted = [{"id": i} for i in deleted_ids]
             conn.commit()
             return {'deleted_count': len(deleted), 'deleted_ids': [r['id'] for r in deleted]}
     except Exception as e:
@@ -4873,24 +4937,24 @@ def get_retracement_speculators(
             params = []
 
             if search:
-                where_clauses.append("(ticker ILIKE %s OR company_name ILIKE %s OR sector ILIKE %s)")
+                where_clauses.append("(ticker LIKE ? OR company_name LIKE ? OR sector LIKE ?)")
                 p = f"%{search}%"
                 params.extend([p, p, p])
 
             if fib_level:
-                where_clauses.append("fib_retracement_level = %s")
+                where_clauses.append("fib_retracement_level = ?")
                 params.append(fib_level)
 
             if tax_bias:
-                where_clauses.append("financial_year_tax_cycle_bias ILIKE %s")
+                where_clauses.append("financial_year_tax_cycle_bias LIKE ?")
                 params.append(f"%{tax_bias}%")
 
             if sector:
-                where_clauses.append("sector ILIKE %s")
+                where_clauses.append("sector LIKE ?")
                 params.append(f"%{sector}%")
 
             if breakout_stage:
-                where_clauses.append("breakout_stage ILIKE %s")
+                where_clauses.append("breakout_stage LIKE ?")
                 params.append(f"%{breakout_stage}%")
 
             query = f"""
@@ -4903,7 +4967,7 @@ def get_retracement_speculators(
                 FROM retracement_speculator_patterns
                 WHERE {' AND '.join(where_clauses)}
                 ORDER BY speculator_behavior_score DESC, ticker ASC
-                LIMIT %s;
+                LIMIT ?;
             """
             params.append(limit)
             cur.execute(query, params)
@@ -4952,7 +5016,8 @@ def get_watchlist_monitor(
     """
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             # Fetch all watchlists
             cur.execute("""
                 SELECT w.id, w.name, w.description,
@@ -4965,7 +5030,7 @@ def get_watchlist_monitor(
             watchlists = [dict(r) for r in cur.fetchall()]
 
             # Insert Watchlist-All
-            cur.execute("SELECT COUNT(DISTINCT ticker) FROM watchlist_items")
+            cur.execute("SELECT COUNT(DISTINCT ticker) AS count FROM watchlist_items")
             all_count_row = cur.fetchone()
             all_count = all_count_row['count'] if all_count_row else 0
             watchlists.insert(0, {
@@ -4985,7 +5050,7 @@ def get_watchlist_monitor(
                 from_clause = "(SELECT DISTINCT ticker FROM watchlist_items) wi"
                 params = ()
             else:
-                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = %s) wi"
+                from_clause = "(SELECT DISTINCT ticker FROM watchlist_items WHERE watchlist_id = ?) wi"
                 params = (int(active_id),)
 
             # Fetch tickers for the selected watchlist with full performance data
@@ -5015,32 +5080,30 @@ def get_watchlist_monitor(
                     f.current_pe                            AS pe,
                     f.last_pat                              AS pat,
                     f.debt_to_equity,
-                    COALESCE(a.updated_at::text, '') AS updated_at
+                    COALESCE(a.updated_at, '') AS updated_at
                 FROM {from_clause}
                 LEFT JOIN ticker_master tm ON tm.ticker = wi.ticker
-                LEFT JOIN LATERAL (
-                    SELECT s.name 
-                    FROM ticker_sector ts
-                    JOIN sectors s ON s.id = ts.sector_id
-                    WHERE ts.ticker = wi.ticker
-                    ORDER BY ts.sector_id ASC
-                    LIMIT 1
-                ) sec_lat ON true
+                LEFT JOIN (
+                    SELECT ts2.ticker, s2.name
+                    FROM ticker_sector ts2
+                    JOIN sectors s2 ON s2.id = ts2.sector_id
+                    GROUP BY ts2.ticker HAVING MIN(ts2.sector_id)
+                ) sec_lat ON sec_lat.ticker = wi.ticker
                 LEFT JOIN analysis_summaries a ON a.ticker = wi.ticker
-                LEFT JOIN LATERAL (
-                    SELECT volume, trade_date FROM ohlcv_daily
-                    WHERE ticker = wi.ticker ORDER BY trade_date DESC LIMIT 1
-                ) o ON true
-                LEFT JOIN LATERAL (
-                    SELECT rsi14, sma20, sma50, macd_line, macd_signal, macd_hist
-                    FROM indicators_daily
-                    WHERE ticker = wi.ticker ORDER BY trade_date DESC LIMIT 1
-                ) ind ON true
-                LEFT JOIN LATERAL (
-                    SELECT current_pe, last_pat, debt_to_equity
-                    FROM fundamentals
-                    WHERE ticker = wi.ticker ORDER BY fetched_date DESC LIMIT 1
-                ) f ON true
+                LEFT JOIN (
+                    SELECT ticker, volume, trade_date FROM ohlcv_daily o2
+                    WHERE trade_date = (SELECT MAX(trade_date) FROM ohlcv_daily WHERE ticker = o2.ticker)
+                ) o ON o.ticker = wi.ticker
+                LEFT JOIN (
+                    SELECT ticker, rsi14, sma20, sma50, macd_line, macd_signal, macd_hist
+                    FROM indicators_daily i2
+                    WHERE trade_date = (SELECT MAX(trade_date) FROM indicators_daily WHERE ticker = i2.ticker)
+                ) ind ON ind.ticker = wi.ticker
+                LEFT JOIN (
+                    SELECT ticker, current_pe, last_pat, debt_to_equity
+                    FROM fundamentals f2
+                    WHERE fetched_date = (SELECT MAX(fetched_date) FROM fundamentals WHERE ticker = f2.ticker)
+                ) f ON f.ticker = wi.ticker
                 ORDER BY COALESCE(a.hybrid_score, 0) DESC, wi.ticker ASC
             """, params)
             tickers = [dict(r) for r in cur.fetchall()]
@@ -5082,6 +5145,8 @@ def get_watchlist_monitor(
 class OpportunitiesRiskIn(BaseModel):
     ticker: str
     about_company: Optional[str] = None
+    product_services: Optional[str] = None
+    sectors: Optional[str] = None
     opportunities: Optional[str] = None
     risk: Optional[str] = None
     is_multibagger: Optional[bool] = False
@@ -5096,20 +5161,22 @@ def get_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
         actual_ticker = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
             cur.execute("""
-                SELECT ticker, about_company, opportunities, risk, is_multibagger, additional_note, created_at, updated_at
+                SELECT ticker, about_company, product_services, sectors, opportunities, risk, is_multibagger, additional_note, created_at, updated_at
                 FROM opportunities_risk
-                WHERE ticker = %s
+                WHERE ticker = ?
             """, (actual_ticker,))
             row = cur.fetchone()
 
             cur.execute("""
-                SELECT sector_id FROM ticker_sector WHERE ticker = %s
+                SELECT sector_id FROM ticker_sector WHERE ticker = ?
             """, (actual_ticker,))
             sector_ids = [r['sector_id'] for r in cur.fetchall()]
 
             data = dict(row) if row else {
                 "ticker": actual_ticker,
                 "about_company": "",
+                "product_services": "",
+                "sectors": "",
                 "opportunities": "",
                 "risk": "",
                 "is_multibagger": False,
@@ -5138,7 +5205,7 @@ def list_opportunities_risk(dataset: str = 'intelligence'):
             result = []
             for r in rows:
                 item = dict(r)
-                cur.execute("SELECT sector_id FROM ticker_sector WHERE ticker = %s", (item['ticker'],))
+                cur.execute("SELECT sector_id FROM ticker_sector WHERE ticker = ?", (item['ticker'],))
                 item['sector_ids'] = [s['sector_id'] for s in cur.fetchall()]
                 result.append(item)
             return result
@@ -5154,21 +5221,23 @@ def save_opportunities_risk(body: OpportunitiesRiskIn, dataset: str = 'intellige
         actual_ticker = body.ticker.upper().replace(".NS", "").replace(".BO", "").strip()
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO opportunities_risk (ticker, about_company, opportunities, risk, is_multibagger, additional_note, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                INSERT INTO opportunities_risk (ticker, about_company, product_services, sectors, opportunities, risk, is_multibagger, additional_note, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT (ticker) DO UPDATE SET
                     about_company = EXCLUDED.about_company,
+                    product_services = EXCLUDED.product_services,
+                    sectors = EXCLUDED.sectors,
                     opportunities = EXCLUDED.opportunities,
                     risk = EXCLUDED.risk,
                     is_multibagger = EXCLUDED.is_multibagger,
                     additional_note = EXCLUDED.additional_note,
-                    updated_at = NOW()
-            """, (actual_ticker, body.about_company, body.opportunities, body.risk, body.is_multibagger or False, body.additional_note))
+                    updated_at = datetime('now')
+            """, (actual_ticker, body.about_company, body.product_services, body.sectors, body.opportunities, body.risk, body.is_multibagger or False, body.additional_note))
 
             if body.sector_ids is not None:
-                cur.execute("DELETE FROM ticker_sector WHERE ticker = %s", (actual_ticker,))
+                cur.execute("DELETE FROM ticker_sector WHERE ticker = ?", (actual_ticker,))
                 for s_id in body.sector_ids:
-                    cur.execute("INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (actual_ticker, s_id))
+                    cur.execute("INSERT INTO ticker_sector (ticker, sector_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (actual_ticker, s_id))
 
             conn.commit()
             return {"success": True, "ticker": actual_ticker}
@@ -5183,7 +5252,7 @@ def delete_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
     try:
         actual_ticker = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
         with get_connection(get_dsn(dataset)) as conn, conn.cursor() as cur:
-            cur.execute("DELETE FROM opportunities_risk WHERE ticker = %s", (actual_ticker,))
+            cur.execute("DELETE FROM opportunities_risk WHERE ticker = ?", (actual_ticker,))
             conn.commit()
             return {"success": True}
     except Exception as e:
@@ -5196,7 +5265,8 @@ def delete_opportunities_risk(ticker: str, dataset: str = 'intelligence'):
 def get_cup_and_handle_report(dataset: str = "intelligence"):
     dsn = get_dsn(dataset)
     try:
-        with get_connection(dsn) as conn, conn.cursor() as cur:
+        with get_connection() as conn:
+            cur = conn.cursor()
             query = """
                 SELECT c.*, t.company_name, t.sector, ans.close
                 FROM cup_and_handle_scanner c
@@ -5296,6 +5366,20 @@ def portal(path: str):
             503,
             "Frontend bundle not built or assets missing. Run 'npm --prefix frontend run build' or use run.bat.",
         )
+    try:
+        content = index.read_text(encoding="utf-8", errors="ignore")
+        match = re.search(r'src=["\']/assets/([^"\']+\.js)["\']', content)
+        if match:
+            bundle_file = assets_path / match.group(1)
+            if not bundle_file.is_file():
+                raise HTTPException(
+                    503,
+                    f"Frontend bundle '{match.group(1)}' referenced in index.html is missing. Run 'npm --prefix frontend run build' or use run.bat --build.",
+                )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error checking frontend bundle integrity: {e}")
     return FileResponse(
         index,
         headers={

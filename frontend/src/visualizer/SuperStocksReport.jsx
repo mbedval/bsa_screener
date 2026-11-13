@@ -129,19 +129,19 @@ export function SuperStocksReport({ apiBase = '/api/intelligence', onTickerClick
                   {truncateText(row.company_name)}
                 </td>
                 <td style={{ ...tdStyle, color: '#f59e0b', fontWeight: 700 }}>
-                  {Number(row.fundamental_score).toFixed(2)}
+                  {row.fundamental_score != null ? Number(row.fundamental_score).toFixed(2) : '—'}
                 </td>
                 <td style={{ ...tdStyle, color: '#34d399', fontWeight: 600 }}>
-                  {row.breakout_stage}
+                  {row.breakout_stage || '—'}
                 </td>
                 <td style={{ ...tdStyle, color: '#34d399' }}>
-                  +{Number(row.mf_1m_change).toFixed(2)}%
+                  {row.mf_1m_change != null ? `+${Number(row.mf_1m_change).toFixed(2)}%` : '—'}
                 </td>
                 <td style={{ ...tdStyle, color: '#34d399' }}>
-                  +{Number(row.fii_3m_change).toFixed(2)}%
+                  {row.fii_3m_change != null ? `+${Number(row.fii_3m_change).toFixed(2)}%` : '—'}
                 </td>
                 <td style={{ ...tdStyle, color: '#a855f7', fontWeight: 800 }}>
-                  +{Number(row.projection_22d_pct).toFixed(2)}%
+                  {row.projection_22d_pct != null ? `+${Number(row.projection_22d_pct).toFixed(2)}%` : '—'}
                 </td>
               </tr>
             ))}

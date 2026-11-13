@@ -42,7 +42,7 @@ export default function CandlestickFullReportPage({ apiBase, initialTicker }) {
       .finally(() => setLoading(false));
   }, [ticker, apiBase]);
 
-  const history = data?.candlestick_pattern_history || [];
+  const history = data?.candlestick_pattern_history || data?.pattern_history || [];
 
   const totalPages = Math.ceil(history.length / pageSize);
   const paginatedData = pageSize > 0 ? history.slice((page - 1) * pageSize, page * pageSize) : history;

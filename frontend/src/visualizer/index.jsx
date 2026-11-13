@@ -770,11 +770,11 @@ export function StockChartVisualizer({ ticker, height = 440, apiBase = '/api/int
             {latestCandle && (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 3 }}>
                 <span style={{ fontSize: 20, fontWeight: 800, color: '#f8fafc', fontFamily: "'DM Mono'" }}>
-                  ₹{latestCandle.close.toFixed(2)}
+                  ₹{latestCandle?.close != null ? Number(latestCandle.close).toFixed(2) : '—'}
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: isUp ? '#22c55e' : '#ef4444', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                   {isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {isUp ? '+' : ''}{dayChange.toFixed(2)} ({isUp ? '+' : ''}{dayChangePct.toFixed(2)}%)
+                  {isUp ? '+' : ''}{dayChange != null ? Number(dayChange).toFixed(2) : '0.00'} ({isUp ? '+' : ''}{dayChangePct != null ? Number(dayChangePct).toFixed(2) : '0.00'}%)
                 </span>
               </div>
             )}
@@ -1652,8 +1652,8 @@ function researchStats(series) {
   if (!series || series.length === 0) return null
   const closes = series.map(d => d.close)
   const first = closes[0], last = closes[closes.length - 1]
-  const pct = first > 0 ? (((last - first) / first) * 100).toFixed(2) : '0'
-  return { first: first.toFixed(2), last: last.toFixed(2), pct, high: Math.max(...closes).toFixed(2), low: Math.min(...closes).toFixed(2), days: series.length }
+  const pct = (first && first > 0 && last != null) ? (((last - first) / first) * 100).toFixed(2) : '0'
+  return { first: first != null ? Number(first).toFixed(2) : '0.00', last: last != null ? Number(last).toFixed(2) : '0.00', pct, high: closes.length ? Math.max(...closes).toFixed(2) : '0.00', low: closes.length ? Math.min(...closes).toFixed(2) : '0.00', days: series.length }
 }
 
 const STATIC_PATTERNS = [
@@ -3837,16 +3837,16 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={badgeStyle('#cbd5e1', 'rgba(148, 163, 184, 0.15)')}>
-                  Total: <b>{patternStats.total.toFixed(1)}</b>
+                  Total: <b>{patternStats?.total != null ? Number(patternStats.total).toFixed(1) : '0.0'}</b>
                 </span>
                 <span style={badgeStyle('#4ade80', 'rgba(34, 197, 94, 0.15)')}>
-                  PASS: <b>{patternStats.pass.toFixed(1)}</b>
+                  PASS: <b>{patternStats?.pass != null ? Number(patternStats.pass).toFixed(1) : '0.0'}</b>
                 </span>
                 <span style={badgeStyle('#f87171', 'rgba(239, 68, 68, 0.15)')}>
-                  FAIL: <b>{patternStats.fail.toFixed(1)}</b>
+                  FAIL: <b>{patternStats?.fail != null ? Number(patternStats.fail).toFixed(1) : '0.0'}</b>
                 </span>
                 <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>
-                  Pass Rate: <b>{patternStats.pass_rate.toFixed(1)}% PASS RATE</b>
+                  Pass Rate: <b>{patternStats?.pass_rate != null ? Number(patternStats.pass_rate).toFixed(1) : '0.0'}% PASS RATE</b>
                 </span>
               </div>
             </div>
@@ -3899,7 +3899,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                             {Number(p.best_price).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </td>
                           <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: "'DM Mono', monospace", fontWeight: 700, color: p.return_pct >= 0 ? '#4ade80' : '#f87171' }}>
-                            {p.return_pct >= 0 ? `+${p.return_pct.toFixed(1)}%` : `${p.return_pct.toFixed(1)}%`}
+                            {p.return_pct != null ? (p.return_pct >= 0 ? `+${Number(p.return_pct).toFixed(1)}%` : `${Number(p.return_pct).toFixed(1)}%`) : '—'}
                           </td>
                           <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                             <span style={{ background: statusBg, color: statusColor, border: `1px solid ${statusColor}50`, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 4, display: 'inline-block', letterSpacing: 0.5 }}>
@@ -3961,10 +3961,10 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                     volumeSpikes.slice(0, 5).map((row, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                         <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{row.trade_date}</td>
-                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{row.open.toFixed(1)}</td>
-                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.high.toFixed(1)}</td>
-                        <td style={{ padding: '10px 12px', color: '#ef4444' }}>{row.low.toFixed(1)}</td>
-                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.close.toFixed(1)}</td>
+                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{row.open != null ? Number(row.open).toFixed(1) : '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.high != null ? Number(row.high).toFixed(1) : '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#ef4444' }}>{row.low != null ? Number(row.low).toFixed(1) : '—'}</td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>{row.close != null ? Number(row.close).toFixed(1) : '—'}</td>
                         <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{row.volume.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
                         <td style={{ padding: '10px 12px', color: '#f59e0b', fontWeight: 700 }}>{renderTruncatedCell(row.vwap_spike_ratio)}</td>
                       </tr>
@@ -4111,11 +4111,11 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={badgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>
-                  Total Funds: <b>{mfHoldings.length.toFixed(1)}</b>
+                  Total Funds: <b>{mfHoldings.length}</b>
                 </span>
                 {mfHoldings.length > 0 && (
                   <span style={badgeStyle('#f59e0b', 'rgba(245, 158, 11, 0.15)')}>
-                    Top Holder: <b>{mfHoldings[0].holding_pct.toFixed(2)}%</b>
+                    Top Holder: <b>{mfHoldings[0]?.holding_pct != null ? Number(mfHoldings[0].holding_pct).toFixed(2) : '—'}%</b>
                   </span>
                 )}
               </div>
@@ -4158,7 +4158,7 @@ export function SearchDetailPage({ apiBase = '/api/intelligence', dataset = 'int
                                 {renderTruncatedCell(h.fund_name)}
                               </td>
                               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: "'DM Mono', monospace", fontWeight: 800, color: isTop3 ? '#f59e0b' : '#38bdf8' }}>
-                                {h.holding_pct.toFixed(2)}%
+                                {h.holding_pct != null ? Number(h.holding_pct).toFixed(2) : '—'}%
                               </td>
                               <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94a3b8', fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
                                 {h.disclosure_date || '—'}
@@ -5690,6 +5690,7 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
 
   const [activeModalText, setActiveModalText] = useState(null)
   const [activeSpeculatorModal, setActiveSpeculatorModal] = useState(null)
+  const [activeChartTicker, setActiveChartTicker] = useState(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -5724,7 +5725,7 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
     } finally {
       setLoading(false)
     }
-  }, [apiBase, searchTerm, selectedFib, selectedTax, selectedSector])
+  }, [apiBase, searchTerm, selectedFib, selectedTax, selectedSector, selectedBreakoutStage])
 
   useEffect(() => {
     fetchData()
@@ -5733,7 +5734,7 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
   // Reset page to 1 whenever filters change
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, selectedFib, selectedTax, selectedSector])
+  }, [searchTerm, selectedFib, selectedTax, selectedSector, selectedBreakoutStage])
 
   const truncateText = (text, maxLength = 20) => {
     if (!text) return '—'
@@ -5826,10 +5827,15 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
         </div>
       )}
 
+      {/* Interactive Candlestick Chart Modal */}
+      {activeChartTicker && (
+        <StockVisualizerModal ticker={activeChartTicker} apiBase={apiBase} dataset={dataset} onClose={() => setActiveChartTicker(null)} />
+      )}
+
       {/* Unified Controls Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ fontSize: 13, color: '#94a3b8' }}>
-          Showing <b style={{ color: '#38bdf8' }}>{filteredList ? filteredList.length : paginatedData.length}</b> / {totalRecords} records
+          Showing <b style={{ color: '#38bdf8' }}>{paginatedData.length}</b> / {totalRecords} records
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -5895,9 +5901,24 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
             </select>
           </div>
 
-          {(searchTerm || selectedFib || selectedTax || selectedSector) && (
+          {/* Breakout Stage Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Stage:</label>
+            <select
+              value={selectedBreakoutStage}
+              onChange={e => setSelectedBreakoutStage(e.target.value)}
+              style={{ background: '#0d1726', border: '1px solid rgba(255,255,255,0.15)', color: '#a78bfa', padding: '7px 10px', borderRadius: 6, fontSize: 13, outline: 'none', fontWeight: 700 }}
+            >
+              <option value="">All Stages</option>
+              {(filters?.breakout_stages || []).map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          {(searchTerm || selectedFib || selectedTax || selectedSector || selectedBreakoutStage) && (
             <button
-              onClick={() => { setSearchTerm(''); setSelectedFib(''); setSelectedTax(''); setSelectedSector('') }}
+              onClick={() => { setSearchTerm(''); setSelectedFib(''); setSelectedTax(''); setSelectedSector(''); setSelectedBreakoutStage('') }}
               style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', padding: '7px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
             >
               Reset Filters
@@ -6008,12 +6029,22 @@ export function RetracementPatternPage({ onSelectTicker, apiBase = '/api/intelli
                           {score.toFixed(1)}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <button
-                            onClick={() => setActiveSpeculatorModal(r)}
-                            style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                          >
-                            📊 View Profile
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                            <button
+                              onClick={() => setActiveSpeculatorModal(r)}
+                              style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                              title="View Speculator Profile"
+                            >
+                              📊 Profile
+                            </button>
+                            <button
+                              onClick={() => setActiveChartTicker(r.ticker)}
+                              style={{ background: 'rgba(34, 197, 94, 0.12)', border: '1px solid rgba(34, 197, 94, 0.3)', color: '#4ade80', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                              title="View Candlestick Chart"
+                            >
+                              📈 Chart
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -6495,9 +6526,9 @@ export function CupAndHandleReport({ onTickerClick }) {
                       <td style={{ color: '#e2e8f0' }}>{details.cup_duration} Days</td>
                       <td style={{ color: '#f87171' }}>{details.cup_depth_pct ? `-${details.cup_depth_pct}%` : '—'}</td>
                       <td style={{ color: '#f87171' }}>{details.handle_retracement_pct ? `-${details.handle_retracement_pct}%` : '—'}</td>
-                      <td style={{ color: '#4ade80', fontWeight: 600 }}>{item.breakout_price ? item.breakout_price.toFixed(2) : '—'}</td>
-                      <td style={{ color: '#38bdf8', fontWeight: 600 }}>{item.target_price ? item.target_price.toFixed(2) : '—'}</td>
-                      <td style={{ color: '#ef4444' }}>{item.stop_loss ? item.stop_loss.toFixed(2) : '—'}</td>
+                      <td style={{ color: '#4ade80', fontWeight: 600 }}>{item.breakout_price != null ? Number(item.breakout_price).toFixed(2) : '—'}</td>
+                      <td style={{ color: '#38bdf8', fontWeight: 600 }}>{item.target_price != null ? Number(item.target_price).toFixed(2) : '—'}</td>
+                      <td style={{ color: '#ef4444' }}>{item.stop_loss != null ? Number(item.stop_loss).toFixed(2) : '—'}</td>
                       <td style={{ color: '#94a3b8' }}>{item.breakout_date}</td>
                     </tr>
                   )

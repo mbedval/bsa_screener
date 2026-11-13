@@ -129,6 +129,9 @@ CREATE TABLE IF NOT EXISTS indices_master (
 -- 11. Opportunities and Risk Table
 CREATE TABLE IF NOT EXISTS opportunities_risk (
     ticker            TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    about_company     TEXT,
+    product_services  TEXT,
+    sectors           TEXT,
     opportunities     TEXT,
     risk              TEXT,
     is_multibagger    BOOLEAN DEFAULT FALSE,
@@ -136,6 +139,9 @@ CREATE TABLE IF NOT EXISTS opportunities_risk (
     created_at        TIMESTAMP DEFAULT NOW(),
     updated_at        TIMESTAMP DEFAULT NOW()
 );
+ALTER TABLE opportunities_risk ADD COLUMN IF NOT EXISTS about_company TEXT;
+ALTER TABLE opportunities_risk ADD COLUMN IF NOT EXISTS product_services TEXT;
+ALTER TABLE opportunities_risk ADD COLUMN IF NOT EXISTS sectors TEXT;
 
 -- 3. Market Data Tables
 CREATE TABLE IF NOT EXISTS ohlcv_daily (
@@ -340,15 +346,38 @@ CREATE TABLE IF NOT EXISTS fno_active (
     last_updated TEXT
 );
 
-CREATE TABLE IF NOT EXISTS opportunities_risk (
-    ticker VARCHAR(50) PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    about_company TEXT,
-    opportunities TEXT,
-    risk TEXT,
-    is_multibagger BOOLEAN DEFAULT FALSE,
-    additional_note TEXT,
-    created_at TIMESTAMP DEFAULT now(),
+
+CREATE TABLE IF NOT EXISTS continuous_hhhl_scanner (
+    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    close DOUBLE PRECISION,
+    current_hhhl INTEGER,
+    avg_continuity_count DOUBLE PRECISION,
+    broken_pattern_count INTEGER,
+    broken_pattern_details TEXT,
+    history_days_analyzed INTEGER,
+    history_start_date DATE,
+    cycle_start_date DATE,
+    historical_cycles JSONB,
     updated_at TIMESTAMP DEFAULT now()
+);
+ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_days_analyzed INTEGER;
+ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_start_date DATE;
+ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS cycle_start_date DATE;
+ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS historical_cycles JSONB;
+
+CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT False,
+    pattern_start_date DATE,
+    cup_bottom_date DATE,
+    handle_start_date DATE,
+    breakout_date DATE,
+    breakout_price DOUBLE PRECISION,
+    target_price DOUBLE PRECISION,
+    stop_loss DOUBLE PRECISION,
+    details JSONB,
+    historical_patterns JSONB,
+    last_updated TIMESTAMP DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS chart_patterns (
@@ -395,6 +424,7 @@ CREATE INDEX IF NOT EXISTS idx_indicators_ticker_date ON indicators_daily(ticker
 CREATE INDEX IF NOT EXISTS idx_fno_ticker ON raw_fno_derivatives(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_ticker ON chart_patterns(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_code_tf ON chart_patterns(pattern_code, timeframe);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_patterns_unique ON chart_patterns (ticker, pattern_code, timeframe, detected_date);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
 
 -- 12. Historical Mutual Fund Behaviour Module

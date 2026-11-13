@@ -1,102 +1,106 @@
 #!/usr/bin/env python3
+"""
+BSA Database Reset & Re-initialization Script (SQLite version).
+
+Steps:
+  1. Optionally delete the existing SQLite database file
+  2. Re-apply the schema (creates all tables / indexes)
+  3. Optionally seed master data from CSV files
+  4. Optionally trigger a fresh download & analysis pipeline
+"""
 import os
 import sys
-import subprocess
-import shutil
-import psycopg2
-from dotenv import load_dotenv
 
-# Add the project root to python path to use imports
+# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+
 def confirm(prompt: str) -> bool:
-    """Helper to prompt for yes/no confirmation on terminal."""
+    """Prompt for yes/no confirmation on terminal."""
     val = input(prompt).strip().lower()
     return val in ("yes", "y")
 
+
 def main():
+    from dotenv import load_dotenv
     load_dotenv()
-    
-    # Connection details
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    user = os.getenv("POSTGRES_USER", "jmbxdbuser")
-    password = os.getenv("POSTGRES_PASSWORD", "jmbxdbpassword")
-    target_db = os.getenv("POSTGRES_DB", "bsa_db")
+
+    db_path = os.getenv("SQLITE_PATH") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "data", "bsa_db.sqlite3"
+    )
 
     print("==================================================")
-    # Step 1: Confirm Database Drop
-    print(f"STEP 1: DROP DATABASE '{target_db}'")
+    print("BSA DATABASE RESET & INITIALIZATION (SQLite)")
     print("==================================================")
-    if not confirm(f"WARNING: This will drop the database '{target_db}' and delete ALL existing data. Proceed? (yes/no): "):
-        print("Aborted.")
-        sys.exit(0)
+    print(f"Database file: {db_path}")
 
-    # Connect to maintenance db to perform drop/create
-    maintenance_dsn = f"postgresql://{user}:{password}@{host}:{port}/postgres"
-    try:
-        conn = psycopg2.connect(maintenance_dsn)
-        conn.autocommit = True
-        with conn.cursor() as cur:
-            # Terminate active connections to the target db so it can be dropped
-            cur.execute(f"""
-                SELECT pg_terminate_backend(pg_stat_activity.pid)
-                FROM pg_stat_activity
-                WHERE pg_stat_activity.datname = '{target_db}' AND pid <> pg_backend_pid();
-            """)
-            print(f"Terminated other active connections to '{target_db}'.")
-            
-            cur.execute(f"DROP DATABASE IF EXISTS {target_db};")
-            print(f"[✓] Database '{target_db}' dropped successfully.")
-            
-            cur.execute(f"CREATE DATABASE {target_db};")
-            print(f"[✓] Fresh database '{target_db}' created successfully.")
-        conn.close()
-    except Exception as e:
-        print(f"[×] Error dropping/recreating database: {e}")
-        sys.exit(1)
-
+    # Step 1: Confirm Delete
     print("\n==================================================")
-    # Step 2: Confirm Seeding
-    print("STEP 2: INITIALIZE SCHEMA & SEED MASTER DATA")
+    print("STEP 1: DELETE EXISTING DATABASE FILE")
     print("==================================================")
-    if confirm("Would you like to initialize tables and seed full master data (2,570 tickers, About Company, sectors, indices, F&O lists)? (yes/no): "):
+    if os.path.exists(db_path):
+        if not confirm(
+            f"WARNING: This will DELETE '{db_path}' and all existing data. Proceed? (yes/no): "
+        ):
+            print("Aborted.")
+            sys.exit(0)
         try:
-            print("1/2. Creating database schema tables from seeding.sql...")
-            target_dsn = f"postgresql://{user}:{password}@{host}:{port}/{target_db}"
-            psql_bin = shutil.which("psql")
-            if psql_bin:
-                cmd = [psql_bin, "-d", target_db, "-h", host, "-U", user, "-f", "seeding.sql"]
-                env = os.environ.copy()
-                env["PGPASSWORD"] = password
-                res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-                if res.returncode != 0:
-                    print(f"[×] Schema initialization failed:\n{res.stderr}")
-                    sys.exit(1)
-            else:
-                conn = psycopg2.connect(target_dsn)
-                conn.autocommit = True
-                cur = conn.cursor()
-                with open("seeding.sql", "r", encoding="utf-8") as f:
-                    cur.execute(f.read())
-                conn.close()
-            
-            print("2/2. Seeding full master data from CSV datasets (_production.csv)...")
-            from engine.database.seeder import load_csv_files
-            seeded = load_csv_files("_production.csv", verbose=True)
-            if seeded:
-                print("[✓] Full master dataset (2,570 tickers, About Company, sectors, F&O lists) initialized successfully.")
-            else:
-                print("[×] Master CSV data seeding encountered an error.")
-                sys.exit(1)
+            os.remove(db_path)
+            # Remove WAL and SHM sidecar files if present
+            for ext in ("-wal", "-shm"):
+                side = db_path + ext
+                if os.path.exists(side):
+                    os.remove(side)
+            print(f"[OK] Database file '{db_path}' deleted successfully.")
         except Exception as e:
-            print(f"[×] Failed to run master data initialization: {e}")
+            print(f"[X] Error deleting database file: {e}")
             sys.exit(1)
     else:
-        print("Skipped seeding tables.")
+        print(f"[i] No existing database found at '{db_path}'. Will create fresh.")
 
+    # Step 2: Initialize Schema
     print("\n==================================================")
+    print("STEP 2: INITIALIZE SCHEMA")
+    print("==================================================")
+    if confirm("Initialize database schema (create all tables & indexes)? (yes/no): "):
+        import sqlite3
+        from pathlib import Path
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        schema_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "engine", "database", "schema.sql"
+        )
+        try:
+            with open(schema_file, "r", encoding="utf-8") as f:
+                schema_sql = f.read()
+            conn = sqlite3.connect(db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.executescript(schema_sql)
+            conn.commit()
+            conn.close()
+            print("[OK] Schema initialized successfully.")
+        except Exception as e:
+            print(f"[X] Schema initialization failed: {e}")
+            sys.exit(1)
+
+        # Step 2b: Seed master data
+        if confirm("\nSeed full master data from CSV datasets (_production.csv)? (yes/no): "):
+            try:
+                from engine.database.seeder import load_csv_files
+                seeded = load_csv_files("_production.csv", verbose=True)
+                if seeded:
+                    print("[OK] Full master dataset initialized successfully.")
+                else:
+                    print("[X] Master CSV data seeding encountered an error.")
+                    sys.exit(1)
+            except Exception as e:
+                print(f"[X] Failed to run master data initialization: {e}")
+                sys.exit(1)
+    else:
+        print("Skipped schema initialization.")
+
     # Step 3: Confirm Download & Analysis
+    print("\n==================================================")
     print("STEP 3: EXECUTE FRESH DOWNLOAD & ANALYSIS PIPELINE")
     print("==================================================")
     if confirm("Would you like to trigger a fresh download and analysis for all tickers now? (yes/no): "):
@@ -104,19 +108,20 @@ def main():
         from engine.downloaders.market_data import download_all_tickers
         from engine.downloaders.derivatives import download_all_derivatives
         from engine.analysis.orchestrator import analyze_all_tickers
-        
+
         print("\nStarting Daily Market Data Download...")
         download_all_tickers()
-        
+
         print("\nStarting Option Chain Derivatives Download...")
         download_all_derivatives()
-        
+
         print("\nStarting Score Analysis Engine...")
         analyze_all_tickers()
-        
-        print("\n[✓] Database recreation, seeding, download, and analysis complete!")
+
+        print("\n[OK] Database recreation, seeding, download, and analysis complete!")
     else:
-        print("Skipped fresh download. Database is left blank and ready.")
+        print("Skipped fresh download. Database is ready and initialized.")
+
 
 if __name__ == "__main__":
     main()

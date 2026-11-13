@@ -1,13 +1,14 @@
 """
-Database Seeder Utility Module.
-Handles dynamic loading of CSV data files into PostgreSQL database tables.
+Database Seeder Utility Module (SQLite).
+Handles dynamic loading of CSV data files into the SQLite database tables.
 """
 
 import os
 import glob
 import csv
-import psycopg2
-from psycopg2.extras import execute_values
+import json
+import sqlite3
+from pathlib import Path
 from dotenv import load_dotenv
 
 TABLE_MAPPINGS = {
@@ -31,19 +32,6 @@ TABLE_MAPPINGS = {
     "screener_ticker_mappings": "screener_ticker_mappings"
 }
 
-SEQUENCE_TABLES = [
-    ("sectors", "sectors_id_seq"),
-    ("watchlist", "watchlist_id_seq"),
-    ("fno_stock_master", "fno_stock_master_id_seq"),
-    ("fno_index_master", "fno_index_master_id_seq"),
-    ("alternative_names", "alternative_names_id_seq"),
-    ("excluded_tickers", "excluded_tickers_id_seq"),
-    ("historical_calls", "historical_calls_id_seq"),
-    ("broker_recommendations", "broker_recommendations_id_seq"),
-    ("reference_pages", "reference_pages_id_seq"),
-    ("screener_ticker_mappings", "screener_ticker_mappings_id_seq")
-]
-
 TABLE_LOAD_ORDER = [
     "system_config",
     "ticker_mappings",
@@ -65,21 +53,34 @@ TABLE_LOAD_ORDER = [
     "screener_ticker_mappings"
 ]
 
+# Tables that use INSERT OR REPLACE on conflict
+REPLACE_TABLES = {"ticker_master", "system_config", "ticker_mappings", "indices_master"}
+
+# Conflict resolution: INSERT OR IGNORE by default; INSERT OR REPLACE for specific tables
+def _insert_sql(table_name: str, col_names: str) -> str:
+    if table_name in REPLACE_TABLES:
+        return f"INSERT OR REPLACE INTO {table_name} ({col_names}) VALUES ({', '.join(['?'] * col_names.count(',') + ['?'])})"
+    return f"INSERT OR IGNORE INTO {table_name} ({col_names}) VALUES ({', '.join(['?'] * (col_names.count(',') + 1))})"
+
+
+def get_sqlite_path() -> str:
+    """Resolve the SQLite database file path."""
+    path = os.getenv("SQLITE_PATH") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "data", "bsa_db.sqlite3"
+    )
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = True) -> bool:
     """
     Scans data_dir for files matching *<file_suffix> (e.g. '_sample.csv' or '_production.csv')
-    and seeds them into corresponding PostgreSQL tables.
+    and seeds them into corresponding SQLite tables.
     """
     load_dotenv()
-    
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    user = os.getenv("POSTGRES_USER", "jmbxdbuser")
-    password = os.getenv("POSTGRES_PASSWORD", "jmbxdbpassword")
-    target_db = os.getenv("POSTGRES_DB", "bsa_db")
 
-    dsn = f"postgresql://{user}:{password}@{host}:{port}/{target_db}"
-
+    db_path = get_sqlite_path()
     csv_pattern = os.path.join(data_dir, f"*{file_suffix}")
     found_files = glob.glob(csv_pattern)
 
@@ -99,11 +100,13 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
         return True
 
     if verbose:
-        print(f"[+] Seeding {len(csv_files)} datasets matching '{file_suffix}' into database '{target_db}'...")
+        print(f"[+] Seeding {len(csv_files)} datasets matching '{file_suffix}' into '{db_path}'...")
 
     try:
-        conn = psycopg2.connect(dsn)
-        conn.autocommit = False
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         for file_path in csv_files:
@@ -125,7 +128,6 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                     continue
 
                 cols = [c.strip().lower() for c in header]
-                # Filter out 'id' column for fno_master if loading production without manual id primary keys
                 rows = list(reader)
 
                 if not rows:
@@ -133,27 +135,12 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                         print(f"  [-] No data rows in '{filename}' for table '{table_name}'")
                     continue
 
-                # Conflict Resolution Targets
-                conflict_target = "ON CONFLICT DO NOTHING"
-                if table_name == "ticker_master":
-                    conflict_target = "ON CONFLICT (ticker) DO NOTHING"
-                elif table_name in ("fno_master", "fno_stock_master", "fno_index_master", "indices_master"):
-                    conflict_target = "ON CONFLICT (symbol) DO NOTHING"
-                elif table_name == "sectors":
-                    conflict_target = "ON CONFLICT (name) DO NOTHING"
-                elif table_name == "alternative_names":
-                    conflict_target = "ON CONFLICT (data_ticker) DO NOTHING"
-                elif table_name == "excluded_tickers":
-                    conflict_target = "ON CONFLICT (ticker) DO NOTHING"
-                elif table_name == "system_config":
-                    conflict_target = "ON CONFLICT (key) DO NOTHING"
-                elif table_name == "watchlist":
-                    conflict_target = "ON CONFLICT (name) DO NOTHING"
-                elif table_name == "users":
-                    conflict_target = "ON CONFLICT (email) DO NOTHING"
-
                 col_names = ", ".join(cols)
-                sql = f"INSERT INTO {table_name} ({col_names}) VALUES %s {conflict_target};"
+                placeholders = ", ".join(["?"] * len(cols))
+                if table_name in REPLACE_TABLES:
+                    sql = f"INSERT OR REPLACE INTO {table_name} ({col_names}) VALUES ({placeholders})"
+                else:
+                    sql = f"INSERT OR IGNORE INTO {table_name} ({col_names}) VALUES ({placeholders})"
 
                 formatted_rows = []
                 for row in rows:
@@ -167,20 +154,25 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
                         val_str = str(row[i]).strip()
                         col_name = cols[i]
                         if val_str.lower() == "true":
-                            formatted_row.append(True)
+                            formatted_row.append(1)
                         elif val_str.lower() == "false":
-                            formatted_row.append(False)
+                            formatted_row.append(0)
                         elif val_str.startswith("[") and val_str.endswith("]"):
-                            # Format Python list str like "['NSE']" to PostgreSQL array format "{NSE}"
+                            # Convert Python list representation to JSON for SQLite storage
                             import ast
                             try:
                                 parsed_list = ast.literal_eval(val_str)
                                 if isinstance(parsed_list, list):
-                                    formatted_row.append("{" + ",".join(str(x) for x in parsed_list) + "}")
+                                    formatted_row.append(json.dumps(parsed_list))
                                 else:
                                     formatted_row.append(val_str)
                             except Exception:
                                 formatted_row.append(val_str)
+                        elif val_str.startswith("{") and val_str.endswith("}"):
+                            # PostgreSQL array format {NSE,NIFTY50} -> JSON ["NSE","NIFTY50"]
+                            inner = val_str[1:-1]
+                            items = [x.strip().strip('"') for x in inner.split(",") if x.strip()]
+                            formatted_row.append(json.dumps(items))
                         elif val_str == "" and table_name == "system_config" and col_name == "value":
                             formatted_row.append("")
                         elif val_str == "":
@@ -191,10 +183,10 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
 
                 if formatted_rows:
                     try:
-                        execute_values(cursor, sql, formatted_rows, page_size=500)
+                        cursor.executemany(sql, formatted_rows)
                         conn.commit()
                         if verbose:
-                            print(f"  [✓] Loaded '{filename}' -> table '{table_name}' ({len(formatted_rows)} records).")
+                            print(f"  [OK] Loaded '{filename}' -> table '{table_name}' ({len(formatted_rows)} records).")
                     except Exception as err:
                         if verbose:
                             print(f"    [!] Batch error inserting into {table_name}: {err}")
@@ -205,45 +197,36 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
             if verbose:
                 print("  [+] Synchronizing sector master & ticker_sector mappings from ticker_master...")
             cursor.execute("""
-                INSERT INTO sectors (name)
-                SELECT DISTINCT sector 
-                FROM ticker_master 
+                INSERT OR IGNORE INTO sectors (name)
+                SELECT DISTINCT sector
+                FROM ticker_master
                 WHERE sector IS NOT NULL AND TRIM(sector) != ''
-                ON CONFLICT (name) DO NOTHING;
             """)
             cursor.execute("""
-                INSERT INTO ticker_sector (ticker, sector_id)
+                INSERT OR IGNORE INTO ticker_sector (ticker, sector_id)
                 SELECT tm.ticker, s.id
                 FROM ticker_master tm
                 JOIN sectors s ON s.name = tm.sector
                 WHERE tm.sector IS NOT NULL AND TRIM(tm.sector) != ''
-                ON CONFLICT (ticker, sector_id) DO NOTHING;
             """)
             conn.commit()
             if verbose:
-                print("  [✓] Sector master & ticker_sector mappings synchronized.")
+                print("  [OK] Sector master & ticker_sector mappings synchronized.")
         except Exception as sync_err:
             if verbose:
                 print(f"  [!] Warning synchronizing sector master: {sync_err}")
             conn.rollback()
 
-        # Reset sequences
-        for table, seq in SEQUENCE_TABLES:
-            try:
-                cursor.execute(f"SELECT pg_catalog.setval('{seq}', COALESCE((SELECT MAX(id) FROM {table}), 1), true);")
-                conn.commit()
-            except Exception:
-                conn.rollback()
-
         cursor.close()
         conn.close()
         if verbose:
-            print(f"[✓] Seeding completed successfully for '{file_suffix}'.")
+            print(f"[OK] Seeding completed successfully for '{file_suffix}'.")
         return True
 
     except Exception as e:
-        print(f"[×] Error during database seeding: {e}")
+        print(f"[X] Error during database seeding: {e}")
         return False
+
 
 if __name__ == "__main__":
     import sys
