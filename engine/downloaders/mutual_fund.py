@@ -256,12 +256,12 @@ def ensure_mf_fii_tables_exist(cur=None):
     """Ensure all required Mutual Fund and FII tables exist in PostgreSQL database."""
     ddl = """
         CREATE TABLE IF NOT EXISTS mf_amc (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             amc_name TEXT UNIQUE NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS mf_scheme (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             amc_id INTEGER REFERENCES mf_amc(id),
             scheme_code TEXT,
             scheme_name TEXT NOT NULL,
@@ -269,11 +269,11 @@ def ensure_mf_fii_tables_exist(cur=None):
         );
 
         CREATE TABLE IF NOT EXISTS mf_holdings (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL REFERENCES ticker_master(ticker) ON DELETE CASCADE,
             fund_name TEXT NOT NULL,
-            holding_pct DOUBLE PRECISION DEFAULT 0.0,
-            shares_held BIGINT DEFAULT 0,
+            holding_pct REAL DEFAULT 0.0,
+            shares_held INTEGER DEFAULT 0,
             rank INTEGER DEFAULT 0,
             disclosure_date TEXT,
             downloaded_at TEXT,
@@ -282,56 +282,58 @@ def ensure_mf_fii_tables_exist(cur=None):
         CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
 
         CREATE TABLE IF NOT EXISTS mf_historical_holdings (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             snapshot_date DATE NOT NULL,
             scheme_id INTEGER REFERENCES mf_scheme(id),
             ticker TEXT REFERENCES ticker_master(ticker),
             isin TEXT,
-            shares BIGINT,
-            market_value DOUBLE PRECISION,
-            portfolio_weight_pct DOUBLE PRECISION,
+            shares INTEGER,
+            market_value REAL,
+            portfolio_weight_pct REAL,
             source TEXT,
             source_date DATE,
-            retrieved_at TIMESTAMP DEFAULT now(),
+            retrieved_at TEXT DEFAULT (datetime('now')),
             UNIQUE(snapshot_date, scheme_id, ticker)
         );
         CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
 
         CREATE TABLE IF NOT EXISTS fii_investor (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             investor_name TEXT NOT NULL UNIQUE
         );
 
         CREATE TABLE IF NOT EXISTS fii_historical_holdings (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             snapshot_date DATE NOT NULL,
             investor_id INTEGER REFERENCES fii_investor(id),
             ticker TEXT REFERENCES ticker_master(ticker),
-            portfolio_weight_pct DOUBLE PRECISION,
-            retrieved_at TIMESTAMP DEFAULT now(),
+            portfolio_weight_pct REAL,
+            retrieved_at TEXT DEFAULT (datetime('now')),
             UNIQUE(snapshot_date, investor_id, ticker)
         );
         CREATE INDEX IF NOT EXISTS idx_fii_hist_ticker_date ON fii_historical_holdings(ticker, snapshot_date);
 
         CREATE TABLE IF NOT EXISTS mf_behavior (
             ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
-            data JSONB,
-            updated_at TIMESTAMP DEFAULT now()
+            data TEXT,
+            updated_at TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS fii_behavior (
             ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
-            data JSONB NOT NULL,
-            updated_at TIMESTAMP DEFAULT now()
+            data TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now'))
         );
     """
     if cur:
-        cur.execute(ddl)
+        if hasattr(cur, 'connection') and cur.connection:
+            cur.connection.executescript(ddl)
+        else:
+            cur.execute(ddl)
     else:
         with get_db_connection() as conn:
-            with conn.cursor() as c:
-                c.execute(ddl)
-                conn.commit()
+            conn.executescript(ddl)
+            conn.commit()
 
 
 def save_mf_holdings_to_db(ticker: str, holdings: List[Dict]) -> bool:

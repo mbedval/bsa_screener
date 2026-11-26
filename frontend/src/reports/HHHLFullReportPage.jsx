@@ -25,29 +25,55 @@ export default function HHHLFullReportPage({ apiBase, initialTicker }) {
   }, [initialTicker]);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    // Note: SearchDetailPage uses /api/ticker-master-search which might be routed through main router
-    // Or if it's intelligence dataset, we can just use the same URL path
-    const baseUrl = apiBase.replace('/intelligence', '');
-    fetch(`${baseUrl}/ticker-master-search/${ticker}`)
-      .then(r => r.json())
-      .then(d => {
+    setError(null);
+
+    const base = apiBase || '/api/intelligence';
+    const primaryUrl = `${base}/ticker-master-search/${encodeURIComponent(ticker)}`;
+    const fallbackUrl = `/api/ticker-master-search/${encodeURIComponent(ticker)}`;
+
+    const doFetch = async () => {
+      try {
+        let res = await fetch(primaryUrl).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch(fallbackUrl).catch(() => null);
+        }
+        if (!res || !res.ok) {
+          throw new Error(`Failed to load data for ${ticker}`);
+        }
+        const d = await res.json();
+        if (!active) return;
         if (d.found === false) {
-          setError(d.message);
+          setError(d.message || `No data found for ${ticker}`);
           setData(null);
         } else {
           setData(d);
           setError(null);
         }
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      } catch (e) {
+        if (active) setError(e.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    doFetch();
+    return () => { active = false; };
   }, [ticker, apiBase]);
 
   const hhhlInsight = data?.hhhl_insight || null;
-  const history = hhhlInsight?.historical_cycles || [];
+  let history = hhhlInsight?.historical_cycles || [];
+  if (typeof history === 'string') {
+    try {
+      history = JSON.parse(history);
+    } catch {
+      history = [];
+    }
+  }
+  if (!Array.isArray(history)) history = [];
 
-  const totalPages = Math.ceil(history.length / pageSize);
+  const totalPages = pageSize > 0 ? Math.ceil(history.length / pageSize) : 1;
   const paginatedData = pageSize > 0 ? history.slice((page - 1) * pageSize, page * pageSize) : history;
 
   return (
@@ -67,7 +93,11 @@ export default function HHHLFullReportPage({ apiBase, initialTicker }) {
         </button>
       </div>
       
-      {loading ? <div className="state">Loading {ticker}...</div> : error ? <div className="state error">{error}</div> : !data ? null : (
+      {loading ? (
+        <div className="state">Loading {ticker}...</div>
+      ) : error ? (
+        <div className="state error">{error}</div>
+      ) : !data ? null : (
         <section className="panel data-panel">
           <div className="table-wrap">
             <table style={{ background: 'rgba(0,0,0,0.15)' }}>
@@ -85,11 +115,11 @@ export default function HHHLFullReportPage({ apiBase, initialTicker }) {
                   <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20 }}>No historical cycles detected for {ticker}.</td></tr>
                 ) : paginatedData.map((cyc, idx) => (
                   <tr key={idx}>
-                    <td>{cyc.start_date} to {cyc.end_date}</td>
-                    <td>₹{cyc.start_price?.toFixed(2)} → ₹{cyc.end_price?.toFixed(2)}</td>
-                    <td>{cyc.total_days} Days</td>
-                    <td>{cyc.max_streak} Days</td>
-                    <td style={{ fontSize: 11, color: '#94a3b8' }}>{cyc.details}</td>
+                    <td>{cyc.start_date || '—'} to {cyc.end_date || '—'}</td>
+                    <td>₹{Number(cyc.start_price != null ? cyc.start_price : 0).toFixed(2)} → ₹{Number(cyc.end_price != null ? cyc.end_price : 0).toFixed(2)}</td>
+                    <td>{cyc.total_days ?? '—'} Days</td>
+                    <td>{cyc.max_streak ?? '—'} Days</td>
+                    <td style={{ fontSize: 11, color: '#94a3b8' }}>{cyc.details || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -104,7 +134,7 @@ export default function HHHLFullReportPage({ apiBase, initialTicker }) {
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
-                  <option value={0}>All</option>
+                  <option value={0}>All ({history.length})</option>
                 </select>
               </div>
               {pageSize > 0 && totalPages > 1 && (

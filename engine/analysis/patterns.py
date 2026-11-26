@@ -15,8 +15,8 @@ from datetime import datetime, date
 from typing import Dict, List, Any, Optional
 import pandas as pd
 import numpy as np
-import psycopg2
-from psycopg2.extras import RealDictCursor
+# MIGRATED: import psycopg2
+# MIGRATED: from psycopg2.extras import RealDictCursor
 
 from engine.database.connection import get_db_connection, os
 
@@ -317,12 +317,51 @@ def detect_candlestick_patterns(df: pd.DataFrame, timeframe: str = "DAILY") -> L
 
     return detected_patterns
 
+_chart_patterns_table_ensured = False
+
+def ensure_chart_patterns_table(cur=None):
+    global _chart_patterns_table_ensured
+    if _chart_patterns_table_ensured:
+        return
+    ddl = """
+        CREATE TABLE IF NOT EXISTS chart_patterns (
+            id SERIAL PRIMARY KEY,
+            ticker TEXT NOT NULL,
+            pattern_code TEXT NOT NULL,
+            pattern_name TEXT NOT NULL,
+            category TEXT DEFAULT 'CANDLESTICK',
+            timeframe TEXT DEFAULT 'DAILY',
+            detected_date DATE DEFAULT CURRENT_DATE,
+            start_date DATE,
+            end_date DATE,
+            high_price REAL,
+            low_price REAL,
+            close_price REAL,
+            strength_score REAL DEFAULT 1.0,
+            details TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_patterns_unique 
+            ON chart_patterns (ticker, pattern_code, timeframe, detected_date);
+    """
+    if cur is not None:
+        cur.execute(ddl)
+        if hasattr(cur, 'connection') and cur.connection:
+            cur.connection.commit()
+    else:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute(ddl)
+            conn.commit()
+    _chart_patterns_table_ensured = True
+
 # ─── Database Scanner & Persistence Orchestrator ──────────────────────────────
 def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> int:
     """
     Fetch OHLCV daily data for ticker, compute both Daily and Weekly patterns,
     and persist into `chart_patterns` PostgreSQL table.
     """
+    ensure_chart_patterns_table()
     clean_t = ticker.strip().upper()
     try:
         if dsn:
@@ -331,65 +370,65 @@ def scan_and_store_ticker_patterns(ticker: str, dsn: Optional[str] = None) -> in
             conn_ctx = get_db_connection()
 
         with conn_ctx as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT trade_date, open, high, low, close, volume
+                FROM ohlcv_daily
+                WHERE ticker = ? AND close > 0
+                ORDER BY trade_date ASC
+            """, (clean_t,))
+            rows = cur.fetchall()
+
+            if not rows or len(rows) < 5:
+                return 0
+
+            df_daily = pd.DataFrame(rows)
+            df_weekly = resample_to_weekly(df_daily)
+            df_monthly = resample_to_monthly(df_daily)
+
+            daily_patterns = detect_candlestick_patterns(df_daily, timeframe="DAILY")
+            weekly_patterns = detect_candlestick_patterns(df_weekly, timeframe="WEEKLY")
+            monthly_patterns = detect_candlestick_patterns(df_monthly, timeframe="MONTHLY")
+
+            all_detected = []
+            for p in daily_patterns:
+                p["timeframe"] = "DAILY"
+                all_detected.append(p)
+
+            for p in weekly_patterns:
+                p["timeframe"] = "WEEKLY"
+                all_detected.append(p)
+
+            for p in monthly_patterns:
+                p["timeframe"] = "MONTHLY"
+                all_detected.append(p)
+
+            stored_count = 0
+            for p in all_detected:
+                meta = PATTERN_MAP.get(p["code"], {"name": p["code"], "category": "NEUTRAL"})
                 cur.execute("""
-                    SELECT trade_date, open, high, low, close, volume
-                    FROM ohlcv_daily
-                    WHERE ticker = %s AND close > 0
-                    ORDER BY trade_date ASC
-                """, (clean_t,))
-                rows = cur.fetchall()
-
-                if not rows or len(rows) < 5:
-                    return 0
-
-                df_daily = pd.DataFrame(rows)
-                df_weekly = resample_to_weekly(df_daily)
-                df_monthly = resample_to_monthly(df_daily)
-
-                daily_patterns = detect_candlestick_patterns(df_daily, timeframe="DAILY")
-                weekly_patterns = detect_candlestick_patterns(df_weekly, timeframe="WEEKLY")
-                monthly_patterns = detect_candlestick_patterns(df_monthly, timeframe="MONTHLY")
-
-                all_detected = []
-                for p in daily_patterns:
-                    p["timeframe"] = "DAILY"
-                    all_detected.append(p)
-
-                for p in weekly_patterns:
-                    p["timeframe"] = "WEEKLY"
-                    all_detected.append(p)
-
-                for p in monthly_patterns:
-                    p["timeframe"] = "MONTHLY"
-                    all_detected.append(p)
-
-                stored_count = 0
-                for p in all_detected:
-                    meta = PATTERN_MAP.get(p["code"], {"name": p["code"], "category": "NEUTRAL"})
-                    cur.execute("""
-                        INSERT INTO chart_patterns (
-                            ticker, pattern_code, pattern_name, category, timeframe,
-                            detected_date, start_date, end_date, high_price, low_price, close_price,
-                            strength_score, details, created_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                        ON CONFLICT (ticker, pattern_code, timeframe, detected_date) DO UPDATE SET
-                            start_date = EXCLUDED.start_date,
-                            end_date = EXCLUDED.end_date,
-                            high_price = EXCLUDED.high_price,
-                            low_price = EXCLUDED.low_price,
-                            close_price = EXCLUDED.close_price,
-                            strength_score = EXCLUDED.strength_score,
-                            details = EXCLUDED.details,
-                            created_at = NOW()
-                    """, (
-                        clean_t, p["code"], meta["name"], meta["category"], p["timeframe"],
-                        p["detected_date"], p["start_date"], p["end_date"],
-                        float(p["high"]), float(p["low"]), float(p["close"]),
-                        float(p["score"]), json.dumps(p["details"])
-                    ))
-                    stored_count += 1
-                conn.commit()
+                    INSERT INTO chart_patterns (
+                        ticker, pattern_code, pattern_name, category, timeframe,
+                        detected_date, start_date, end_date, high_price, low_price, close_price,
+                        strength_score, details, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ON CONFLICT (ticker, pattern_code, timeframe, detected_date) DO UPDATE SET
+                        start_date = EXCLUDED.start_date,
+                        end_date = EXCLUDED.end_date,
+                        high_price = EXCLUDED.high_price,
+                        low_price = EXCLUDED.low_price,
+                        close_price = EXCLUDED.close_price,
+                        strength_score = EXCLUDED.strength_score,
+                        details = EXCLUDED.details,
+                        created_at = NOW()
+                """, (
+                    clean_t, p["code"], meta["name"], meta["category"], p["timeframe"],
+                    p["detected_date"], p["start_date"], p["end_date"],
+                    float(p["high"]), float(p["low"]), float(p["close"]),
+                    float(p["score"]), json.dumps(p["details"])
+                ))
+                stored_count += 1
+            conn.commit()
 
         return stored_count
     except Exception as e:
@@ -406,9 +445,9 @@ def scan_all_database_patterns(dsn: Optional[str] = None) -> int:
             conn_ctx = get_db_connection()
 
         with conn_ctx as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker")
-                tickers = [r[0] for r in cur.fetchall()]
+            cur = conn.cursor()
+            cur.execute("SELECT ticker FROM ticker_master ORDER BY ticker")
+            tickers = [r[0] for r in cur.fetchall()]
 
         total_patterns = 0
         for t in tickers:

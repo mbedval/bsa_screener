@@ -16,11 +16,11 @@ def fetch_live_spot_price(ticker: str) -> float or None:
     # 1. Quick check from DB ohlcv_daily
     try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = %s ORDER BY trade_date DESC LIMIT 1", (raw,))
-                row = cur.fetchone()
-                if row and row[0] and float(row[0]) > 0:
-                    return round(float(row[0]), 2)
+            cur = conn.cursor()
+            cur.execute("SELECT close FROM ohlcv_daily WHERE ticker = ? ORDER BY trade_date DESC LIMIT 1", (raw,))
+            row = cur.fetchone()
+            if row and row[0] and float(row[0]) > 0:
+                return round(float(row[0]), 2)
     except Exception:
         pass
 
@@ -103,47 +103,47 @@ def download_and_insert_derivatives(ticker: str) -> bool:
 
     try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Deduplication Business Rule: check against latest record for ticker
-                cur.execute(
-                    "SELECT underlying_price FROM raw_fno_derivatives WHERE ticker = %s ORDER BY last_updated DESC LIMIT 1",
-                    (ticker_clean,)
-                )
-                prev = cur.fetchone()
-                if prev and prev[0] and abs(float(prev[0]) - spot) < 0.01:
-                    logger.info(f"Deduplication skip: identical spot observed for {ticker_clean}.")
-                    return True
+            cur = conn.cursor()
+            # Deduplication Business Rule: check against latest record for ticker
+            cur.execute(
+                "SELECT underlying_price FROM raw_fno_derivatives WHERE ticker = ? ORDER BY last_updated DESC LIMIT 1",
+                (ticker_clean,)
+            )
+            prev = cur.fetchone()
+            if prev and prev[0] and abs(float(prev[0]) - spot) < 0.01:
+                logger.info(f"Deduplication skip: identical spot observed for {ticker_clean}.")
+                return True
 
-                from psycopg2.extras import execute_values
+            from engine.database.connection import execute_values
 
-                derivatives_records = []
-                for strike in strikes:
-                    dist_abs = abs(strike - spot)
-                    intrinsic_ce = max(0.0, spot - strike)
-                    extrinsic_ce = max(1.5, (spot * 0.015) - (dist_abs * 0.08))
-                    ce_ltp = round(intrinsic_ce + extrinsic_ce, 2)
+            derivatives_records = []
+            for strike in strikes:
+                dist_abs = abs(strike - spot)
+                intrinsic_ce = max(0.0, spot - strike)
+                extrinsic_ce = max(1.5, (spot * 0.015) - (dist_abs * 0.08))
+                ce_ltp = round(intrinsic_ce + extrinsic_ce, 2)
 
-                    intrinsic_pe = max(0.0, strike - spot)
-                    extrinsic_pe = max(1.5, (spot * 0.015) - (dist_abs * 0.08))
-                    pe_ltp = round(intrinsic_pe + extrinsic_pe, 2)
+                intrinsic_pe = max(0.0, strike - spot)
+                extrinsic_pe = max(1.5, (spot * 0.015) - (dist_abs * 0.08))
+                pe_ltp = round(intrinsic_pe + extrinsic_pe, 2)
 
-                    ce_volume = int(max(1000, 20000 - dist_abs * 10))
-                    pe_volume = int(max(1000, 18000 - dist_abs * 9))
+                ce_volume = int(max(1000, 20000 - dist_abs * 10))
+                pe_volume = int(max(1000, 18000 - dist_abs * 9))
 
-                    derivatives_records.append((ticker_clean, strike, "CE", active_expiry, ce_volume, ce_ltp, spot, now_str))
-                    derivatives_records.append((ticker_clean, strike, "PE", active_expiry, pe_volume, pe_ltp, spot, now_str))
+                derivatives_records.append((ticker_clean, strike, "CE", active_expiry, ce_volume, ce_ltp, spot, now_str))
+                derivatives_records.append((ticker_clean, strike, "PE", active_expiry, pe_volume, pe_ltp, spot, now_str))
 
-                if derivatives_records:
-                    execute_values(cur, """
-                        INSERT INTO raw_fno_derivatives (
-                            ticker, strike_price, option_type, expiry_date, volume, ltp, underlying_price, last_updated
-                        ) VALUES %s
-                        ON CONFLICT (ticker, strike_price, option_type, expiry_date) DO UPDATE SET
-                            volume = EXCLUDED.volume, ltp = EXCLUDED.ltp,
-                            underlying_price = EXCLUDED.underlying_price, last_updated = EXCLUDED.last_updated
-                    """, derivatives_records, page_size=200)
+            if derivatives_records:
+                execute_values(cur, """
+                    INSERT INTO raw_fno_derivatives (
+                        ticker, strike_price, option_type, expiry_date, volume, ltp, underlying_price, last_updated
+                    ) VALUES ?
+                    ON CONFLICT (ticker, strike_price, option_type, expiry_date) DO UPDATE SET
+                        volume = EXCLUDED.volume, ltp = EXCLUDED.ltp,
+                        underlying_price = EXCLUDED.underlying_price, last_updated = EXCLUDED.last_updated
+                """, derivatives_records, page_size=200)
 
-                conn.commit()
+            conn.commit()
 
         return True
     except Exception as e:
@@ -165,40 +165,40 @@ def download_all_derivatives(progress_callback=None, resume: bool = True, ticker
         all_tickers = [t.upper().strip() for t in tickers]
     else:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                try:
-                    cur.execute("""
-                        UPDATE ticker_master
-                        SET is_fno = TRUE
-                        WHERE ticker IN (SELECT symbol FROM fno_stock_master WHERE is_active = TRUE)
-                    """)
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
+            cur = conn.cursor()
+            try:
+                cur.execute("""
+                    UPDATE ticker_master
+                    SET is_fno = TRUE
+                    WHERE ticker IN (SELECT symbol FROM fno_stock_master WHERE is_active = TRUE)
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
-                try:
-                    cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
-                    all_tickers = [row[0] for row in cur.fetchall()]
-                except Exception:
-                    conn.rollback()
+            try:
+                cur.execute("SELECT ticker FROM ticker_master WHERE is_fno = TRUE")
+                all_tickers = [row[0] for row in cur.fetchall()]
+            except Exception:
+                conn.rollback()
 
-                try:
-                    cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
-                    fno_symbols = [row[0] for row in cur.fetchall()]
-                    for s in fno_symbols:
-                        if s not in all_tickers:
-                            all_tickers.append(s)
-                except Exception:
-                    conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM fno_stock_master WHERE is_active = TRUE")
+                fno_symbols = [row[0] for row in cur.fetchall()]
+                for s in fno_symbols:
+                    if s not in all_tickers:
+                        all_tickers.append(s)
+            except Exception:
+                conn.rollback()
 
-                try:
-                    cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
-                    idx_symbols = [row[0] for row in cur.fetchall()]
-                    for s in idx_symbols:
-                        if s not in all_tickers:
-                            all_tickers.append(s)
-                except Exception:
-                    conn.rollback()
+            try:
+                cur.execute("SELECT symbol FROM fno_index_master WHERE is_active = TRUE")
+                idx_symbols = [row[0] for row in cur.fetchall()]
+                for s in idx_symbols:
+                    if s not in all_tickers:
+                        all_tickers.append(s)
+            except Exception:
+                conn.rollback()
 
         indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]
         for idx in indices:

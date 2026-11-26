@@ -8,35 +8,27 @@ and generates insights based on monthly portfolio disclosures.
 
 import os
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-import psycopg2
-from psycopg2.extras import RealDictCursor
+# MIGRATED: import psycopg2
+# MIGRATED: from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_connection():
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    user = os.getenv("POSTGRES_USER", "jmbxdbuser")
-    password = os.getenv("POSTGRES_PASSWORD", "jmbxdbpassword")
-    db = os.getenv("POSTGRES_DB", "bsa_db")
-    dsn = f"postgresql://{user}:{password}@{host}:{port}/{db}"
-    return psycopg2.connect(dsn)
-
+from engine.database.connection import get_db_connection as get_connection
 def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
     """
     Computes mutual fund behaviour metrics for a specific ticker.
     """
     ticker = ticker.upper()
     
-    with get_connection() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+    with get_connection() as conn, conn.cursor() as cur:
         # Get all available snapshot dates for this ticker
         cur.execute("""
             SELECT DISTINCT snapshot_date 
             FROM mf_historical_holdings 
-            WHERE ticker = %s 
+            WHERE ticker = ? 
             ORDER BY snapshot_date DESC
         """, (ticker,))
         
@@ -44,7 +36,14 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
         if not dates_rows:
             return {"error": "No historical MF data found for ticker.", "historical_chart": []}
             
-        all_dates = [r['snapshot_date'] for r in dates_rows]
+        def _to_date(d):
+            if isinstance(d, (datetime, date)):
+                return d if isinstance(d, date) else d.date()
+            if isinstance(d, str):
+                return datetime.strptime(d[:10], "%Y-%m-%d").date()
+            return d
+
+        all_dates = [_to_date(r['snapshot_date']) for r in dates_rows if r['snapshot_date']]
         latest_date = all_dates[0]
         
         # Calculate target dates for 1M, 3M, 6M, 12M lookbacks
@@ -64,7 +63,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
             cur.execute("""
                 SELECT SUM(portfolio_weight_pct) as total_weight
                 FROM mf_historical_holdings
-                WHERE ticker = %s AND snapshot_date = %s
+                WHERE ticker = ? AND snapshot_date = ?
             """, (ticker, date_val))
             res = cur.fetchone()
             return res['total_weight'] if res and res['total_weight'] else 0.0
@@ -79,7 +78,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
         cur.execute("""
             SELECT scheme_id, shares, portfolio_weight_pct, source_date
             FROM mf_historical_holdings
-            WHERE ticker = %s AND snapshot_date = %s
+            WHERE ticker = ? AND snapshot_date = ?
         """, (ticker, latest_date))
         latest_holdings = {r['scheme_id']: r for r in cur.fetchall()}
         
@@ -88,7 +87,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
             cur.execute("""
                 SELECT scheme_id, shares
                 FROM mf_historical_holdings
-                WHERE ticker = %s AND snapshot_date = %s
+                WHERE ticker = ? AND snapshot_date = ?
             """, (ticker, date_1m))
             prev_holdings = {r['scheme_id']: r['shares'] for r in cur.fetchall()}
             
@@ -137,12 +136,12 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
         cur.execute("""
             SELECT snapshot_date as date, SUM(portfolio_weight_pct) as total_weight, SUM(shares) as total_shares
             FROM mf_historical_holdings
-            WHERE ticker = %s
+            WHERE ticker = ?
             GROUP BY snapshot_date
             ORDER BY snapshot_date ASC
         """, (ticker,))
         historical_chart = [
-            {"time": r['date'].strftime('%Y-%m-%d'), "value": float(round(r['total_weight'] or 0.0, 2))}
+            {"time": (r['date'][:10] if isinstance(r['date'], str) else r['date'].strftime('%Y-%m-%d')), "value": float(round(r['total_weight'] or 0.0, 2))}
             for r in cur.fetchall()
         ]
 
@@ -163,7 +162,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
             SELECT h.portfolio_weight_pct as weight, s.scheme_name as name
             FROM mf_historical_holdings h
             LEFT JOIN mf_scheme s ON h.scheme_id = s.id
-            WHERE h.ticker = %s AND h.snapshot_date = %s
+            WHERE h.ticker = ? AND h.snapshot_date = ?
             ORDER BY h.portfolio_weight_pct DESC
             LIMIT 3
         """, (ticker, latest_date))
@@ -175,7 +174,7 @@ def analyze_mf_behavior(ticker: str) -> Dict[str, Any]:
             })
 
         return {
-            "latest_date": latest_date.strftime('%Y-%m-%d'),
+            "latest_date": (latest_date[:10] if isinstance(latest_date, str) else latest_date.strftime('%Y-%m-%d')),
             "current_weight": round(current_weight, 2),
             "changes": {
                 "1M": round(current_weight - (weight_1m or current_weight), 2) if weight_1m is not None else None,
@@ -215,20 +214,20 @@ def precalculate_all_mf_behavior(tickers: Optional[List[str]] = None):
     
     conn = get_connection()
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS mf_behavior (
-                    ticker TEXT PRIMARY KEY,
-                    data JSONB,
-                    updated_at TIMESTAMP DEFAULT now()
-                )
-            """)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS mf_behavior (
+                ticker TEXT PRIMARY KEY,
+                data TEXT,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
             
-            if tickers is not None:
-                tickers_list = [t.upper().strip() for t in tickers]
-            else:
-                cur.execute("SELECT DISTINCT ticker FROM mf_historical_holdings")
-                tickers_list = [r['ticker'] for r in cur.fetchall()]
+        if tickers is not None:
+            tickers_list = [t.upper().strip() for t in tickers]
+        else:
+            cur.execute("SELECT DISTINCT ticker FROM mf_historical_holdings")
+            tickers_list = [r['ticker'] for r in cur.fetchall()]
             
         conn.commit()
     except Exception as e:
@@ -243,18 +242,18 @@ def precalculate_all_mf_behavior(tickers: Optional[List[str]] = None):
     for i, ticker in enumerate(tickers_list, 1):
         try:
             res = analyze_mf_behavior(ticker)
-            with conn.cursor() as cur:
-                if res and "error" not in res:
-                    cur.execute("""
-                        INSERT INTO mf_behavior (ticker, data, updated_at)
-                        VALUES (%s, %s, now())
-                        ON CONFLICT (ticker) DO UPDATE 
-                        SET data = EXCLUDED.data, updated_at = now()
-                    """, (ticker, json.dumps(res)))
-                else:
-                    cur.execute("""
-                        DELETE FROM mf_behavior WHERE ticker = %s
-                    """, (ticker,))
+            cur = conn.cursor()
+            if res and "error" not in res:
+                cur.execute("""
+                    INSERT INTO mf_behavior (ticker, data, updated_at)
+                    VALUES (?, ?, now())
+                    ON CONFLICT (ticker) DO UPDATE 
+                    SET data = EXCLUDED.data, updated_at = now()
+                """, (ticker, json.dumps(res)))
+            else:
+                cur.execute("""
+                    DELETE FROM mf_behavior WHERE ticker = ?
+                """, (ticker,))
             conn.commit()
         except Exception as e:
             conn.rollback()

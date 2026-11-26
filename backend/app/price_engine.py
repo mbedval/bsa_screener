@@ -13,7 +13,10 @@ try:
 except ImportError:
     yf = None
 
-from app.database import get_connection
+try:
+    from .database import get_connection
+except ImportError:
+    from backend.app.database import get_connection
 
 # In-memory TTL Price Cache (ticker -> (price, timestamp))
 _PRICE_CACHE: dict[str, tuple[float, float]] = {}
@@ -90,9 +93,10 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
                     ("reversal_trading", "close", "run_time"),
                 ]:
                     try:
+                        ph = ",".join(["?"] * len(exact_symbols))
                         cur.execute(
-                            f"SELECT {col} AS price FROM public.{tbl} WHERE UPPER(ticker) = ANY(%s) AND {col} > 0 ORDER BY {time_col} DESC NULLS LAST LIMIT 1",
-                            (exact_symbols,),
+                            f"SELECT {col} AS price FROM {tbl} WHERE UPPER(ticker) IN ({ph}) AND {col} > 0 ORDER BY {time_col} DESC LIMIT 1",
+                            exact_symbols,
                         )
                         r = cur.fetchone()
                         if r and r["price"] and float(r["price"]) > 0:
@@ -105,7 +109,13 @@ def resolve_ticker_price(ticker: str, bsa_dsn: str | None = None, rawdata_dsn: s
             pass
 
     # 3. Static Benchmark Price Map fallback
-    from app.main import BENCHMARK_PRICES
+    try:
+        from .main import BENCHMARK_PRICES
+    except ImportError:
+        try:
+            from backend.app.main import BENCHMARK_PRICES
+        except ImportError:
+            BENCHMARK_PRICES = {}
     if raw_ticker in BENCHMARK_PRICES:
         return BENCHMARK_PRICES[raw_ticker]
 

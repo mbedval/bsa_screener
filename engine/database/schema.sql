@@ -1,10 +1,11 @@
--- Clean Master DDL Schema for PostgreSQL database (bsa_db)
+-- SQLite Schema for BSA Screener (bsa_db.sqlite3)
+-- Migrated from PostgreSQL. All tables use SQLite-compatible syntax.
 
 -- 1. Configuration Tables
 CREATE TABLE IF NOT EXISTS system_config (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL,
-    updated_at  TIMESTAMP DEFAULT now()
+    updated_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS ticker_mappings (
@@ -14,21 +15,21 @@ CREATE TABLE IF NOT EXISTS ticker_mappings (
 
 -- 2. Core Master Tables
 CREATE TABLE IF NOT EXISTS sectors (
-    id          SERIAL PRIMARY KEY,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    created_at  TIMESTAMP DEFAULT now()
+    created_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS ticker_master (
-    ticker             TEXT PRIMARY KEY,
-    company_name       TEXT NOT NULL,
-    is_fno             BOOLEAN DEFAULT FALSE,
-    sector             TEXT,
+    ticker              TEXT PRIMARY KEY,
+    company_name        TEXT NOT NULL,
+    is_fno              INTEGER DEFAULT 0,
+    sector              TEXT,
     market_cap_category TEXT DEFAULT 'Largecap',
-    index_memberships  TEXT[] DEFAULT '{}',
-    exchange           TEXT DEFAULT 'NSE',
-    updated_at         TIMESTAMP DEFAULT now()
+    index_memberships   TEXT DEFAULT '[]',
+    exchange            TEXT DEFAULT 'NSE',
+    updated_at          TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS ticker_sector (
@@ -38,10 +39,10 @@ CREATE TABLE IF NOT EXISTS ticker_sector (
 );
 
 CREATE TABLE IF NOT EXISTS watchlist (
-    id          SERIAL PRIMARY KEY,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    created_at  TIMESTAMP DEFAULT now()
+    created_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS watchlist_items (
@@ -55,60 +56,60 @@ CREATE TABLE IF NOT EXISTS users (
     first_name   TEXT NOT NULL,
     last_name    TEXT NOT NULL,
     watchlist_id INTEGER REFERENCES watchlist(id) ON DELETE SET NULL,
-    is_subscribed BOOLEAN DEFAULT FALSE,
-    created_at   TIMESTAMP DEFAULT now()
+    is_subscribed INTEGER DEFAULT 0,
+    created_at   TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS alternative_names (
-    id SERIAL PRIMARY KEY,
-    data_ticker TEXT UNIQUE NOT NULL,
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    data_ticker    TEXT UNIQUE NOT NULL,
     current_ticker TEXT NOT NULL,
-    company_name TEXT,
-    notes TEXT,
-    last_updated TEXT
+    company_name   TEXT,
+    notes          TEXT,
+    last_updated   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS excluded_tickers (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT UNIQUE NOT NULL,
-    reason TEXT,
-    added_by TEXT DEFAULT 'MANUAL',
-    status TEXT DEFAULT 'EXCLUDED',
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker     TEXT UNIQUE NOT NULL,
+    reason     TEXT,
+    added_by   TEXT DEFAULT 'MANUAL',
+    status     TEXT DEFAULT 'EXCLUDED',
     last_error TEXT,
     created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS fno_stock_master (
-    id SERIAL PRIMARY KEY,
-    symbol TEXT UNIQUE NOT NULL,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol          TEXT UNIQUE NOT NULL,
     underlying_name TEXT NOT NULL,
     instrument_type TEXT DEFAULT 'STOCK',
-    serial_number INTEGER,
-    is_active BOOLEAN DEFAULT TRUE,
-    entry_date TEXT DEFAULT CURRENT_DATE::text,
-    exit_date TEXT,
-    created_at TEXT DEFAULT NOW()::text
+    serial_number   INTEGER,
+    is_active       INTEGER DEFAULT 1,
+    entry_date      TEXT DEFAULT (date('now')),
+    exit_date       TEXT,
+    created_at      TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS fno_index_master (
-    id SERIAL PRIMARY KEY,
-    symbol TEXT UNIQUE NOT NULL,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol          TEXT UNIQUE NOT NULL,
     underlying_name TEXT NOT NULL,
     instrument_type TEXT DEFAULT 'INDEX',
-    serial_number INTEGER,
-    is_active BOOLEAN DEFAULT TRUE,
-    entry_date TEXT DEFAULT CURRENT_DATE::text,
-    exit_date TEXT,
-    created_at TEXT DEFAULT NOW()::text
+    serial_number   INTEGER,
+    is_active       INTEGER DEFAULT 1,
+    entry_date      TEXT DEFAULT (date('now')),
+    exit_date       TEXT,
+    created_at      TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS reference_pages (
-    id          SERIAL PRIMARY KEY,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT NOT NULL,
     url         TEXT NOT NULL,
     category    TEXT DEFAULT 'General',
     description TEXT,
-    created_at  TIMESTAMP DEFAULT now()
+    created_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS indices_master (
@@ -116,73 +117,76 @@ CREATE TABLE IF NOT EXISTS indices_master (
     name            TEXT NOT NULL,
     exchange        TEXT DEFAULT 'NSE',
     category        TEXT DEFAULT 'BENCHMARK',
-    is_fno          BOOLEAN DEFAULT TRUE,
+    is_fno          INTEGER DEFAULT 1,
     lot_size        INTEGER DEFAULT 25,
-    benchmark_price DOUBLE PRECISION,
-    is_active       BOOLEAN DEFAULT TRUE,
-    created_at      TIMESTAMP DEFAULT now(),
-    updated_at      TIMESTAMP DEFAULT now()
+    benchmark_price REAL,
+    is_active       INTEGER DEFAULT 1,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
 );
 
 -- 11. Opportunities and Risk Table
 CREATE TABLE IF NOT EXISTS opportunities_risk (
-    ticker            TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    opportunities     TEXT,
-    risk              TEXT,
-    is_multibagger    BOOLEAN DEFAULT FALSE,
-    additional_note   TEXT,
-    created_at        TIMESTAMP DEFAULT NOW(),
-    updated_at        TIMESTAMP DEFAULT NOW()
+    ticker           TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    about_company    TEXT,
+    product_services TEXT,
+    sectors          TEXT,
+    opportunities    TEXT,
+    risk             TEXT,
+    is_multibagger   INTEGER DEFAULT 0,
+    additional_note  TEXT,
+    created_at       TEXT DEFAULT (datetime('now')),
+    updated_at       TEXT DEFAULT (datetime('now'))
 );
 
 -- 3. Market Data Tables
 CREATE TABLE IF NOT EXISTS ohlcv_daily (
-    ticker          TEXT NOT NULL,
-    trade_date      TEXT NOT NULL,
-    open            DOUBLE PRECISION,
-    high            DOUBLE PRECISION,
-    low             DOUBLE PRECISION,
-    close           DOUBLE PRECISION,
-    volume          BIGINT,
-    vwap            DOUBLE PRECISION,
-    downloaded_at   TEXT,
+    ticker        TEXT NOT NULL,
+    trade_date    TEXT NOT NULL,
+    open          REAL,
+    high          REAL,
+    low           REAL,
+    close         REAL,
+    volume        INTEGER,
+    vwap          REAL,
+    downloaded_at TEXT,
     PRIMARY KEY (ticker, trade_date)
 );
 
 CREATE TABLE IF NOT EXISTS indicators_daily (
-    ticker          TEXT NOT NULL,
-    trade_date      TEXT NOT NULL,
-    rsi14           DOUBLE PRECISION,
-    sma20           DOUBLE PRECISION,
-    sma50           DOUBLE PRECISION,
-    ema12           DOUBLE PRECISION,
-    ema26           DOUBLE PRECISION,
-    macd_line       DOUBLE PRECISION,
-    macd_signal     DOUBLE PRECISION,
-    macd_hist       DOUBLE PRECISION,
-    bb_upper        DOUBLE PRECISION,
-    bb_mid          DOUBLE PRECISION,
-    bb_lower        DOUBLE PRECISION,
-    atr14           DOUBLE PRECISION,
-    tenkan_sen      DOUBLE PRECISION,
-    kijun_sen       DOUBLE PRECISION,
-    span_a          DOUBLE PRECISION,
-    span_b          DOUBLE PRECISION,
-    computed_at     TEXT,
+    ticker      TEXT NOT NULL,
+    trade_date  TEXT NOT NULL,
+    rsi14       REAL,
+    sma20       REAL,
+    sma50       REAL,
+    ema12       REAL,
+    ema26       REAL,
+    macd_line   REAL,
+    macd_signal REAL,
+    macd_hist   REAL,
+    bb_upper    REAL,
+    bb_mid      REAL,
+    bb_lower    REAL,
+    atr14       REAL,
+    tenkan_sen  REAL,
+    kijun_sen   REAL,
+    span_a      REAL,
+    span_b      REAL,
+    computed_at TEXT,
     PRIMARY KEY (ticker, trade_date)
 );
 
 CREATE TABLE IF NOT EXISTS fundamentals (
     ticker              TEXT NOT NULL,
     fetched_date        TEXT NOT NULL,
-    market_cap          DOUBLE PRECISION,
-    current_pe          DOUBLE PRECISION,
-    avg_pe              DOUBLE PRECISION,
-    last_pat            DOUBLE PRECISION,
-    avg_pat             DOUBLE PRECISION,
-    last_other_income   DOUBLE PRECISION,
-    avg_other_income    DOUBLE PRECISION,
-    debt_to_equity      DOUBLE PRECISION,
+    market_cap          REAL,
+    current_pe          REAL,
+    avg_pe              REAL,
+    last_pat            REAL,
+    avg_pat             REAL,
+    last_other_income   REAL,
+    avg_other_income    REAL,
+    debt_to_equity      REAL,
     is_pat_growing      INTEGER DEFAULT 0,
     is_other_income_ok  INTEGER DEFAULT 0,
     is_pe_ok            INTEGER DEFAULT 0,
@@ -195,193 +199,280 @@ CREATE TABLE IF NOT EXISTS fundamentals (
 
 -- 4. F&O Derivative Chain Tables
 CREATE TABLE IF NOT EXISTS raw_fno_derivatives (
-    ticker            TEXT NOT NULL,
-    strike_price      DOUBLE PRECISION NOT NULL,
-    option_type       TEXT NOT NULL,
-    expiry_date       TEXT NOT NULL,
-    volume            BIGINT,
-    ltp               DOUBLE PRECISION,
-    underlying_price  DOUBLE PRECISION,
-    last_updated      TEXT NOT NULL,
+    ticker           TEXT NOT NULL,
+    strike_price     REAL NOT NULL,
+    option_type      TEXT NOT NULL,
+    expiry_date      TEXT NOT NULL,
+    volume           INTEGER,
+    ltp              REAL,
+    underlying_price REAL,
+    last_updated     TEXT NOT NULL,
     PRIMARY KEY (ticker, strike_price, option_type, expiry_date)
 );
 
 -- 5. Analysis and Projections Summary Table
 CREATE TABLE IF NOT EXISTS analysis_summaries (
-    ticker             TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    close              DOUBLE PRECISION,
-    technical_score    DOUBLE PRECISION,
-    fundamental_score  DOUBLE PRECISION,
-    behavioral_score   DOUBLE PRECISION,
-    hybrid_score       DOUBLE PRECISION,
-    overall_signal     TEXT,
-    confidence         DOUBLE PRECISION,
-    reasons            TEXT,
-    projection_22d     TEXT,
-    option_insights    TEXT,
-    news_footprint     TEXT,
-    updated_at         TIMESTAMP DEFAULT now()
+    ticker            TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    close             REAL,
+    technical_score   REAL,
+    fundamental_score REAL,
+    behavioral_score  REAL,
+    hybrid_score      REAL,
+    overall_signal    TEXT,
+    confidence        REAL,
+    reasons           TEXT,
+    projection_22d    TEXT,
+    option_insights   TEXT,
+    news_footprint    TEXT,
+    updated_at        TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS broker_recommendations (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT NOT NULL,
-    rec_date TEXT DEFAULT CURRENT_DATE::text,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker      TEXT NOT NULL,
+    rec_date    TEXT DEFAULT (date('now')),
     recommender TEXT NOT NULL,
-    cmp DOUBLE PRECISION,
-    stop_loss DOUBLE PRECISION,
-    target DOUBLE PRECISION,
+    cmp         REAL,
+    stop_loss   REAL,
+    target      REAL,
     time_period TEXT,
     description TEXT,
-    created_at TIMESTAMP DEFAULT now()
+    created_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS historical_calls (
-    id SERIAL PRIMARY KEY,
-    uniqueid TEXT,
-    ticker TEXT NOT NULL,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uniqueid        TEXT,
+    ticker          TEXT NOT NULL,
     recommended_call TEXT,
-    confidence DOUBLE PRECISION,
-    cmp DOUBLE PRECISION,
-    entry_price DOUBLE PRECISION,
-    stop_loss DOUBLE PRECISION,
-    target_price DOUBLE PRECISION,
-    rr_ratio TEXT DEFAULT '1:2.00',
-    status TEXT DEFAULT 'OPEN',
-    timestamp TEXT,
-    created_at TIMESTAMP DEFAULT now(),
-    review_date DATE DEFAULT CURRENT_DATE,
-    closed_at TIMESTAMP,
-    final_cmp DOUBLE PRECISION,
-    latest_cmp DOUBLE PRECISION,
-    call_status TEXT DEFAULT 'OPEN',
-    outcome TEXT DEFAULT 'OPEN',
-    min_cmp DOUBLE PRECISION,
-    max_cmp DOUBLE PRECISION,
-    closest TEXT,
-    closest_info TEXT
+    confidence      REAL,
+    cmp             REAL,
+    entry_price     REAL,
+    stop_loss       REAL,
+    target_price    REAL,
+    rr_ratio        TEXT DEFAULT '1:2.00',
+    status          TEXT DEFAULT 'OPEN',
+    timestamp       TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    review_date     TEXT DEFAULT (date('now')),
+    closed_at       TEXT,
+    final_cmp       REAL,
+    latest_cmp      REAL,
+    call_status     TEXT DEFAULT 'OPEN',
+    outcome         TEXT DEFAULT 'OPEN',
+    min_cmp         REAL,
+    max_cmp         REAL,
+    closest         TEXT,
+    closest_info    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS historical_call_bkp (
-    id SERIAL PRIMARY KEY,
-    uniqueid TEXT,
-    ticker TEXT NOT NULL,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    uniqueid        TEXT,
+    ticker          TEXT NOT NULL,
     recommended_call TEXT,
-    confidence DOUBLE PRECISION,
-    cmp DOUBLE PRECISION,
-    entry_price DOUBLE PRECISION,
-    stop_loss DOUBLE PRECISION,
-    target_price DOUBLE PRECISION,
-    rr_ratio TEXT DEFAULT '1:2.00',
-    status TEXT DEFAULT 'OPEN',
-    timestamp TEXT,
-    created_at TIMESTAMP DEFAULT now(),
-    review_date DATE DEFAULT CURRENT_DATE,
-    closed_at TIMESTAMP,
-    final_cmp DOUBLE PRECISION,
-    latest_cmp DOUBLE PRECISION,
-    call_status TEXT DEFAULT 'OPEN',
-    outcome TEXT DEFAULT 'OPEN',
-    min_cmp DOUBLE PRECISION,
-    max_cmp DOUBLE PRECISION,
-    closest TEXT,
-    closest_info TEXT,
-    backed_up_at TIMESTAMP DEFAULT now()
+    confidence      REAL,
+    cmp             REAL,
+    entry_price     REAL,
+    stop_loss       REAL,
+    target_price    REAL,
+    rr_ratio        TEXT DEFAULT '1:2.00',
+    status          TEXT DEFAULT 'OPEN',
+    timestamp       TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    review_date     TEXT DEFAULT (date('now')),
+    closed_at       TEXT,
+    final_cmp       REAL,
+    latest_cmp      REAL,
+    call_status     TEXT DEFAULT 'OPEN',
+    outcome         TEXT DEFAULT 'OPEN',
+    min_cmp         REAL,
+    max_cmp         REAL,
+    closest         TEXT,
+    closest_info    TEXT,
+    backed_up_at    TEXT DEFAULT (datetime('now'))
 );
 
-
 CREATE TABLE IF NOT EXISTS call_efficiency (
-    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    total_calls INT DEFAULT 0,
-    passed INT DEFAULT 0,
-    failed INT DEFAULT 0,
-    partial_success INT DEFAULT 0,
-    partial_fail INT DEFAULT 0,
-    success_rate_pct DOUBLE PRECISION DEFAULT 0.0,
-    last_updated TIMESTAMP DEFAULT now()
+    ticker           TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    total_calls      INTEGER DEFAULT 0,
+    passed           INTEGER DEFAULT 0,
+    failed           INTEGER DEFAULT 0,
+    partial_success  INTEGER DEFAULT 0,
+    partial_fail     INTEGER DEFAULT 0,
+    success_rate_pct REAL DEFAULT 0.0,
+    last_updated     TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS intraday_call (
-    id SERIAL PRIMARY KEY,
-    uniqueid TEXT,
-    ticker TEXT NOT NULL,
-    signal TEXT,
-    bet TEXT,
-    confidence DOUBLE PRECISION,
-    entry_price DOUBLE PRECISION,
-    stop_loss DOUBLE PRECISION,
-    target_price DOUBLE PRECISION,
-    cmp DOUBLE PRECISION,
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    uniqueid         TEXT,
+    ticker           TEXT NOT NULL,
+    signal           TEXT,
+    bet              TEXT,
+    confidence       REAL,
+    entry_price      REAL,
+    stop_loss        REAL,
+    target_price     REAL,
+    cmp              REAL,
     actionable_insight TEXT,
-    fo_buildup TEXT,
-    tech_reason TEXT,
-    analysed_at TIMESTAMP DEFAULT now(),
-    pcr TEXT,
-    support DOUBLE PRECISION,
-    resistance DOUBLE PRECISION
+    fo_buildup       TEXT,
+    tech_reason      TEXT,
+    analysed_at      TEXT DEFAULT (datetime('now')),
+    pcr              TEXT,
+    support          REAL,
+    resistance       REAL
 );
 
 CREATE TABLE IF NOT EXISTS fno_active (
-    rank INTEGER PRIMARY KEY,
-    ticker TEXT NOT NULL,
-    stock_name TEXT,
-    most_active_strike DOUBLE PRECISION,
-    option_type TEXT,
-    expiry_date TEXT,
-    volume BIGINT,
-    open_interest BIGINT,
-    change_in_oi BIGINT,
-    ltp DOUBLE PRECISION,
-    pchange DOUBLE PRECISION,
-    active_score DOUBLE PRECISION,
-    buildup_signal TEXT,
-    last_updated TEXT
+    rank            INTEGER PRIMARY KEY,
+    ticker          TEXT NOT NULL,
+    stock_name      TEXT,
+    most_active_strike REAL,
+    option_type     TEXT,
+    expiry_date     TEXT,
+    volume          INTEGER,
+    open_interest   INTEGER,
+    change_in_oi    INTEGER,
+    ltp             REAL,
+    pchange         REAL,
+    active_score    REAL,
+    buildup_signal  TEXT,
+    last_updated    TEXT
 );
 
-CREATE TABLE IF NOT EXISTS opportunities_risk (
-    ticker VARCHAR(50) PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-    about_company TEXT,
-    opportunities TEXT,
-    risk TEXT,
-    is_multibagger BOOLEAN DEFAULT FALSE,
-    additional_note TEXT,
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now()
+CREATE TABLE IF NOT EXISTS continuous_hhhl_scanner (
+    ticker                  TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    close                   REAL,
+    current_hhhl            INTEGER,
+    avg_continuity_count    REAL,
+    broken_pattern_count    INTEGER,
+    broken_pattern_details  TEXT,
+    history_days_analyzed   INTEGER,
+    history_start_date      TEXT,
+    cycle_start_date        TEXT,
+    historical_cycles       TEXT,   -- JSON text (was JSONB)
+    updated_at              TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+    ticker              TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+    is_active           INTEGER DEFAULT 0,
+    pattern_start_date  TEXT,
+    cup_bottom_date     TEXT,
+    handle_start_date   TEXT,
+    breakout_date       TEXT,
+    breakout_price      REAL,
+    target_price        REAL,
+    stop_loss           REAL,
+    details             TEXT,   -- JSON text (was JSONB)
+    historical_patterns TEXT,   -- JSON text (was JSONB)
+    last_updated        TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS chart_patterns (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT NOT NULL,
-    pattern_code TEXT NOT NULL,
-    pattern_name TEXT NOT NULL,
-    category TEXT DEFAULT 'CANDLESTICK',
-    timeframe TEXT DEFAULT 'DAILY',
-    detected_date DATE DEFAULT CURRENT_DATE,
-    start_date DATE,
-    end_date DATE,
-    high_price DOUBLE PRECISION,
-    low_price DOUBLE PRECISION,
-    close_price DOUBLE PRECISION,
-    strength_score DOUBLE PRECISION DEFAULT 1.0,
-    details TEXT,
-    created_at TIMESTAMP DEFAULT now()
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker         TEXT NOT NULL,
+    pattern_code   TEXT NOT NULL,
+    pattern_name   TEXT NOT NULL,
+    category       TEXT DEFAULT 'CANDLESTICK',
+    timeframe      TEXT DEFAULT 'DAILY',
+    detected_date  TEXT DEFAULT (date('now')),
+    start_date     TEXT,
+    end_date       TEXT,
+    high_price     REAL,
+    low_price      REAL,
+    close_price    REAL,
+    strength_score REAL DEFAULT 1.0,
+    details        TEXT,
+    created_at     TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS mf_holdings (
-    id SERIAL PRIMARY KEY,
-    ticker TEXT NOT NULL,
-    fund_name TEXT NOT NULL,
-    holding_pct DOUBLE PRECISION DEFAULT 0.0,
-    shares_held BIGINT DEFAULT 0,
-    rank INT DEFAULT 0,
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker        TEXT NOT NULL,
+    fund_name     TEXT NOT NULL,
+    holding_pct   REAL DEFAULT 0.0,
+    shares_held   INTEGER DEFAULT 0,
+    rank          INTEGER DEFAULT 0,
     disclosed_date TEXT,
     disclosure_date TEXT,
-    downloaded_at TIMESTAMP DEFAULT now(),
-    value_cr DOUBLE PRECISION DEFAULT 0.0,
-    as_of_date TEXT,
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now(),
+    downloaded_at TEXT DEFAULT (datetime('now')),
+    value_cr      REAL DEFAULT 0.0,
+    as_of_date    TEXT,
+    created_at    TEXT DEFAULT (datetime('now')),
+    updated_at    TEXT DEFAULT (datetime('now')),
     UNIQUE (ticker, fund_name)
+);
+
+-- 12. Historical Mutual Fund Behaviour Module
+CREATE TABLE IF NOT EXISTS mf_amc (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    amc_name TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mf_scheme (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    amc_id      INTEGER REFERENCES mf_amc(id),
+    scheme_code TEXT,
+    scheme_name TEXT NOT NULL,
+    UNIQUE(amc_id, scheme_name)
+);
+
+CREATE TABLE IF NOT EXISTS mf_historical_holdings (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date        TEXT NOT NULL,
+    scheme_id            INTEGER REFERENCES mf_scheme(id),
+    ticker               TEXT REFERENCES ticker_master(ticker),
+    isin                 TEXT,
+    shares               INTEGER,
+    market_value         REAL,
+    portfolio_weight_pct REAL,
+    source               TEXT,
+    source_date          TEXT,
+    retrieved_at         TEXT DEFAULT (datetime('now')),
+    UNIQUE(snapshot_date, scheme_id, ticker)
+);
+
+CREATE TABLE IF NOT EXISTS fii_investor (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    investor_name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS fii_historical_holdings (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date        TEXT NOT NULL,
+    investor_id          INTEGER REFERENCES fii_investor(id),
+    ticker               TEXT REFERENCES ticker_master(ticker),
+    portfolio_weight_pct REAL,
+    retrieved_at         TEXT DEFAULT (datetime('now')),
+    UNIQUE(snapshot_date, investor_id, ticker)
+);
+
+CREATE TABLE IF NOT EXISTS fii_behavior (
+    ticker     TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
+    data       TEXT NOT NULL,   -- JSON text (was JSONB)
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS derivative_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol      TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    lot_size    INTEGER,
+    action_date TEXT,
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS screener_ticker_mappings (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    yfinance_ticker     TEXT NOT NULL UNIQUE,
+    screener_ticker     TEXT NOT NULL,
+    screener_company_id INTEGER,
+    company_name        TEXT,
+    notes               TEXT,
+    created_at          TEXT DEFAULT (datetime('now')),
+    updated_at          TEXT DEFAULT (datetime('now'))
 );
 
 -- Indexes for Optimization
@@ -393,67 +484,7 @@ CREATE INDEX IF NOT EXISTS idx_indicators_ticker_date ON indicators_daily(ticker
 CREATE INDEX IF NOT EXISTS idx_fno_ticker ON raw_fno_derivatives(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_ticker ON chart_patterns(ticker);
 CREATE INDEX IF NOT EXISTS idx_chart_patterns_code_tf ON chart_patterns(pattern_code, timeframe);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_patterns_unique ON chart_patterns (ticker, pattern_code, timeframe, detected_date);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_ticker ON mf_holdings(ticker);
-
--- 12. Historical Mutual Fund Behaviour Module
-CREATE TABLE IF NOT EXISTS mf_amc (
-    id SERIAL PRIMARY KEY,
-    amc_name TEXT UNIQUE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS mf_scheme (
-    id SERIAL PRIMARY KEY,
-    amc_id INTEGER REFERENCES mf_amc(id),
-    scheme_code TEXT,
-    scheme_name TEXT NOT NULL,
-    UNIQUE(amc_id, scheme_name)
-);
-
-CREATE TABLE IF NOT EXISTS mf_historical_holdings (
-    id SERIAL PRIMARY KEY,
-    snapshot_date DATE NOT NULL,
-    scheme_id INTEGER REFERENCES mf_scheme(id),
-    ticker TEXT REFERENCES ticker_master(ticker),
-    isin TEXT,
-    shares BIGINT,
-    market_value DOUBLE PRECISION,
-    portfolio_weight_pct DOUBLE PRECISION,
-    source TEXT,
-    source_date DATE,
-    retrieved_at TIMESTAMP DEFAULT now(),
-    UNIQUE(snapshot_date, scheme_id, ticker)
-);
-
 CREATE INDEX IF NOT EXISTS idx_mf_hist_ticker_date ON mf_historical_holdings(ticker, snapshot_date);
-
-CREATE TABLE IF NOT EXISTS fii_investor (
-    id SERIAL PRIMARY KEY,
-    investor_name TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS fii_historical_holdings (
-    id SERIAL PRIMARY KEY,
-    snapshot_date DATE NOT NULL,
-    investor_id INTEGER REFERENCES fii_investor(id),
-    ticker TEXT REFERENCES ticker_master(ticker),
-    portfolio_weight_pct DOUBLE PRECISION,
-    retrieved_at TIMESTAMP DEFAULT now(),
-    UNIQUE(snapshot_date, investor_id, ticker)
-);
-
 CREATE INDEX IF NOT EXISTS idx_fii_hist_ticker_date ON fii_historical_holdings(ticker, snapshot_date);
-
-CREATE TABLE IF NOT EXISTS fii_behavior (
-    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker),
-    data JSONB NOT NULL,
-    updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS derivative_history (
-    id SERIAL PRIMARY KEY,
-    symbol TEXT NOT NULL,
-    action TEXT NOT NULL,
-    lot_size INTEGER,
-    action_date TEXT,
-    created_at TEXT DEFAULT NOW()::text
-);

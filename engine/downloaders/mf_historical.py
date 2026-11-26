@@ -9,7 +9,7 @@ import os
 import csv
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
-import psycopg2
+# MIGRATED: import psycopg2
 from dotenv import load_dotenv
 
 # Load environment to get DB config
@@ -28,28 +28,28 @@ def get_connection():
 def _get_or_create_amc(cur, amc_name: str) -> int:
     """Normalizes and gets/creates an AMC record, returning its ID."""
     clean_name = amc_name.strip().upper()
-    cur.execute("SELECT id FROM mf_amc WHERE amc_name = %s", (clean_name,))
+    cur.execute("SELECT id FROM mf_amc WHERE amc_name = ?", (clean_name,))
     row = cur.fetchone()
     if row:
         return row[0]
     
-    cur.execute("INSERT INTO mf_amc (amc_name) VALUES (%s) RETURNING id", (clean_name,))
+    cur.execute("INSERT INTO mf_amc (amc_name) VALUES (?) RETURNING id", (clean_name,))
     return cur.fetchone()[0]
 
 def _get_or_create_scheme(cur, amc_id: int, scheme_name: str, scheme_code: Optional[str]) -> int:
     """Normalizes and gets/creates a Scheme record, returning its ID."""
     clean_name = scheme_name.strip().upper()
-    cur.execute("SELECT id FROM mf_scheme WHERE amc_id = %s AND scheme_name = %s", (amc_id, clean_name))
+    cur.execute("SELECT id FROM mf_scheme WHERE amc_id = ? AND scheme_name = ?", (amc_id, clean_name))
     row = cur.fetchone()
     if row:
         # Optionally update scheme_code if it was previously null and now provided
         if scheme_code and scheme_code.strip():
-            cur.execute("UPDATE mf_scheme SET scheme_code = %s WHERE id = %s AND scheme_code IS NULL", (scheme_code.strip(), row[0]))
+            cur.execute("UPDATE mf_scheme SET scheme_code = ? WHERE id = ? AND scheme_code IS NULL", (scheme_code.strip(), row[0]))
         return row[0]
     
     clean_code = scheme_code.strip() if scheme_code else None
     cur.execute(
-        "INSERT INTO mf_scheme (amc_id, scheme_code, scheme_name) VALUES (%s, %s, %s) RETURNING id",
+        "INSERT INTO mf_scheme (amc_id, scheme_code, scheme_name) VALUES (?, ?, ?) RETURNING id",
         (amc_id, clean_code, clean_name)
     )
     return cur.fetchone()[0]
@@ -103,7 +103,7 @@ def ingest_historical_mf_csv(file_path: str, source_name: str = "MANUAL_CSV") ->
                     scheme_id = _get_or_create_scheme(cur, amc_id, scheme_name, scheme_code)
                     
                     # Validate if ticker exists in ticker_master (Optional strictness)
-                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = %s", (ticker,))
+                    cur.execute("SELECT 1 FROM ticker_master WHERE ticker = ?", (ticker,))
                     if not cur.fetchone():
                         # If ticker isn't in our master, we might skip or just insert assuming it's valid for future
                         # For BSA Screener, we typically only care about mapped tickers
@@ -113,7 +113,7 @@ def ingest_historical_mf_csv(file_path: str, source_name: str = "MANUAL_CSV") ->
                     cur.execute("""
                         INSERT INTO mf_historical_holdings 
                         (snapshot_date, scheme_id, ticker, isin, shares, market_value, portfolio_weight_pct, source, source_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT (snapshot_date, scheme_id, ticker) DO NOTHING
                         RETURNING id
                     """, (

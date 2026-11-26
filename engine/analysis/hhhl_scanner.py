@@ -29,12 +29,12 @@ def ensure_hhhl_table_exists():
                     updated_at TIMESTAMP DEFAULT now()
                 );
             """)
-            cur.execute("""
-                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_days_analyzed INTEGER;
-                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS history_start_date DATE;
-                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS cycle_start_date DATE;
-                ALTER TABLE continuous_hhhl_scanner ADD COLUMN IF NOT EXISTS historical_cycles JSONB;
-            """)
+            cur.execute("PRAGMA table_info(continuous_hhhl_scanner)")
+            existing = {r[1] for r in cur.fetchall()}
+            for col, ctype in [("history_days_analyzed", "INTEGER"), ("history_start_date", "DATE"), ("cycle_start_date", "DATE"), ("historical_cycles", "TEXT")]:
+                if col not in existing:
+                    cur.execute(f"ALTER TABLE continuous_hhhl_scanner ADD COLUMN {col} {ctype};")
+            conn.commit()
     _hhhl_table_created = True
 
 def scan_and_store_hhhl(ticker: str, context=None) -> bool:

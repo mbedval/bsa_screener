@@ -2,7 +2,7 @@ import logging
 import json
 import pandas as pd
 import numpy as np
-from psycopg2.extras import RealDictCursor
+# MIGRATED: from psycopg2.extras import RealDictCursor
 from engine.database.connection import get_db_connection
 
 logger = logging.getLogger("bsa_cup_handle")
@@ -10,26 +10,49 @@ logger.setLevel(logging.INFO)
 
 _table_created = False
 
-def ensure_cup_and_handle_table(cur):
+def ensure_cup_and_handle_table(cur=None):
     global _table_created
     if _table_created:
         return
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
-            ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
-            is_active BOOLEAN DEFAULT False,
-            pattern_start_date DATE,
-            cup_bottom_date DATE,
-            handle_start_date DATE,
-            breakout_date DATE,
-            breakout_price DOUBLE PRECISION,
-            target_price DOUBLE PRECISION,
-            stop_loss DOUBLE PRECISION,
-            details JSONB,
-            historical_patterns JSONB,
-            last_updated TIMESTAMP DEFAULT now()
-        );
-    """)
+    if cur is not None:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+                ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                is_active INTEGER DEFAULT 0,
+                pattern_start_date DATE,
+                cup_bottom_date DATE,
+                handle_start_date DATE,
+                breakout_date DATE,
+                breakout_price REAL,
+                target_price REAL,
+                stop_loss REAL,
+                details TEXT,
+                historical_patterns TEXT,
+                last_updated TEXT DEFAULT (datetime('now'))
+            );
+        """)
+        if hasattr(cur, 'connection') and cur.connection:
+            cur.connection.commit()
+    else:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS cup_and_handle_scanner (
+                    ticker TEXT PRIMARY KEY REFERENCES ticker_master(ticker) ON DELETE CASCADE,
+                    is_active INTEGER DEFAULT 0,
+                    pattern_start_date DATE,
+                    cup_bottom_date DATE,
+                    handle_start_date DATE,
+                    breakout_date DATE,
+                    breakout_price REAL,
+                    target_price REAL,
+                    stop_loss REAL,
+                    details TEXT,
+                    historical_patterns TEXT,
+                    last_updated TEXT DEFAULT (datetime('now'))
+                );
+            """)
+            conn.commit()
     _table_created = True
 
 def scan_and_store_cup_and_handle(ticker: str, context=None) -> bool:
@@ -38,6 +61,7 @@ def scan_and_store_cup_and_handle(ticker: str, context=None) -> bool:
     active and historical patterns to `cup_and_handle_scanner` table.
     """
     try:
+        ensure_cup_and_handle_table()
         df = None
         if context and context.df_ohlcv is not None and not context.df_ohlcv.empty:
             df = context.df_ohlcv[['trade_date', 'open', 'high', 'low', 'close']].copy()
@@ -45,15 +69,15 @@ def scan_and_store_cup_and_handle(ticker: str, context=None) -> bool:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
         else:
             with get_db_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    ensure_cup_and_handle_table(cur)
-                    cur.execute("""
-                        SELECT trade_date, open, high, low, close
-                        FROM ohlcv_daily
-                        WHERE ticker = %s AND close > 0
-                        ORDER BY trade_date ASC
-                    """, (ticker,))
-                    rows = cur.fetchall()
+                cur = conn.cursor()
+                ensure_cup_and_handle_table(cur)
+                cur.execute("""
+                    SELECT trade_date, open, high, low, close
+                    FROM ohlcv_daily
+                    WHERE ticker = ? AND close > 0
+                    ORDER BY trade_date ASC
+                """, (ticker,))
+                rows = cur.fetchall()
 
             if not rows or len(rows) < 30:
                 return False
@@ -157,54 +181,54 @@ def scan_and_store_cup_and_handle(ticker: str, context=None) -> bool:
                         active_pattern_data = all_patterns[0]
 
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                if not all_patterns:
-                    cur.execute("""
-                        INSERT INTO cup_and_handle_scanner (ticker, is_active, historical_patterns, last_updated)
-                        VALUES (%s, FALSE, %s, now())
-                        ON CONFLICT (ticker) DO UPDATE SET 
-                            is_active = FALSE,
-                            historical_patterns = %s,
-                            last_updated = now()
-                    """, (ticker, json.dumps([]), json.dumps([])))
-                else:
-                    ap = active_pattern_data or {}
-                    cur.execute("""
-                        INSERT INTO cup_and_handle_scanner (
-                            ticker, is_active, pattern_start_date, cup_bottom_date, handle_start_date,
-                            breakout_date, breakout_price, target_price, stop_loss, details, historical_patterns, last_updated
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                        ON CONFLICT (ticker) DO UPDATE SET
-                            is_active = EXCLUDED.is_active,
-                            pattern_start_date = EXCLUDED.pattern_start_date,
-                            cup_bottom_date = EXCLUDED.cup_bottom_date,
-                            handle_start_date = EXCLUDED.handle_start_date,
-                            breakout_date = EXCLUDED.breakout_date,
-                            breakout_price = EXCLUDED.breakout_price,
-                            target_price = EXCLUDED.target_price,
-                            stop_loss = EXCLUDED.stop_loss,
-                            details = EXCLUDED.details,
-                            historical_patterns = EXCLUDED.historical_patterns,
-                            last_updated = now()
-                    """, (
-                        ticker,
-                        is_active,
-                        ap.get('pattern_start_date'),
-                        ap.get('cup_bottom_date'),
-                        ap.get('handle_start_date'),
-                        ap.get('breakout_date'),
-                        ap.get('breakout_price'),
-                        ap.get('target_price'),
-                        ap.get('stop_loss'),
-                        json.dumps({
-                            "cup_depth_pct": ap.get("cup_depth_pct"),
-                            "handle_retracement_pct": ap.get("handle_retracement_pct"),
-                            "cup_duration": ap.get("cup_duration"),
-                            "handle_duration": ap.get("handle_duration")
-                        }) if is_active else None,
-                        json.dumps(all_patterns)
-                    ))
-                conn.commit()
+            cur = conn.cursor()
+            if not all_patterns:
+                cur.execute("""
+                    INSERT INTO cup_and_handle_scanner (ticker, is_active, historical_patterns, last_updated)
+                    VALUES (?, FALSE, ?, now())
+                    ON CONFLICT (ticker) DO UPDATE SET 
+                        is_active = FALSE,
+                        historical_patterns = ?,
+                        last_updated = now()
+                """, (ticker, json.dumps([]), json.dumps([])))
+            else:
+                ap = active_pattern_data or {}
+                cur.execute("""
+                    INSERT INTO cup_and_handle_scanner (
+                        ticker, is_active, pattern_start_date, cup_bottom_date, handle_start_date,
+                        breakout_date, breakout_price, target_price, stop_loss, details, historical_patterns, last_updated
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        is_active = EXCLUDED.is_active,
+                        pattern_start_date = EXCLUDED.pattern_start_date,
+                        cup_bottom_date = EXCLUDED.cup_bottom_date,
+                        handle_start_date = EXCLUDED.handle_start_date,
+                        breakout_date = EXCLUDED.breakout_date,
+                        breakout_price = EXCLUDED.breakout_price,
+                        target_price = EXCLUDED.target_price,
+                        stop_loss = EXCLUDED.stop_loss,
+                        details = EXCLUDED.details,
+                        historical_patterns = EXCLUDED.historical_patterns,
+                        last_updated = now()
+                """, (
+                    ticker,
+                    is_active,
+                    ap.get('pattern_start_date'),
+                    ap.get('cup_bottom_date'),
+                    ap.get('handle_start_date'),
+                    ap.get('breakout_date'),
+                    ap.get('breakout_price'),
+                    ap.get('target_price'),
+                    ap.get('stop_loss'),
+                    json.dumps({
+                        "cup_depth_pct": ap.get("cup_depth_pct"),
+                        "handle_retracement_pct": ap.get("handle_retracement_pct"),
+                        "cup_duration": ap.get("cup_duration"),
+                        "handle_duration": ap.get("handle_duration")
+                    }) if is_active else None,
+                    json.dumps(all_patterns)
+                ))
+            conn.commit()
                 
         return True
 

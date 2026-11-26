@@ -1,4 +1,3 @@
-from psycopg.rows import dict_row
 """Master data CRUD router — /api/master/
 
 Endpoints:
@@ -32,12 +31,12 @@ Endpoints:
     GET    /api/master/sectors/{sector_id}/tickers  (tickers for a sector)
 """
 
+import json
 import re
 from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from psycopg import sql as psql
 from pydantic import BaseModel
 
 from .config import settings
@@ -48,7 +47,7 @@ router = APIRouter(prefix="/api/master", tags=["master"])
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def rawdata_conn(dataset: Optional[str] = None):
-    return get_connection(settings.rawdata_postgres_dsn)
+    return get_connection()
 
 
 def _not_found(entity: str, key: Any) -> HTTPException:
@@ -195,23 +194,26 @@ class ScreenerTickerMappingUpdate(BaseModel):
 
 @router.get("/sectors")
 def list_sectors(dataset: Optional[str] = None) -> list[dict]:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
             "SELECT id, name, description, created_at FROM sectors ORDER BY name"
         )
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 @router.post("/sectors", status_code=201)
 def create_sector(body: SectorIn, dataset: Optional[str] = None) -> dict:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING *",
+                "INSERT INTO sectors (name, description) VALUES (?, ?)",
                 (body.name, body.description),
             )
             conn.commit()
-            return cur.fetchone()
+            cur.execute("SELECT * FROM sectors WHERE rowid = ?", (cur.lastrowid,))
+            return dict(cur.fetchone())
         except Exception as exc:
             conn.rollback()
             if "unique" in str(exc).lower():
@@ -221,42 +223,54 @@ def create_sector(body: SectorIn, dataset: Optional[str] = None) -> dict:
 
 @router.put("/sectors/{sector_id}")
 def update_sector(sector_id: int, body: SectorIn, dataset: Optional[str] = None) -> dict:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
-            "UPDATE sectors SET name=%s, description=%s WHERE id=%s RETURNING *",
+            "UPDATE sectors SET name=?, description=? WHERE id=?",
             (body.name, body.description, sector_id),
         )
+        conn.commit()
+        cur.execute("SELECT * FROM sectors WHERE id = ?", (sector_id,))
         row = cur.fetchone()
         if not row:
             raise _not_found("Sector", sector_id)
-        conn.commit()
-        return row
+        return dict(row)
 
 
 @router.delete("/sectors/{sector_id}", status_code=204)
 def delete_sector(sector_id: int, dataset: Optional[str] = None) -> None:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM sectors WHERE id=%s RETURNING id", (sector_id,))
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM sectors WHERE id=?", (sector_id,))
         if not cur.fetchone():
             raise _not_found("Sector", sector_id)
+        cur.execute("DELETE FROM sectors WHERE id=?", (sector_id,))
         conn.commit()
 
 
 @router.get("/sectors/{sector_id}/tickers")
 def sector_tickers(sector_id: int, dataset: Optional[str] = None) -> list[dict]:
     """All tickers belonging to a sector (with ticker_master details)."""
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT tm.ticker, tm.company_name, tm.is_fno, tm.index_memberships, tm.exchange
             FROM ticker_master tm
             JOIN ticker_sector ts ON ts.ticker = tm.ticker
-            WHERE ts.sector_id = %s
+            WHERE ts.sector_id = ?
             ORDER BY tm.ticker
             """,
             (sector_id,),
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        result = []
+        for row in rows:
+            r = dict(row)
+            if 'index_memberships' in r and isinstance(r.get('index_memberships'), str):
+                r['index_memberships'] = json.loads(r['index_memberships'] or '[]')
+            result.append(r)
+        return result
 
 
 @router.post("/sectors/import-file")
@@ -314,18 +328,21 @@ def import_watchlist_sector_file(
 
     default_exchange = "NASDAQ" if dataset == "us_intelligence" else "NSE"
 
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         # 2. Get or create sector
-        cur.execute("SELECT id, name FROM sectors WHERE LOWER(name) = LOWER(%s)", (sector_name,))
+        cur.execute("SELECT id, name FROM sectors WHERE LOWER(name) = LOWER(?)", (sector_name,))
         sector_row = cur.fetchone()
         if sector_row:
             sector_id = sector_row["id"]
             sector_name = sector_row["name"] # preserve actual case in DB
         else:
             cur.execute(
-                "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING id, name",
+                "INSERT INTO sectors (name, description) VALUES (?, ?)",
                 (sector_name, f"Imported from {filename}"),
             )
+            conn.commit()
+            cur.execute("SELECT id, name FROM sectors WHERE rowid = ?", (cur.lastrowid,))
             created_sec = cur.fetchone()
             sector_id = created_sec["id"]
             sector_name = created_sec["name"]
@@ -338,12 +355,12 @@ def import_watchlist_sector_file(
 
         for t in tickers_list:
             # Check if ticker exists in ticker_master
-            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s", (t,))
+            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = ?", (t,))
             t_row = cur.fetchone()
             if not t_row:
                 # Add to ticker_master
                 cur.execute(
-                    "INSERT INTO ticker_master (ticker, company_name, exchange) VALUES (%s, %s, %s)",
+                    "INSERT INTO ticker_master (ticker, company_name, exchange) VALUES (?, ?, ?)",
                     (t, t, default_exchange),
                 )
                 new_tickers_added.append(t)
@@ -352,13 +369,13 @@ def import_watchlist_sector_file(
 
             # Check if mapping exists in ticker_sector
             cur.execute(
-                "SELECT ticker FROM ticker_sector WHERE ticker = %s AND sector_id = %s",
+                "SELECT ticker FROM ticker_sector WHERE ticker = ? AND sector_id = ?",
                 (t, sector_id),
             )
             m_row = cur.fetchone()
             if not m_row:
                 cur.execute(
-                    "INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s)",
+                    "INSERT INTO ticker_sector (ticker, sector_id) VALUES (?, ?)",
                     (t, sector_id),
                 )
                 new_mappings_created.append(t)
@@ -393,17 +410,18 @@ def list_indices(
     is_fno: Optional[bool] = None,
     dataset: Optional[str] = None,
 ) -> list[dict]:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         query = "SELECT symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at FROM indices_master"
         where_clauses, params = [], []
         if search:
-            where_clauses.append("(symbol ILIKE %s OR name ILIKE %s)")
+            where_clauses.append("(symbol LIKE ? OR name LIKE ?)")
             params.extend([f"%{search}%", f"%{search}%"])
         if category:
-            where_clauses.append("category ILIKE %s")
+            where_clauses.append("category LIKE ?")
             params.append(category)
         if is_fno is not None:
-            where_clauses.append("is_fno = %s")
+            where_clauses.append("is_fno = ?")
             params.append(is_fno)
 
         if where_clauses:
@@ -415,13 +433,13 @@ def list_indices(
 
 @router.post("/indices", status_code=201)
 def create_index(body: IndexIn, dataset: Optional[str] = None) -> dict:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO indices_master (symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 """,
                 (
                     body.symbol.upper().strip(),
@@ -434,8 +452,9 @@ def create_index(body: IndexIn, dataset: Optional[str] = None) -> dict:
                     body.is_active,
                 ),
             )
-            row = cur.fetchone()
             conn.commit()
+            cur.execute("SELECT * FROM indices_master WHERE rowid = ?", (cur.lastrowid,))
+            row = cur.fetchone()
             return dict(row)
         except Exception as exc:
             conn.rollback()
@@ -448,45 +467,50 @@ def create_index(body: IndexIn, dataset: Optional[str] = None) -> dict:
 def update_index(symbol: str, body: IndexUpdate, dataset: Optional[str] = None) -> dict:
     updates, params = [], []
     if body.name is not None:
-        updates.append("name = %s"); params.append(body.name)
+        updates.append("name = ?"); params.append(body.name)
     if body.exchange is not None:
-        updates.append("exchange = %s"); params.append(body.exchange)
+        updates.append("exchange = ?"); params.append(body.exchange)
     if body.category is not None:
-        updates.append("category = %s"); params.append(body.category)
+        updates.append("category = ?"); params.append(body.category)
     if body.is_fno is not None:
-        updates.append("is_fno = %s"); params.append(body.is_fno)
+        updates.append("is_fno = ?"); params.append(body.is_fno)
     if body.lot_size is not None:
-        updates.append("lot_size = %s"); params.append(body.lot_size)
+        updates.append("lot_size = ?"); params.append(body.lot_size)
     if body.benchmark_price is not None:
-        updates.append("benchmark_price = %s"); params.append(body.benchmark_price)
+        updates.append("benchmark_price = ?"); params.append(body.benchmark_price)
     if body.is_active is not None:
-        updates.append("is_active = %s"); params.append(body.is_active)
+        updates.append("is_active = ?"); params.append(body.is_active)
 
     if not updates:
         raise HTTPException(400, "No fields to update.")
 
-    updates.append("updated_at = NOW()")
+    updates.append("updated_at = datetime('now')")
     params.append(symbol.upper().strip())
 
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
-            f"UPDATE indices_master SET {', '.join(updates)} WHERE symbol = %s RETURNING *",
-            params,
+            f"UPDATE indices_master SET {', '.join(updates)} WHERE symbol = ?",
+            list(params),
         )
+        conn.commit()
+        cur.execute("SELECT * FROM indices_master WHERE symbol = ?", (symbol.upper().strip(),))
         row = cur.fetchone()
         if not row:
             raise _not_found("Index", symbol)
-        conn.commit()
         return dict(row)
 
 
 @router.delete("/indices/{symbol}", status_code=204)
 def delete_index(symbol: str, dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM indices_master WHERE symbol = %s RETURNING symbol", (symbol.upper().strip(),))
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        sym = symbol.upper().strip()
+        cur.execute("SELECT symbol FROM indices_master WHERE symbol = ?", (sym,))
         row = cur.fetchone()
         if not row:
             raise _not_found("Index", symbol)
+        cur.execute("DELETE FROM indices_master WHERE symbol = ?", (sym,))
         conn.commit()
 
 
@@ -595,7 +619,8 @@ def import_indices_master_file(
     new_indices = []
     updated_indices = []
 
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         for rec in records:
             s = rec["symbol"]
             n = rec["name"]
@@ -606,13 +631,13 @@ def import_indices_master_file(
             bp = rec["benchmark_price"]
             act = rec["is_active"]
 
-            cur.execute("SELECT symbol FROM indices_master WHERE symbol = %s", (s,))
+            cur.execute("SELECT symbol FROM indices_master WHERE symbol = ?", (s,))
             exists = cur.fetchone()
             if not exists:
                 cur.execute(
                     """
                     INSERT INTO indices_master (symbol, name, exchange, category, is_fno, lot_size, benchmark_price, is_active, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                     """,
                     (s, n, e, c, f, l, bp, act),
                 )
@@ -621,15 +646,15 @@ def import_indices_master_file(
                 cur.execute(
                     """
                     UPDATE indices_master
-                    SET name = COALESCE(NULLIF(%s, ''), name),
-                        exchange = COALESCE(NULLIF(%s, ''), exchange),
-                        category = COALESCE(NULLIF(%s, ''), category),
-                        is_fno = %s,
-                        lot_size = COALESCE(%s, lot_size),
-                        benchmark_price = COALESCE(%s, benchmark_price),
-                        is_active = %s,
-                        updated_at = NOW()
-                    WHERE symbol = %s
+                    SET name = COALESCE(NULLIF(?, ''), name),
+                        exchange = COALESCE(NULLIF(?, ''), exchange),
+                        category = COALESCE(NULLIF(?, ''), category),
+                        is_fno = ?,
+                        lot_size = COALESCE(?, lot_size),
+                        benchmark_price = COALESCE(?, benchmark_price),
+                        is_active = ?,
+                        updated_at = datetime('now')
+                    WHERE symbol = ?
                     """,
                     (n, e, c, f, l, bp, act, s),
                 )
@@ -663,7 +688,6 @@ def _parse_index_memberships(raw_val: Any) -> list[str]:
         return [x.strip(' "\'') for x in inner.split(",") if x.strip(' "\'')]
     if val_str.startswith("[") and val_str.endswith("]"):
         try:
-            import json
             parsed = json.loads(val_str)
             if isinstance(parsed, list):
                 return [str(x).strip() for x in parsed if str(x).strip()]
@@ -794,7 +818,8 @@ def import_ticker_master_file(
     new_tickers = []
     updated_tickers = []
 
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         for rec in records:
             t = rec["ticker"]
             c_name = rec["company_name"]
@@ -804,31 +829,32 @@ def import_ticker_master_file(
             exch = rec["exchange"] or default_exchange
             about_c = rec.get("about_company")
             prod_s = rec.get("product_services")
+            idx_json = json.dumps(idx)
 
-            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = %s", (t,))
+            cur.execute("SELECT ticker FROM ticker_master WHERE ticker = ?", (t,))
             exists = cur.fetchone()
             if not exists:
                 cur.execute(
                     """
                     INSERT INTO ticker_master (ticker, company_name, is_fno, sector, index_memberships, exchange, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
                     """,
-                    (t, c_name, fno, sec, idx, exch),
+                    (t, c_name, fno, sec, idx_json, exch),
                 )
                 new_tickers.append(t)
             else:
                 cur.execute(
                     """
                     UPDATE ticker_master
-                    SET company_name = COALESCE(NULLIF(%s, ''), company_name),
-                        is_fno = %s,
-                        sector = COALESCE(%s, sector),
-                        index_memberships = CASE WHEN array_length(%s::text[], 1) > 0 THEN %s ELSE index_memberships END,
-                        exchange = COALESCE(NULLIF(%s, ''), exchange),
-                        updated_at = NOW()
-                    WHERE ticker = %s
+                    SET company_name = COALESCE(NULLIF(?, ''), company_name),
+                        is_fno = ?,
+                        sector = COALESCE(?, sector),
+                        index_memberships = CASE WHEN json_array_length(?) > 0 THEN ? ELSE index_memberships END,
+                        exchange = COALESCE(NULLIF(?, ''), exchange),
+                        updated_at = datetime('now')
+                    WHERE ticker = ?
                     """,
-                    (c_name, fno, sec, idx, idx, exch, t),
+                    (c_name, fno, sec, idx_json, idx_json, exch, t),
                 )
                 updated_tickers.append(t)
 
@@ -838,28 +864,30 @@ def import_ticker_master_file(
                 cur.execute(
                     """
                     INSERT INTO opportunities_risk (ticker, about_company, updated_at)
-                    VALUES (%s, %s, NOW())
+                    VALUES (?, ?, datetime('now'))
                     ON CONFLICT (ticker) DO UPDATE SET
-                        about_company = EXCLUDED.about_company,
-                        updated_at = NOW()
+                        about_company = excluded.about_company,
+                        updated_at = datetime('now')
                     """,
                     (t, full_about_text),
                 )
 
             if sec:
-                cur.execute("SELECT id FROM sectors WHERE LOWER(name) = LOWER(%s)", (sec,))
+                cur.execute("SELECT id FROM sectors WHERE LOWER(name) = LOWER(?)", (sec,))
                 s_row = cur.fetchone()
                 if s_row:
                     s_id = s_row["id"]
                 else:
                     cur.execute(
-                        "INSERT INTO sectors (name, description) VALUES (%s, %s) RETURNING id",
+                        "INSERT INTO sectors (name, description) VALUES (?, ?)",
                         (sec, f"Imported from {filename}"),
                     )
+                    conn.commit()
+                    cur.execute("SELECT id FROM sectors WHERE rowid = ?", (cur.lastrowid,))
                     s_id = cur.fetchone()["id"]
 
                 cur.execute(
-                    "INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s) ON CONFLICT (ticker, sector_id) DO NOTHING",
+                    "INSERT OR IGNORE INTO ticker_sector (ticker, sector_id) VALUES (?, ?)",
                     (t, s_id),
                 )
 
@@ -868,8 +896,8 @@ def import_ticker_master_file(
                     cur.execute(
                         """
                         INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
-                        VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
-                        ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                        VALUES (?, ?, 'STOCK', 1, date('now'), datetime('now'))
+                        ON CONFLICT (symbol) DO UPDATE SET is_active = 1, underlying_name = excluded.underlying_name
                         """,
                         (t, c_name),
                     )
@@ -899,16 +927,17 @@ def list_tickers(
     is_fno: Optional[bool] = None,
     dataset: Optional[str] = None,
 ) -> list[dict]:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         query = "SELECT ticker, company_name, is_fno, index_memberships, exchange, updated_at FROM ticker_master"
         where_clauses = []
         params = []
 
         if search:
-            where_clauses.append("(ticker ILIKE %s OR company_name ILIKE %s)")
+            where_clauses.append("(ticker LIKE ? OR company_name LIKE ?)")
             params.extend([f"%{search}%", f"%{search}%"])
         if is_fno is not None:
-            where_clauses.append("is_fno = %s")
+            where_clauses.append("is_fno = ?")
             params.append(is_fno)
 
         if where_clauses:
@@ -933,6 +962,8 @@ def list_tickers(
         result = []
         for row in tickers_rows:
             row_dict = dict(row)
+            if 'index_memberships' in row_dict and isinstance(row_dict.get('index_memberships'), str):
+                row_dict['index_memberships'] = json.loads(row_dict['index_memberships'] or '[]')
             row_dict["sectors"] = sector_map.get(row["ticker"], [])
             if sector_id:
                 if any(s["id"] == sector_id for s in row_dict["sectors"]):
@@ -945,36 +976,40 @@ def list_tickers(
 
 @router.post("/tickers", status_code=201)
 def create_ticker(body: TickerIn, dataset: Optional[str] = None) -> dict:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO ticker_master (ticker, company_name, is_fno, index_memberships, exchange)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     body.ticker.upper(),
                     body.company_name,
                     body.is_fno,
-                    body.index_memberships,
+                    json.dumps(body.index_memberships),
                     body.exchange,
                 ),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             if body.is_fno:
                 try:
                     cur.execute(
                         """
                         INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
-                        VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
-                        ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                        VALUES (?, ?, 'STOCK', 1, date('now'), datetime('now'))
+                        ON CONFLICT (symbol) DO UPDATE SET is_active = 1, underlying_name = excluded.underlying_name
                         """,
                         (body.ticker.upper(), body.company_name),
                     )
                 except Exception:
                     pass
             conn.commit()
+            cur.execute("SELECT * FROM ticker_master WHERE rowid = ?", (new_rowid,))
+            row = dict(cur.fetchone())
+            if 'index_memberships' in row and isinstance(row.get('index_memberships'), str):
+                row['index_memberships'] = json.loads(row['index_memberships'] or '[]')
             return {**row, "sectors": []}
         except Exception as exc:
             conn.rollback()
@@ -987,50 +1022,56 @@ def create_ticker(body: TickerIn, dataset: Optional[str] = None) -> dict:
 def update_ticker(ticker: str, body: TickerUpdate, dataset: Optional[str] = None) -> dict:
     updates, params = [], []
     if body.company_name is not None:
-        updates.append("company_name = %s"); params.append(body.company_name)
+        updates.append("company_name = ?"); params.append(body.company_name)
     if body.is_fno is not None:
-        updates.append("is_fno = %s"); params.append(body.is_fno)
+        updates.append("is_fno = ?"); params.append(body.is_fno)
     if body.index_memberships is not None:
-        updates.append("index_memberships = %s"); params.append(body.index_memberships)
+        updates.append("index_memberships = ?"); params.append(json.dumps(body.index_memberships))
     if body.exchange is not None:
-        updates.append("exchange = %s"); params.append(body.exchange)
+        updates.append("exchange = ?"); params.append(body.exchange)
     if not updates:
         raise HTTPException(400, "No fields to update.")
-    updates.append("updated_at = now()")
+    updates.append("updated_at = datetime('now')")
     params.append(ticker.upper())
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
-            f"UPDATE ticker_master SET {', '.join(updates)} WHERE ticker = %s RETURNING *",
-            params,
+            f"UPDATE ticker_master SET {', '.join(updates)} WHERE ticker = ?",
+            list(params),
         )
+        conn.commit()
+        cur.execute("SELECT * FROM ticker_master WHERE ticker = ?", (ticker.upper(),))
         row = cur.fetchone()
         if not row:
             raise _not_found("Ticker", ticker)
-        if row.get("is_fno"):
+        row_dict = dict(row)
+        if 'index_memberships' in row_dict and isinstance(row_dict.get('index_memberships'), str):
+            row_dict['index_memberships'] = json.loads(row_dict['index_memberships'] or '[]')
+        if row_dict.get("is_fno"):
             try:
                 cur.execute(
                     """
                     INSERT INTO fno_stock_master (symbol, underlying_name, instrument_type, is_active, entry_date, created_at)
-                    VALUES (%s, %s, 'STOCK', true, CURRENT_DATE::text, NOW()::text)
-                    ON CONFLICT (symbol) DO UPDATE SET is_active = true, underlying_name = EXCLUDED.underlying_name
+                    VALUES (?, ?, 'STOCK', 1, date('now'), datetime('now'))
+                    ON CONFLICT (symbol) DO UPDATE SET is_active = 1, underlying_name = excluded.underlying_name
                     """,
-                    (row["ticker"], row["company_name"]),
+                    (row_dict["ticker"], row_dict["company_name"]),
                 )
+                conn.commit()
             except Exception:
                 pass
-        conn.commit()
-        return row
+        return row_dict
 
 
 @router.delete("/tickers/{ticker}", status_code=204)
 def delete_ticker(ticker: str, dataset: Optional[str] = None) -> None:
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM ticker_master WHERE ticker=%s RETURNING ticker",
-            (ticker.upper(),),
-        )
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        t = ticker.upper()
+        cur.execute("SELECT ticker FROM ticker_master WHERE ticker=?", (t,))
         if not cur.fetchone():
             raise _not_found("Ticker", ticker)
+        cur.execute("DELETE FROM ticker_master WHERE ticker=?", (t,))
         conn.commit()
 
 
@@ -1039,14 +1080,20 @@ def delete_tickers_batch(body: BatchDeleteTickers, dataset: Optional[str] = None
     if not body.tickers:
         return {"deleted_count": 0}
     clean_tickers = [t.upper() for t in body.tickers]
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    placeholders = ",".join("?" for _ in clean_tickers)
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
-            "DELETE FROM ticker_master WHERE ticker = ANY(%s) RETURNING ticker",
-            (clean_tickers,),
+            f"SELECT ticker FROM ticker_master WHERE ticker IN ({placeholders})",
+            clean_tickers,
         )
-        deleted = cur.fetchall()
+        existing = [r["ticker"] for r in cur.fetchall()]
+        cur.execute(
+            f"DELETE FROM ticker_master WHERE ticker IN ({placeholders})",
+            clean_tickers,
+        )
         conn.commit()
-        return {"deleted_count": len(deleted), "deleted_tickers": [r["ticker"] for r in deleted]}
+        return {"deleted_count": len(existing), "deleted_tickers": existing}
 
 
 
@@ -1054,16 +1101,17 @@ def delete_tickers_batch(body: BatchDeleteTickers, dataset: Optional[str] = None
 def assign_ticker_sectors(ticker: str, body: SectorAssign, dataset: Optional[str] = None) -> dict:
     """Replace the sector assignments for a ticker."""
     t = ticker.upper()
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         # Verify ticker exists
-        cur.execute("SELECT ticker FROM ticker_master WHERE ticker=%s", (t,))
+        cur.execute("SELECT ticker FROM ticker_master WHERE ticker=?", (t,))
         if not cur.fetchone():
             raise _not_found("Ticker", t)
         # Replace all sector links
-        cur.execute("DELETE FROM ticker_sector WHERE ticker=%s", (t,))
+        cur.execute("DELETE FROM ticker_sector WHERE ticker=?", (t,))
         if body.sector_ids:
             cur.executemany(
-                "INSERT INTO ticker_sector (ticker, sector_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT OR IGNORE INTO ticker_sector (ticker, sector_id) VALUES (?, ?)",
                 [(t, sid) for sid in body.sector_ids],
             )
         conn.commit()
@@ -1076,26 +1124,40 @@ def assign_ticker_sectors(ticker: str, body: SectorAssign, dataset: Optional[str
 
 @router.get("/watchlists")
 def list_watchlists() -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT
                 w.id,
                 w.name,
                 w.description,
-                w.created_at,
-                COALESCE(
-                    json_agg(wi.ticker ORDER BY wi.ticker)
-                    FILTER (WHERE wi.ticker IS NOT NULL),
-                    '[]'
-                ) AS tickers
+                w.created_at
             FROM watchlist w
-            LEFT JOIN watchlist_items wi ON wi.watchlist_id = w.id
-            GROUP BY w.id, w.name, w.description, w.created_at
             ORDER BY w.name
             """
         )
-        return cur.fetchall()
+        watchlist_rows = cur.fetchall()
+        cur.execute(
+            """
+            SELECT wi.watchlist_id, wi.ticker
+            FROM watchlist_items wi
+            ORDER BY wi.ticker
+            """
+        )
+        items = cur.fetchall()
+        tickers_map: dict[int, list[str]] = {}
+        for item in items:
+            wid = item["watchlist_id"]
+            if wid not in tickers_map:
+                tickers_map[wid] = []
+            tickers_map[wid].append(item["ticker"])
+        result = []
+        for row in watchlist_rows:
+            r = dict(row)
+            r["tickers"] = tickers_map.get(r["id"], [])
+            result.append(r)
+        return result
 
 
 @router.post("/watchlists", status_code=201)
@@ -1103,14 +1165,17 @@ def create_watchlist(body: WatchlistIn) -> dict:
     name = body.name.strip() if body.name else ""
     if not name:
         raise HTTPException(400, "Watchlist name cannot be empty or blank.")
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO watchlist (name, description) VALUES (%s, %s) RETURNING *",
+                "INSERT INTO watchlist (name, description) VALUES (?, ?)",
                 (name, body.description),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             conn.commit()
+            cur.execute("SELECT * FROM watchlist WHERE rowid = ?", (new_rowid,))
+            row = dict(cur.fetchone())
             return {**row, "tickers": []}
         except Exception as exc:
             conn.rollback()
@@ -1124,17 +1189,19 @@ def update_watchlist(watchlist_id: int, body: WatchlistIn) -> dict:
     name = body.name.strip() if body.name else ""
     if not name:
         raise HTTPException(400, "Watchlist name cannot be empty or blank.")
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
-                "UPDATE watchlist SET name=%s, description=%s WHERE id=%s RETURNING *",
+                "UPDATE watchlist SET name=?, description=? WHERE id=?",
                 (name, body.description, watchlist_id),
             )
+            conn.commit()
+            cur.execute("SELECT * FROM watchlist WHERE id = ?", (watchlist_id,))
             row = cur.fetchone()
             if not row:
                 raise _not_found("Watchlist", watchlist_id)
-            conn.commit()
-            return row
+            return dict(row)
         except HTTPException:
             raise
         except Exception as exc:
@@ -1147,12 +1214,12 @@ def update_watchlist(watchlist_id: int, body: WatchlistIn) -> dict:
 @router.delete("/watchlists/{watchlist_id}", status_code=204)
 def delete_watchlist(watchlist_id: int) -> None:
     """Hard-deletes watchlist and cascades deletions to all references (watchlist_items & user foreign keys)."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM watchlist WHERE id=%s RETURNING id", (watchlist_id,)
-        )
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM watchlist WHERE id=?", (watchlist_id,))
         if not cur.fetchone():
             raise _not_found("Watchlist", watchlist_id)
+        cur.execute("DELETE FROM watchlist WHERE id=?", (watchlist_id,))
         conn.commit()
 
 
@@ -1160,14 +1227,20 @@ def delete_watchlist(watchlist_id: int) -> None:
 def delete_watchlists_batch(body: BatchDeleteWatchlists) -> dict:
     if not body.ids:
         return {"deleted_count": 0}
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    placeholders = ",".join("?" for _ in body.ids)
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
-            "DELETE FROM watchlist WHERE id = ANY(%s) RETURNING id",
-            (body.ids,),
+            f"SELECT id FROM watchlist WHERE id IN ({placeholders})",
+            list(body.ids),
         )
-        deleted = cur.fetchall()
+        existing = [r["id"] for r in cur.fetchall()]
+        cur.execute(
+            f"DELETE FROM watchlist WHERE id IN ({placeholders})",
+            list(body.ids),
+        )
         conn.commit()
-        return {"deleted_count": len(deleted), "deleted_ids": [r["id"] for r in deleted]}
+        return {"deleted_count": len(existing), "deleted_ids": existing}
 
 
 
@@ -1176,7 +1249,8 @@ def delete_watchlists_batch(body: BatchDeleteWatchlists) -> dict:
 def download_watchlists_csv():
     from fastapi.responses import StreamingResponse
     import csv, io
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute("""
             SELECT w.name, w.description, wi.ticker
             FROM watchlist w
@@ -1247,22 +1321,31 @@ def upload_watchlists_csv(file: UploadFile = File(...)):
         if rec["ticker"]:
              watchlists_data[name]["tickers"].add(rec["ticker"])
 
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT ticker FROM ticker_master")
         known_tickers = {r["ticker"] for r in cur.fetchall()}
         
         for w_name, w_data in watchlists_data.items():
-            cur.execute(
-                "INSERT INTO watchlist (name, description) VALUES (%s, %s) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING id",
-                (w_name, w_data["description"])
-            )
-            w_id = cur.fetchone()["id"]
+            cur.execute("SELECT id FROM watchlist WHERE name = ?", (w_name,))
+            existing_w = cur.fetchone()
+            if existing_w:
+                w_id = existing_w["id"]
+                cur.execute("UPDATE watchlist SET description = ? WHERE id = ?", (w_data["description"], w_id))
+            else:
+                cur.execute(
+                    "INSERT INTO watchlist (name, description) VALUES (?, ?)",
+                    (w_name, w_data["description"])
+                )
+                conn.commit()
+                cur.execute("SELECT id FROM watchlist WHERE rowid = ?", (cur.lastrowid,))
+                w_id = cur.fetchone()["id"]
             
             valid_tickers = [t for t in w_data["tickers"] if t in known_tickers]
             if valid_tickers:
-                 cur.execute("DELETE FROM watchlist_items WHERE watchlist_id = %s", (w_id,))
+                 cur.execute("DELETE FROM watchlist_items WHERE watchlist_id = ?", (w_id,))
                  cur.executemany(
-                     "INSERT INTO watchlist_items (watchlist_id, ticker) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                     "INSERT OR IGNORE INTO watchlist_items (watchlist_id, ticker) VALUES (?, ?)",
                      [(w_id, t) for t in valid_tickers]
                  )
         conn.commit()
@@ -1273,8 +1356,9 @@ def upload_watchlists_csv(file: UploadFile = File(...)):
 @router.post("/watchlists/{watchlist_id}/tickers")
 def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
     """Replace ticker assignments for a watchlist. Silently skips tickers not in ticker_master."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id FROM watchlist WHERE id=%s", (watchlist_id,))
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM watchlist WHERE id=?", (watchlist_id,))
         if not cur.fetchone():
             raise _not_found("Watchlist", watchlist_id)
 
@@ -1284,18 +1368,19 @@ def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
         valid_tickers: list[str] = []
         skipped_tickers: list[str] = []
         if tickers_upper:
+            placeholders = ",".join("?" for _ in tickers_upper)
             cur.execute(
-                "SELECT ticker FROM ticker_master WHERE ticker = ANY(%s)",
-                (tickers_upper,)
+                f"SELECT ticker FROM ticker_master WHERE ticker IN ({placeholders})",
+                tickers_upper
             )
             known = {r["ticker"] for r in cur.fetchall()}
             valid_tickers = [t for t in tickers_upper if t in known]
             skipped_tickers = [t for t in tickers_upper if t not in known]
 
-        cur.execute("DELETE FROM watchlist_items WHERE watchlist_id=%s", (watchlist_id,))
+        cur.execute("DELETE FROM watchlist_items WHERE watchlist_id=?", (watchlist_id,))
         if valid_tickers:
             cur.executemany(
-                "INSERT INTO watchlist_items (watchlist_id, ticker) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT OR IGNORE INTO watchlist_items (watchlist_id, ticker) VALUES (?, ?)",
                 [(watchlist_id, t) for t in valid_tickers],
             )
         conn.commit()
@@ -1314,7 +1399,8 @@ def set_watchlist_tickers(watchlist_id: int, body: TickerAssign) -> dict:
 
 @router.get("/users")
 def list_users() -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT
@@ -1326,24 +1412,25 @@ def list_users() -> list[dict]:
             ORDER BY u.email
             """
         )
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 @router.post("/users", status_code=201)
 def create_user(body: UserIn) -> dict:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO users (email, first_name, last_name, watchlist_id, is_subscribed)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (body.email.lower(), body.first_name, body.last_name, body.watchlist_id, body.is_subscribed),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             conn.commit()
-            return row
+            cur.execute("SELECT * FROM users WHERE rowid = ?", (new_rowid,))
+            return dict(cur.fetchone())
         except Exception as exc:
             conn.rollback()
             if "unique" in str(exc).lower():
@@ -1355,36 +1442,39 @@ def create_user(body: UserIn) -> dict:
 def update_user(email: str, body: UserUpdate) -> dict:
     updates, params = [], []
     if body.first_name is not None:
-        updates.append("first_name = %s"); params.append(body.first_name)
+        updates.append("first_name = ?"); params.append(body.first_name)
     if body.last_name is not None:
-        updates.append("last_name = %s"); params.append(body.last_name)
+        updates.append("last_name = ?"); params.append(body.last_name)
     if body.watchlist_id is not None:
-        updates.append("watchlist_id = %s"); params.append(body.watchlist_id)
+        updates.append("watchlist_id = ?"); params.append(body.watchlist_id)
     if body.is_subscribed is not None:
-        updates.append("is_subscribed = %s"); params.append(body.is_subscribed)
+        updates.append("is_subscribed = ?"); params.append(body.is_subscribed)
     if not updates:
         raise HTTPException(400, "No fields to update.")
     params.append(email.lower())
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
-            f"UPDATE users SET {', '.join(updates)} WHERE email = %s RETURNING *",
-            params,
+            f"UPDATE users SET {', '.join(updates)} WHERE email = ?",
+            list(params),
         )
+        conn.commit()
+        cur.execute("SELECT * FROM users WHERE email = ?", (email.lower(),))
         row = cur.fetchone()
         if not row:
             raise _not_found("User", email)
-        conn.commit()
-        return row
+        return dict(row)
 
 
 @router.delete("/users/{email}", status_code=204)
 def delete_user(email: str) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM users WHERE email=%s RETURNING email", (email.lower(),)
-        )
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        e = email.lower()
+        cur.execute("SELECT email FROM users WHERE email=?", (e,))
         if not cur.fetchone():
             raise _not_found("User", email)
+        cur.execute("DELETE FROM users WHERE email=?", (e,))
         conn.commit()
 
 
@@ -1393,48 +1483,56 @@ def delete_users_batch(body: BatchDeleteUsers) -> dict:
     if not body.emails:
         return {"deleted_count": 0}
     clean_emails = [e.lower() for e in body.emails]
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    placeholders = ",".join("?" for _ in clean_emails)
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
-            "DELETE FROM users WHERE email = ANY(%s) RETURNING email",
-            (clean_emails,),
+            f"SELECT email FROM users WHERE email IN ({placeholders})",
+            clean_emails,
         )
-        deleted = cur.fetchall()
+        existing = [r["email"] for r in cur.fetchall()]
+        cur.execute(
+            f"DELETE FROM users WHERE email IN ({placeholders})",
+            clean_emails,
+        )
         conn.commit()
-        return {"deleted_count": len(deleted), "deleted_emails": [r["email"] for r in deleted]}
+        return {"deleted_count": len(existing), "deleted_emails": existing}
 
 
 
 # ─── Alternative Names (Ticker Aliases) ───────────────────────────────────────
 @router.get("/alternative-names")
 def list_alternative_names(search: Optional[str] = None) -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         query = "SELECT * FROM alternative_names"
         params = []
         if search:
-            query += " WHERE data_ticker ILIKE %s OR current_ticker ILIKE %s OR company_name ILIKE %s OR notes ILIKE %s"
+            query += " WHERE data_ticker LIKE ? OR current_ticker LIKE ? OR company_name LIKE ? OR notes LIKE ?"
             term = f"%{search}%"
             params = [term, term, term, term]
         query += " ORDER BY id DESC"
         cur.execute(query, params)
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 @router.post("/alternative-names", status_code=201)
 def create_alternative_name(body: AlternativeNameIn) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO alternative_names (data_ticker, current_ticker, company_name, notes, last_updated)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (body.data_ticker.strip().upper(), body.current_ticker.strip().upper(), body.company_name, body.notes, now),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             conn.commit()
-            return row
+            cur.execute("SELECT * FROM alternative_names WHERE rowid = ?", (new_rowid,))
+            return dict(cur.fetchone())
         except Exception as exc:
             conn.rollback()
             if "unique" in str(exc).lower():
@@ -1447,29 +1545,31 @@ def update_alternative_name(id: int, body: AlternativeNameUpdate) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     updates, params = [], []
     if body.data_ticker is not None:
-        updates.append("data_ticker = %s"); params.append(body.data_ticker.strip().upper())
+        updates.append("data_ticker = ?"); params.append(body.data_ticker.strip().upper())
     if body.current_ticker is not None:
-        updates.append("current_ticker = %s"); params.append(body.current_ticker.strip().upper())
+        updates.append("current_ticker = ?"); params.append(body.current_ticker.strip().upper())
     if body.company_name is not None:
-        updates.append("company_name = %s"); params.append(body.company_name)
+        updates.append("company_name = ?"); params.append(body.company_name)
     if body.notes is not None:
-        updates.append("notes = %s"); params.append(body.notes)
-    updates.append("last_updated = %s"); params.append(now)
+        updates.append("notes = ?"); params.append(body.notes)
+    updates.append("last_updated = ?"); params.append(now)
 
     if len(updates) == 1:
         raise HTTPException(400, "No fields to update.")
     params.append(id)
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
-                f"UPDATE alternative_names SET {', '.join(updates)} WHERE id = %s RETURNING *",
-                params,
+                f"UPDATE alternative_names SET {', '.join(updates)} WHERE id = ?",
+                list(params),
             )
+            conn.commit()
+            cur.execute("SELECT * FROM alternative_names WHERE id = ?", (id,))
             row = cur.fetchone()
             if not row:
                 raise _not_found("Alternative Name Mapping", id)
-            conn.commit()
-            return row
+            return dict(row)
         except HTTPException:
             raise
         except Exception as exc:
@@ -1481,32 +1581,36 @@ def update_alternative_name(id: int, body: AlternativeNameUpdate) -> dict:
 
 @router.delete("/alternative-names/{id}", status_code=204)
 def delete_alternative_name(id: int) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM alternative_names WHERE id = %s RETURNING id", (id,))
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM alternative_names WHERE id = ?", (id,))
         if not cur.fetchone():
             raise _not_found("Alternative Name Mapping", id)
+        cur.execute("DELETE FROM alternative_names WHERE id = ?", (id,))
         conn.commit()
 
 
 # ─── Excluded Tickers (Logical Exclusion Layer) ──────────────────────────────
 @router.get("/excluded-tickers")
 def list_excluded_tickers(search: Optional[str] = None) -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         query = "SELECT * FROM excluded_tickers"
         params = []
         if search:
-            query += " WHERE ticker ILIKE %s OR reason ILIKE %s OR added_by ILIKE %s OR status ILIKE %s OR last_error ILIKE %s"
+            query += " WHERE ticker LIKE ? OR reason LIKE ? OR added_by LIKE ? OR status LIKE ? OR last_error LIKE ?"
             term = f"%{search}%"
             params = [term, term, term, term, term]
         query += " ORDER BY id DESC"
         cur.execute(query, params)
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 @router.get("/excluded-tickers/active-list")
 def list_active_excluded_tickers() -> list[str]:
     """Returns simple list of active excluded ticker symbols for pipelines & background downloaders."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT ticker FROM excluded_tickers WHERE UPPER(status) = 'EXCLUDED' OR status IS NULL")
         return [row["ticker"].upper() for row in cur.fetchall()]
 
@@ -1514,13 +1618,13 @@ def list_active_excluded_tickers() -> list[str]:
 @router.post("/excluded-tickers", status_code=201)
 def create_excluded_ticker(body: ExcludedTickerIn) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO excluded_tickers (ticker, reason, added_by, status, last_error, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     body.ticker.strip().upper(),
@@ -1531,9 +1635,10 @@ def create_excluded_ticker(body: ExcludedTickerIn) -> dict:
                     now,
                 ),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             conn.commit()
-            return row
+            cur.execute("SELECT * FROM excluded_tickers WHERE rowid = ?", (new_rowid,))
+            return dict(cur.fetchone())
         except Exception as exc:
             conn.rollback()
             if "unique" in str(exc).lower():
@@ -1545,33 +1650,37 @@ def create_excluded_ticker(body: ExcludedTickerIn) -> dict:
 def update_excluded_ticker(id: int, body: ExcludedTickerUpdate) -> dict:
     updates, params = [], []
     if body.reason is not None:
-        updates.append("reason = %s"); params.append(body.reason)
+        updates.append("reason = ?"); params.append(body.reason)
     if body.status is not None:
-        updates.append("status = %s"); params.append(body.status)
+        updates.append("status = ?"); params.append(body.status)
     if body.last_error is not None:
-        updates.append("last_error = %s"); params.append(body.last_error)
+        updates.append("last_error = ?"); params.append(body.last_error)
 
     if not updates:
         raise HTTPException(400, "No fields to update.")
     params.append(id)
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute(
-            f"UPDATE excluded_tickers SET {', '.join(updates)} WHERE id = %s RETURNING *",
-            params,
+            f"UPDATE excluded_tickers SET {', '.join(updates)} WHERE id = ?",
+            list(params),
         )
+        conn.commit()
+        cur.execute("SELECT * FROM excluded_tickers WHERE id = ?", (id,))
         row = cur.fetchone()
         if not row:
             raise _not_found("Excluded Ticker", id)
-        conn.commit()
-        return row
+        return dict(row)
 
 
 @router.delete("/excluded-tickers/{id}", status_code=204)
 def delete_excluded_ticker(id: int) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM excluded_tickers WHERE id = %s RETURNING id", (id,))
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM excluded_tickers WHERE id = ?", (id,))
         if not cur.fetchone():
             raise _not_found("Excluded Ticker", id)
+        cur.execute("DELETE FROM excluded_tickers WHERE id = ?", (id,))
         conn.commit()
 
 
@@ -1583,9 +1692,10 @@ from engine.utils.email_sender import send_email_with_attachment
 @router.post("/users/{email}/newsletter-send")
 def send_user_newsletter(email: str):
     """Generates PDF reports for a user's watchlist and emails them if they are subscribed."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         # Check user details & subscription status
-        cur.execute("SELECT first_name, watchlist_id, is_subscribed FROM users WHERE email = %s", (email.lower(),))
+        cur.execute("SELECT first_name, watchlist_id, is_subscribed FROM users WHERE email = ?", (email.lower(),))
         user_row = cur.fetchone()
         if not user_row:
             raise _not_found("User", email)
@@ -1599,14 +1709,15 @@ def send_user_newsletter(email: str):
             raise HTTPException(400, f"User '{email}' does not have an assigned watchlist.")
             
         # Get watchlist tickers
-        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = %s", (watchlist_id,))
+        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = ?", (watchlist_id,))
         tickers = [row["ticker"] for row in cur.fetchall()]
         
     if not tickers:
         raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
         
     # Generate batched newsletter PDFs
-    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    user_row_dict = dict(user_row)
+    user_name = f"{first_name} {user_row_dict.get('last_name', '')}".strip()
     pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
             
     if not pdf_paths:
@@ -1651,24 +1762,26 @@ def send_user_newsletter(email: str):
 @router.get("/users/{email}/newsletter-download")
 def download_user_newsletter(email: str):
     """Generates PDF newsletter for a user's watchlist and returns it as a download."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT first_name, last_name, watchlist_id FROM users WHERE email = %s", (email.lower(),))
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT first_name, last_name, watchlist_id FROM users WHERE email = ?", (email.lower(),))
         user_row = cur.fetchone()
         if not user_row:
             raise _not_found("User", email)
             
-        first_name, watchlist_id = user_row["first_name"], user_row["watchlist_id"]
+        user_row_dict = dict(user_row)
+        first_name, watchlist_id = user_row_dict["first_name"], user_row_dict["watchlist_id"]
         
         if not watchlist_id:
             raise HTTPException(400, f"User '{email}' does not have an assigned watchlist.")
             
-        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = %s", (watchlist_id,))
+        cur.execute("SELECT ticker FROM watchlist_items WHERE watchlist_id = ?", (watchlist_id,))
         tickers = [row["ticker"] for row in cur.fetchall()]
         
     if not tickers:
         raise HTTPException(400, f"Watchlist is empty. Add tickers to watchlist first.")
         
-    user_name = f"{first_name} {user_row.get('last_name', '')}".strip()
+    user_name = f"{first_name} {user_row_dict.get('last_name', '')}".strip()
     pdf_paths = generate_newsletter_pdfs(email, tickers, user_name=user_name)
     
     if not pdf_paths:
@@ -1695,55 +1808,61 @@ class ReferencePageUpdate(BaseModel):
 
 @router.get("/reference-pages")
 def get_reference_pages(dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, title, url, category, description, created_at::text FROM reference_pages ORDER BY id DESC")
-        return cur.fetchall()
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, title, url, category, description, created_at FROM reference_pages ORDER BY id DESC")
+        return [dict(r) for r in cur.fetchall()]
 
 @router.post("/reference-pages", status_code=201)
 def create_reference_page(data: ReferencePageCreate, dataset: Optional[str] = None):
     if not data.title.strip() or not data.url.strip():
         raise HTTPException(400, "Title and URL are required.")
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute(
-            "INSERT INTO reference_pages (title, url, category, description) VALUES (%s, %s, %s, %s) RETURNING id, title, url, category, description, created_at::text",
+            "INSERT INTO reference_pages (title, url, category, description) VALUES (?, ?, ?, ?)",
             (data.title.strip(), data.url.strip(), data.category.strip() if data.category else "General", data.description)
         )
+        new_rowid = cur.lastrowid
         conn.commit()
-        return cur.fetchone()
+        cur.execute("SELECT id, title, url, category, description, created_at FROM reference_pages WHERE rowid = ?", (new_rowid,))
+        return dict(cur.fetchone())
 
 @router.put("/reference-pages/{ref_id}")
 def update_reference_page(ref_id: int, data: ReferencePageUpdate, dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("SELECT id FROM reference_pages WHERE id = %s", (ref_id,))
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM reference_pages WHERE id = ?", (ref_id,))
         if not cur.fetchone():
             raise _not_found("Reference Page", ref_id)
         
         updates = []
         params = []
         if data.title is not None:
-            updates.append("title = %s"); params.append(data.title.strip())
+            updates.append("title = ?"); params.append(data.title.strip())
         if data.url is not None:
-            updates.append("url = %s"); params.append(data.url.strip())
+            updates.append("url = ?"); params.append(data.url.strip())
         if data.category is not None:
-            updates.append("category = %s"); params.append(data.category.strip())
+            updates.append("category = ?"); params.append(data.category.strip())
         if data.description is not None:
-            updates.append("description = %s"); params.append(data.description)
+            updates.append("description = ?"); params.append(data.description)
         
         if updates:
             params.append(ref_id)
-            cur.execute(f"UPDATE reference_pages SET {', '.join(updates)} WHERE id = %s", params)
+            cur.execute(f"UPDATE reference_pages SET {', '.join(updates)} WHERE id = ?", list(params))
             conn.commit()
         
-        cur.execute("SELECT id, title, url, category, description, created_at::text FROM reference_pages WHERE id = %s", (ref_id,))
-        return cur.fetchone()
+        cur.execute("SELECT id, title, url, category, description, created_at FROM reference_pages WHERE id = ?", (ref_id,))
+        return dict(cur.fetchone())
 
 @router.delete("/reference-pages/{ref_id}")
 def delete_reference_page(ref_id: int, dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("SELECT id FROM reference_pages WHERE id = %s", (ref_id,))
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM reference_pages WHERE id = ?", (ref_id,))
         if not cur.fetchone():
             raise _not_found("Reference Page", ref_id)
-        cur.execute("DELETE FROM reference_pages WHERE id = %s", (ref_id,))
+        cur.execute("DELETE FROM reference_pages WHERE id = ?", (ref_id,))
         conn.commit()
         return {"status": "deleted", "id": ref_id}
 
@@ -1752,10 +1871,11 @@ def delete_reference_page(ref_id: int, dataset: Optional[str] = None):
 
 def _ensure_screener_ticker_mappings_table():
     """Auto-create screener_ticker_mappings table if it doesn't exist."""
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS screener_ticker_mappings (
-                id                  SERIAL PRIMARY KEY,
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                 yfinance_ticker     TEXT UNIQUE NOT NULL,
                 screener_ticker     TEXT NOT NULL,
                 screener_company_id INTEGER DEFAULT NULL,
@@ -1766,7 +1886,7 @@ def _ensure_screener_ticker_mappings_table():
         """)
         # Add screener_company_id column if upgrading from old schema
         try:
-            cur.execute("ALTER TABLE screener_ticker_mappings ADD COLUMN IF NOT EXISTS screener_company_id INTEGER DEFAULT NULL")
+            cur.execute("ALTER TABLE screener_ticker_mappings ADD COLUMN screener_company_id INTEGER DEFAULT NULL")
         except Exception:
             pass
         conn.commit()
@@ -1780,29 +1900,30 @@ except Exception:
 @router.get("/screener-ticker-mappings")
 def list_screener_ticker_mappings(search: Optional[str] = None) -> list[dict]:
     _ensure_screener_ticker_mappings_table()
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         query = "SELECT * FROM screener_ticker_mappings"
         params = []
         if search:
-            query += " WHERE yfinance_ticker ILIKE %s OR screener_ticker ILIKE %s OR company_name ILIKE %s OR notes ILIKE %s"
+            query += " WHERE yfinance_ticker LIKE ? OR screener_ticker LIKE ? OR company_name LIKE ? OR notes LIKE ?"
             term = f"%{search}%"
             params = [term, term, term, term]
         query += " ORDER BY id DESC"
         cur.execute(query, params)
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 @router.post("/screener-ticker-mappings", status_code=201)
 def create_screener_ticker_mapping(body: ScreenerTickerMappingIn) -> dict:
     _ensure_screener_ticker_mappings_table()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
                 """
                 INSERT INTO screener_ticker_mappings (yfinance_ticker, screener_ticker, screener_company_id, company_name, notes, last_updated)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING *
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     body.yfinance_ticker.strip().upper(),
@@ -1813,9 +1934,10 @@ def create_screener_ticker_mapping(body: ScreenerTickerMappingIn) -> dict:
                     now,
                 ),
             )
-            row = cur.fetchone()
+            new_rowid = cur.lastrowid
             conn.commit()
-            return row
+            cur.execute("SELECT * FROM screener_ticker_mappings WHERE rowid = ?", (new_rowid,))
+            return dict(cur.fetchone())
         except Exception as exc:
             conn.rollback()
             if "unique" in str(exc).lower():
@@ -1828,31 +1950,33 @@ def update_screener_ticker_mapping(mapping_id: int, body: ScreenerTickerMappingU
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     updates, params = [], []
     if body.yfinance_ticker is not None:
-        updates.append("yfinance_ticker = %s"); params.append(body.yfinance_ticker.strip().upper())
+        updates.append("yfinance_ticker = ?"); params.append(body.yfinance_ticker.strip().upper())
     if body.screener_ticker is not None:
-        updates.append("screener_ticker = %s"); params.append(body.screener_ticker.strip().upper())
+        updates.append("screener_ticker = ?"); params.append(body.screener_ticker.strip().upper())
     if body.screener_company_id is not None:
-        updates.append("screener_company_id = %s"); params.append(body.screener_company_id)
+        updates.append("screener_company_id = ?"); params.append(body.screener_company_id)
     if body.company_name is not None:
-        updates.append("company_name = %s"); params.append(body.company_name)
+        updates.append("company_name = ?"); params.append(body.company_name)
     if body.notes is not None:
-        updates.append("notes = %s"); params.append(body.notes)
-    updates.append("last_updated = %s"); params.append(now)
+        updates.append("notes = ?"); params.append(body.notes)
+    updates.append("last_updated = ?"); params.append(now)
 
     if len(updates) == 1:
         raise HTTPException(400, "No fields to update.")
     params.append(mapping_id)
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         try:
             cur.execute(
-                f"UPDATE screener_ticker_mappings SET {', '.join(updates)} WHERE id = %s RETURNING *",
-                params,
+                f"UPDATE screener_ticker_mappings SET {', '.join(updates)} WHERE id = ?",
+                list(params),
             )
+            conn.commit()
+            cur.execute("SELECT * FROM screener_ticker_mappings WHERE id = ?", (mapping_id,))
             row = cur.fetchone()
             if not row:
                 raise _not_found("Screener Ticker Mapping", mapping_id)
-            conn.commit()
-            return row
+            return dict(row)
         except HTTPException:
             raise
         except Exception as exc:
@@ -1864,18 +1988,21 @@ def update_screener_ticker_mapping(mapping_id: int, body: ScreenerTickerMappingU
 
 @router.delete("/screener-ticker-mappings/{mapping_id}", status_code=204)
 def delete_screener_ticker_mapping(mapping_id: int) -> None:
-    with rawdata_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM screener_ticker_mappings WHERE id = %s RETURNING id", (mapping_id,))
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM screener_ticker_mappings WHERE id = ?", (mapping_id,))
         if not cur.fetchone():
             raise _not_found("Screener Ticker Mapping", mapping_id)
+        cur.execute("DELETE FROM screener_ticker_mappings WHERE id = ?", (mapping_id,))
         conn.commit()
 
 
 @router.get("/recommendations")
 def list_master_recommendations() -> list[dict]:
-    with rawdata_conn() as conn, conn.cursor() as cur:
+    with rawdata_conn() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT * FROM broker_recommendations ORDER BY id DESC LIMIT 500")
-        return cur.fetchall()
+        return [dict(r) for r in cur.fetchall()]
 
 
 # ── System Config CRUD ──────────────────────────────────────────────────────────
@@ -1885,24 +2012,26 @@ class SystemConfigUpdate(BaseModel):
 
 @router.get("/system-config")
 def list_system_config(dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
-        cur.execute("SELECT key, value, updated_at::text FROM system_config ORDER BY key ASC")
-        return cur.fetchall()
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT key, value, updated_at FROM system_config ORDER BY key ASC")
+        return [dict(r) for r in cur.fetchall()]
 
 @router.put("/system-config/{key}")
 def update_system_config(key: str, data: SystemConfigUpdate, dataset: Optional[str] = None):
     from engine.utils.helpers import clear_system_config_cache
-    with rawdata_conn(dataset) as conn, conn.cursor() as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         cur.execute("""
             INSERT INTO system_config (key, value, updated_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-            RETURNING key, value, updated_at::text
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
         """, (key, data.value))
-        row = cur.fetchone()
         conn.commit()
+        cur.execute("SELECT key, value, updated_at FROM system_config WHERE key = ?", (key,))
+        row = cur.fetchone()
         clear_system_config_cache()
-        return row
+        return dict(row)
 
 
 
@@ -1910,27 +2039,29 @@ def update_system_config(key: str, data: SystemConfigUpdate, dataset: Optional[s
 
 @router.get("/derivative_history")
 def get_derivative_history(dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         try:
             cur.execute("""
                 SELECT id, symbol, action, lot_size, action_date, created_at
                 FROM derivative_history
                 ORDER BY action_date DESC, id DESC
             """)
-            return cur.fetchall()
+            return [dict(r) for r in cur.fetchall()]
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/derivative_history/{ticker}")
 def get_derivative_history_by_ticker(ticker: str, dataset: Optional[str] = None):
-    with rawdata_conn(dataset) as conn, conn.cursor(row_factory=dict_row) as cur:
+    with rawdata_conn(dataset) as conn:
+        cur = conn.cursor()
         try:
             cur.execute("""
                 SELECT id, symbol, action, lot_size, action_date, created_at
                 FROM derivative_history
-                WHERE symbol = %s
+                WHERE symbol = ?
                 ORDER BY action_date DESC, id DESC
             """, (ticker.upper(),))
-            return cur.fetchall()
+            return [dict(r) for r in cur.fetchall()]
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
