@@ -91,6 +91,10 @@ def format_ticker(ticker: str) -> str:
     if base_ticker in index_map:
         return index_map[base_ticker]
         
+    # If it is an index symbol not in index_map, prevent appending stock exchange suffixes
+    if is_index_symbol(base_ticker):
+        return base_ticker
+
     # Check if base ticker has a mapping override
     if base_ticker in mappings:
         mapped = mappings[base_ticker]
@@ -159,7 +163,7 @@ def get_system_config(key: str, default: str = "") -> str:
     return default
 
 def get_spot_tickers() -> list:
-    """Retrieve all spot master tickers and index tickers from database."""
+    """Retrieve all spot master stock tickers from database (strictly excluding indices)."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             all_tickers = set()
@@ -167,34 +171,26 @@ def get_spot_tickers() -> list:
                 cur.execute("SELECT ticker FROM ticker_master")
                 for row in cur.fetchall():
                     if row[0]:
-                        all_tickers.add(row[0].upper().strip())
+                        sym = row[0].upper().strip()
+                        if not is_index_symbol(sym):
+                            all_tickers.add(sym)
             except Exception:
                 conn.rollback()
-            try:
-                cur.execute("SELECT symbol FROM fno_index_master")
-                for row in cur.fetchall():
-                    if row[0]:
-                        all_tickers.add(row[0].upper().strip())
-            except Exception:
-                conn.rollback()
-            try:
-                cur.execute("SELECT symbol FROM indices_master")
-                for row in cur.fetchall():
-                    if row[0]:
-                        all_tickers.add(row[0].upper().strip())
-            except Exception:
-                conn.rollback()
-            for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX"]:
-                all_tickers.add(idx)
             return sorted(list(all_tickers))
 
 def is_index_symbol(ticker: str) -> bool:
-    """Returns True if ticker is a market index (e.g. NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, NIFTYNXT50, BANKEX, SENSEX)."""
+    """Returns True if ticker is a market or sectoral index (e.g. NIFTY, BANKNIFTY, NIFTY IT, NIFTY PHARMA, etc.)."""
     if not ticker:
         return False
     raw = ticker.upper().strip()
-    static_indices = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "BANKEX", "SENSEX", "NIFTY50", "NIFTY 50", "BANK NIFTY"}
-    if raw in static_indices or raw.startswith("^"):
+    # Any symbol with spaces, starting with caret, or starting with NIFTY is an index
+    if raw.startswith("^") or " " in raw or raw.startswith("NIFTY"):
+        return True
+    static_indices = {
+        "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", 
+        "BANKEX", "SENSEX", "NIFTY50", "NIFTY 50", "BANK NIFTY", "NIFTYFPI"
+    }
+    if raw in static_indices:
         return True
     try:
         with get_db_connection() as conn:

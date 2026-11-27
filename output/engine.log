@@ -14163,3 +14163,1254 @@ LINE 2:                     SELECT pe_ratio, pb_ratio, debt_to_equit...
 2026-11-12 13:44:02,251 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
 2026-11-12 13:44:03,097 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.85s.
 2026-11-12 13:44:03,098 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-26 16:29:53,310 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...
+2026-11-26 16:29:53,311 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-26 16:29:53,311 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-26 16:29:56,138 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1.1 (Download Technicals)...
+2026-11-26 16:34:55,139 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...
+2026-11-26 16:34:55,140 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-26 16:34:55,140 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-26 16:34:57,769 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1.1 (Download Technicals)...
+2026-11-26 16:50:02,700 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 907.56s.
+2026-11-26 16:50:02,701 [INFO] bsa_cli: === Phase 1.2: Spot Data Download (Fundamentals) ===
+2026-11-26 17:07:00,991 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1.2 (Download Fundamentals)...
+2026-11-26 17:24:23,972 [INFO] bsa_cli: [OK] Phase 1.2 (Download Fundamentals) completed in 2061.27s.
+2026-11-26 17:24:23,972 [INFO] bsa_cli: === Phase 1.3: Mutual Fund & FII Holdings Download ===
+2026-11-26 19:32:06,022 [INFO] bsa_cli: [OK] Phase 1.3 (Download MF & FII) completed in 7662.05s.
+2026-11-26 19:32:06,022 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-26 19:32:06,053 [INFO] bsa_cli: All 216 items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.
+2026-11-26 19:32:06,054 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 0.03s.
+2026-11-26 19:32:06,054 [INFO] bsa_cli: [OK] Phase 1 (Raw Data Ingestion) fully completed in 10630.91s.
+2026-11-26 19:32:06,054 [INFO] bsa_cli: === Starting Phase 2: Consolidated Scoring, Scanners & Analysis Engine (--mode analyze-all) ===
+2026-11-26 19:32:06,054 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-26 19:39:22,512 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 436.46s.
+2026-11-26 19:39:22,514 [INFO] bsa_cli: [Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...
+2026-11-26 19:39:22,698 [INFO] bsa_cli: [Sub-task 2.2/2.8] Fundamental Analysis completed in 0.18s.
+2026-11-26 19:39:22,699 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-26 19:39:22,783 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.08s.
+2026-11-26 19:39:22,783 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-26 19:45:57,600 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 394.82s.
+2026-11-26 19:45:57,602 [INFO] bsa_cli: [Sub-task 2.5/2.8] Starting Mutual Fund & FII Institutional Behavior Analysis...
+2026-11-26 19:45:58,646 [INFO] bsa_cli: [Sub-task 2.5/2.8] Mutual Fund & FII Behavior Analysis completed in 1.04s.
+2026-11-26 19:45:58,646 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-26 19:45:59,202 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.56s.
+2026-11-26 19:45:59,204 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-26 19:45:59,378 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.17s.
+2026-11-26 19:45:59,378 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-26 19:46:04,994 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 2.8 (Analyze Summaries)...
+2026-11-26 19:46:05,002 [INFO] bsa_orchestrator: Starting analysis process. Total: 2587, Completed: 0, Pending: 2587
+2026-11-26 19:49:27,764 [WARNING] bsa_orchestrator: No price data available for JAYKAY-RE1, skipping analysis.
+2026-11-26 19:49:55,996 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-11-26 19:50:50,713 [WARNING] bsa_orchestrator: No price data available for NIFTY AUTO, skipping analysis.
+2026-11-26 19:50:50,715 [WARNING] bsa_orchestrator: No price data available for NIFTY ENERGY, skipping analysis.
+2026-11-26 19:50:50,721 [WARNING] bsa_orchestrator: No price data available for NIFTY FMCG, skipping analysis.
+2026-11-26 19:50:50,734 [WARNING] bsa_orchestrator: No price data available for NIFTY INFRA, skipping analysis.
+2026-11-26 19:50:50,736 [WARNING] bsa_orchestrator: No price data available for NIFTY IT, skipping analysis.
+2026-11-26 19:50:50,740 [WARNING] bsa_orchestrator: No price data available for NIFTY METAL, skipping analysis.
+2026-11-26 19:50:50,742 [WARNING] bsa_orchestrator: No price data available for NIFTY PHARMA, skipping analysis.
+2026-11-26 19:50:50,745 [WARNING] bsa_orchestrator: No price data available for NIFTY PSU BANK, skipping analysis.
+2026-11-26 19:50:50,746 [WARNING] bsa_orchestrator: No price data available for NIFTY PVT BANK, skipping analysis.
+2026-11-26 19:50:50,749 [WARNING] bsa_orchestrator: No price data available for NIFTY REALTY, skipping analysis.
+2026-11-26 19:53:28,897 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-11-26 19:53:50,381 [INFO] bsa_orchestrator: Core Ticker Analysis completed. Total: 2587, Succeeded: 2574, Failed: 13, Time Taken: 465.38s
+2026-11-26 19:53:50,384 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 471.01s.
+2026-11-26 19:53:50,384 [INFO] bsa_cli: [OK] Phase 2 (Analyze All) fully completed in 1304.33s.
+2026-11-26 19:53:50,384 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-11-26 19:53:50,392 [INFO] bsa_cli: [OK] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to D:\StockScanners\bsa_screener\data\historical_call_bkp.csv.
+2026-11-26 19:53:50,392 [INFO] bsa_cli: [OK] Full pipeline execution completed successfully!
+2026-11-26 20:02:56,721 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-11-26 20:02:56,722 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-26 20:02:58,960 [INFO] bsa_cli: User requested resume ('r'). Resuming Phase 1.1 (Download Technicals)...
+2026-11-26 20:03:06,423 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 9.70s.
+2026-11-26 20:03:06,423 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-26 20:03:06,426 [INFO] bsa_cli: All 216 items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.
+2026-11-26 20:03:06,427 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 0.00s.
+2026-11-26 20:03:06,427 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-26 20:10:46,209 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 459.78s.
+2026-11-26 20:10:46,211 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-26 20:10:46,304 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.09s.
+2026-11-26 20:10:46,304 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-26 20:18:25,951 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 459.65s.
+2026-11-26 20:18:25,952 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-26 20:18:26,549 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.60s.
+2026-11-26 20:18:26,550 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-26 20:18:26,750 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.20s.
+2026-11-26 20:18:26,750 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-26 20:18:42,750 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 2.8 (Analyze Summaries)...
+2026-11-26 20:18:42,760 [INFO] bsa_orchestrator: Starting analysis process. Total: 2587, Completed: 0, Pending: 2587
+2026-11-26 20:22:04,060 [WARNING] bsa_orchestrator: No price data available for JAYKAY-RE1, skipping analysis.
+2026-11-26 20:22:31,995 [WARNING] bsa_orchestrator: No price data available for KSHITIJ-RE, skipping analysis.
+2026-11-26 20:23:26,172 [WARNING] bsa_orchestrator: No price data available for NIFTY AUTO, skipping analysis.
+2026-11-26 20:23:26,179 [WARNING] bsa_orchestrator: No price data available for NIFTY ENERGY, skipping analysis.
+2026-11-26 20:23:26,183 [WARNING] bsa_orchestrator: No price data available for NIFTY FMCG, skipping analysis.
+2026-11-26 20:23:26,188 [WARNING] bsa_orchestrator: No price data available for NIFTY INFRA, skipping analysis.
+2026-11-26 20:23:26,191 [WARNING] bsa_orchestrator: No price data available for NIFTY IT, skipping analysis.
+2026-11-26 20:23:26,198 [WARNING] bsa_orchestrator: No price data available for NIFTY METAL, skipping analysis.
+2026-11-26 20:23:26,198 [WARNING] bsa_orchestrator: No price data available for NIFTY PHARMA, skipping analysis.
+2026-11-26 20:23:26,207 [WARNING] bsa_orchestrator: No price data available for NIFTY PSU BANK, skipping analysis.
+2026-11-26 20:23:26,207 [WARNING] bsa_orchestrator: No price data available for NIFTY PVT BANK, skipping analysis.
+2026-11-26 20:23:26,214 [WARNING] bsa_orchestrator: No price data available for NIFTY REALTY, skipping analysis.
+2026-11-26 20:26:03,912 [WARNING] bsa_orchestrator: No price data available for VHLTD-RE1, skipping analysis.
+2026-11-26 20:26:24,590 [INFO] bsa_orchestrator: Core Ticker Analysis completed. Total: 2587, Succeeded: 2574, Failed: 13, Time Taken: 461.83s
+2026-11-26 20:26:24,593 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 477.84s.
+2026-11-26 20:26:24,593 [INFO] bsa_cli: [OK] Spot pipeline execution completed successfully in 1407.87s!
+2026-11-27 09:47:21,788 [INFO] bsa_cli: Watchlist filter active: matched 40 watchlist(s) ('Default Watchlist' [ID: 1], 'AEROSPACE' [ID: 2], 'AI-theme' [ID: 3], 'AUTO' [ID: 4], 'BANKS' [ID: 5], 'BATTERIES' [ID: 6], 'BUILDINGMATERIAL' [ID: 7], 'CABLES AND WIRES' [ID: 8], 'CDMO' [ID: 9], 'CEMENTS' [ID: 10], 'CHEMICAL' [ID: 11], 'DEFENSE' [ID: 12], 'ENERGY' [ID: 13], 'ENGINEERING' [ID: 14], 'EXCHANGEINFRA' [ID: 15], 'Favorite' [ID: 16], 'Industrial Equipments' [ID: 17], 'ITCompanies' [ID: 18], 'jain zee' [ID: 19], 'LITTLESTAR' [ID: 20], 'logistics' [ID: 21], 'MANISH' [ID: 22], 'Mukesh' [ID: 23], 'NBFC' [ID: 24], 'NewAge' [ID: 25], 'PACKAGEFOOD' [ID: 26], 'PAINTS' [ID: 27], 'PHARMA' [ID: 28], 'PORTS' [ID: 29], 'rail' [ID: 30], 'REALITY' [ID: 31], 'RETAIL_SHOPPING' [ID: 32], 'sethi zee' [ID: 33], 'SME-Stocks' [ID: 34], 'SOLAR' [ID: 35], 'STUDIOS' [ID: 36], 'TEXTILE' [ID: 37], 'Usha' [ID: 38], 'WATERMANAGEMENT' [ID: 39], 'ZeeNews' [ID: 40]).
+2026-11-27 09:47:21,789 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-11-27 09:47:21,789 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 09:47:21,821 [INFO] bsa_cli: All 375 items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.
+2026-11-27 09:47:21,822 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 0.03s.
+2026-11-27 09:47:21,822 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-27 09:47:21,841 [INFO] bsa_cli: All 133 items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.
+2026-11-27 09:47:21,841 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 0.02s.
+2026-11-27 09:47:21,841 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-27 09:50:51,362 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 209.52s.
+2026-11-27 09:50:51,363 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-27 09:50:51,573 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.21s.
+2026-11-27 09:50:51,573 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-27 09:54:20,650 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 209.08s.
+2026-11-27 09:54:20,652 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-27 09:54:21,223 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.57s.
+2026-11-27 09:54:21,224 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-27 09:54:21,950 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.73s.
+2026-11-27 09:54:21,951 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-27 09:54:22,021 [INFO] bsa_cli: All 375 tickers already analyzed and synthesized! Use --fresh to re-synthesize.
+2026-11-27 09:54:22,021 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 0.07s.
+2026-11-27 09:54:22,022 [INFO] bsa_cli: [OK] Spot pipeline execution completed successfully in 420.23s!
+2026-11-27 13:25:52,448 [INFO] bsa_cli: Watchlist filter active: matched 40 watchlist(s) ('Default Watchlist' [ID: 1], 'AEROSPACE' [ID: 2], 'AI-theme' [ID: 3], 'AUTO' [ID: 4], 'BANKS' [ID: 5], 'BATTERIES' [ID: 6], 'BUILDINGMATERIAL' [ID: 7], 'CABLES AND WIRES' [ID: 8], 'CDMO' [ID: 9], 'CEMENTS' [ID: 10], 'CHEMICAL' [ID: 11], 'DEFENSE' [ID: 12], 'ENERGY' [ID: 13], 'ENGINEERING' [ID: 14], 'EXCHANGEINFRA' [ID: 15], 'Favorite' [ID: 16], 'Industrial Equipments' [ID: 17], 'ITCompanies' [ID: 18], 'jain zee' [ID: 19], 'LITTLESTAR' [ID: 20], 'logistics' [ID: 21], 'MANISH' [ID: 22], 'Mukesh' [ID: 23], 'NBFC' [ID: 24], 'NewAge' [ID: 25], 'PACKAGEFOOD' [ID: 26], 'PAINTS' [ID: 27], 'PHARMA' [ID: 28], 'PORTS' [ID: 29], 'rail' [ID: 30], 'REALITY' [ID: 31], 'RETAIL_SHOPPING' [ID: 32], 'sethi zee' [ID: 33], 'SME-Stocks' [ID: 34], 'SOLAR' [ID: 35], 'STUDIOS' [ID: 36], 'TEXTILE' [ID: 37], 'Usha' [ID: 38], 'WATERMANAGEMENT' [ID: 39], 'ZeeNews' [ID: 40]).
+2026-11-27 13:25:52,449 [INFO] bsa_cli: Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...
+2026-11-27 13:25:52,449 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 13:25:52,468 [INFO] bsa_cli: All 375 items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.
+2026-11-27 13:25:52,468 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 0.02s.
+2026-11-27 13:25:52,468 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-27 13:25:52,472 [INFO] bsa_cli: All 133 items for Phase 1.4 (Download F&O) are already completed. Use --fresh to re-download.
+2026-11-27 13:25:52,472 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 0.00s.
+2026-11-27 13:25:52,472 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-27 13:29:25,271 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 212.80s.
+2026-11-27 13:29:25,272 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-27 13:29:25,481 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.21s.
+2026-11-27 13:29:25,482 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-27 13:32:30,471 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 184.99s.
+2026-11-27 13:32:30,472 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-27 13:32:30,983 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.51s.
+2026-11-27 13:32:30,984 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-27 13:32:31,489 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.50s.
+2026-11-27 13:32:31,489 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-27 13:32:31,540 [INFO] bsa_cli: All 375 tickers already analyzed and synthesized! Use --fresh to re-synthesize.
+2026-11-27 13:32:31,541 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 0.05s.
+2026-11-27 13:32:31,542 [INFO] bsa_cli: [OK] Spot pipeline execution completed successfully in 399.09s!
+2026-11-27 13:50:58,534 [INFO] bsa_cli: Ticker TESTTICKER not found in ticker_master. Auto-adding it globally with exchange NSE...
+2026-11-27 13:50:58,537 [INFO] bsa_cli: Successfully added TESTTICKER to ticker_master.
+2026-11-27 13:50:58,537 [INFO] bsa_cli: Ticker TESTTICKER all ready exist in ticker_master.
+2026-11-27 13:51:05,970 [INFO] bsa_cli: Exact match found for ticker: TESTTICKER. Deleting from master and all related tables...
+2026-11-27 13:51:05,971 [WARNING] bsa_cli: Could not delete from raw_ticker_option_chain_temp: no such table: raw_ticker_option_chain_temp
+2026-11-27 13:51:05,971 [INFO] bsa_cli: Deleted TESTTICKER from ticker_master
+2026-11-27 13:51:05,973 [INFO] bsa_cli: Successfully deleted TESTTICKER and all related data.
+2026-11-27 14:15:17,322 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...
+2026-11-27 14:15:17,323 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-27 14:15:17,323 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 14:19:11,577 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 234.25s.
+2026-11-27 14:19:11,577 [INFO] bsa_cli: === Phase 1.2: Spot Data Download (Fundamentals) ===
+2026-11-27 14:22:39,119 [INFO] bsa_cli: [OK] Phase 1.2 (Download Fundamentals) completed in 207.54s.
+2026-11-27 14:22:39,119 [INFO] bsa_cli: === Phase 1.3: Mutual Fund & FII Holdings Download ===
+2026-11-27 14:47:29,990 [INFO] bsa_cli: [OK] Phase 1.3 (Download MF & FII) completed in 1490.87s.
+2026-11-27 14:47:29,990 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-27 14:48:13,630 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 43.64s.
+2026-11-27 14:48:13,631 [INFO] bsa_cli: [OK] Phase 1 (Raw Data Ingestion) fully completed in 1976.31s.
+2026-11-27 14:48:13,631 [INFO] bsa_cli: === Starting Phase 2: Consolidated Scoring, Scanners & Analysis Engine (--mode analyze-all) ===
+2026-11-27 14:48:13,631 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-27 14:48:13,690 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 0.06s.
+2026-11-27 14:48:13,690 [INFO] bsa_cli: [Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...
+2026-11-27 14:48:13,735 [INFO] bsa_cli: [Sub-task 2.2/2.8] Fundamental Analysis completed in 0.04s.
+2026-11-27 14:48:13,735 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-27 14:48:13,802 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.07s.
+2026-11-27 14:48:13,803 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-27 14:48:13,844 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 0.04s.
+2026-11-27 14:48:13,845 [INFO] bsa_cli: [Sub-task 2.5/2.8] Starting Mutual Fund & FII Institutional Behavior Analysis...
+2026-11-27 14:48:14,276 [INFO] bsa_cli: [Sub-task 2.5/2.8] Mutual Fund & FII Behavior Analysis completed in 0.43s.
+2026-11-27 14:48:14,276 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-27 14:48:14,337 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.06s.
+2026-11-27 14:48:14,338 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-27 14:48:14,360 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.02s.
+2026-11-27 14:48:14,361 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-27 14:48:14,374 [INFO] bsa_orchestrator: Starting analysis process. Total: 518, Completed: 0, Pending: 518
+2026-11-27 14:48:14,387 [WARNING] bsa_orchestrator: No price data available for ABB, skipping analysis.
+2026-11-27 14:48:14,387 [WARNING] bsa_orchestrator: No price data available for ABBOTINDIA, skipping analysis.
+2026-11-27 14:48:14,389 [WARNING] bsa_orchestrator: No price data available for ABREL, skipping analysis.
+2026-11-27 14:48:14,388 [WARNING] bsa_orchestrator: No price data available for ABDL, skipping analysis.
+2026-11-27 14:48:14,388 [WARNING] bsa_orchestrator: No price data available for AADHARHFC, skipping analysis.
+2026-11-27 14:48:14,388 [WARNING] bsa_orchestrator: No price data available for 360ONE, skipping analysis.
+2026-11-27 14:48:14,389 [WARNING] bsa_orchestrator: No price data available for ABSLAMC, skipping analysis.
+2026-11-27 14:48:14,389 [WARNING] bsa_orchestrator: No price data available for ACC, skipping analysis.
+2026-11-27 14:48:14,389 [WARNING] bsa_orchestrator: No price data available for ACE, skipping analysis.
+2026-11-27 14:48:14,390 [WARNING] bsa_orchestrator: No price data available for ACMESOLAR, skipping analysis.
+2026-11-27 14:48:14,391 [WARNING] bsa_orchestrator: No price data available for ACUTAAS, skipping analysis.
+2026-11-27 14:48:14,391 [WARNING] bsa_orchestrator: No price data available for ABCAPITAL, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for ADANIENSOL, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for ADANIENT, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for ADANIPORTS, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for AAVAS, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for ADANIPOWER, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for ADANIGREEN, skipping analysis.
+2026-11-27 14:48:14,392 [WARNING] bsa_orchestrator: No price data available for AARTIIND, skipping analysis.
+2026-11-27 14:48:14,393 [WARNING] bsa_orchestrator: No price data available for AEGISLOG, skipping analysis.
+2026-11-27 14:48:14,393 [WARNING] bsa_orchestrator: No price data available for AEGISVOPAK, skipping analysis.
+2026-11-27 14:48:14,394 [WARNING] bsa_orchestrator: No price data available for AIIL, skipping analysis.
+2026-11-27 14:48:14,393 [WARNING] bsa_orchestrator: No price data available for AFFLE, skipping analysis.
+2026-11-27 14:48:14,393 [WARNING] bsa_orchestrator: No price data available for AFCONS, skipping analysis.
+2026-11-27 14:48:14,394 [WARNING] bsa_orchestrator: No price data available for AIAENG, skipping analysis.
+2026-11-27 14:48:14,393 [WARNING] bsa_orchestrator: No price data available for AETHER, skipping analysis.
+2026-11-27 14:48:14,394 [WARNING] bsa_orchestrator: No price data available for AJANTPHARM, skipping analysis.
+2026-11-27 14:48:14,395 [WARNING] bsa_orchestrator: No price data available for AMBER, skipping analysis.
+2026-11-27 14:48:14,395 [WARNING] bsa_orchestrator: No price data available for ALKEM, skipping analysis.
+2026-11-27 14:48:14,395 [WARNING] bsa_orchestrator: No price data available for ANANDRATHI, skipping analysis.
+2026-11-27 14:48:14,395 [WARNING] bsa_orchestrator: No price data available for AMBUJACEM, skipping analysis.
+2026-11-27 14:48:14,395 [WARNING] bsa_orchestrator: No price data available for ANANTRAJ, skipping analysis.
+2026-11-27 14:48:14,396 [WARNING] bsa_orchestrator: No price data available for APARINDS, skipping analysis.
+2026-11-27 14:48:14,398 [WARNING] bsa_orchestrator: No price data available for APOLLOHOSP, skipping analysis.
+2026-11-27 14:48:14,397 [WARNING] bsa_orchestrator: No price data available for ANGELONE, skipping analysis.
+2026-11-27 14:48:14,397 [WARNING] bsa_orchestrator: No price data available for ANTHEM, skipping analysis.
+2026-11-27 14:48:14,397 [WARNING] bsa_orchestrator: No price data available for APLAPOLLO, skipping analysis.
+2026-11-27 14:48:14,396 [WARNING] bsa_orchestrator: No price data available for ANURAS, skipping analysis.
+2026-11-27 14:48:14,398 [WARNING] bsa_orchestrator: No price data available for APOLLOTYRE, skipping analysis.
+2026-11-27 14:48:14,398 [WARNING] bsa_orchestrator: No price data available for ARE&M, skipping analysis.
+2026-11-27 14:48:14,399 [WARNING] bsa_orchestrator: No price data available for ASIANPAINT, skipping analysis.
+2026-11-27 14:48:14,398 [WARNING] bsa_orchestrator: No price data available for ASHOKLEY, skipping analysis.
+2026-11-27 14:48:14,399 [WARNING] bsa_orchestrator: No price data available for ASAHIINDIA, skipping analysis.
+2026-11-27 14:48:14,398 [WARNING] bsa_orchestrator: No price data available for APTUS, skipping analysis.
+2026-11-27 14:48:14,400 [WARNING] bsa_orchestrator: No price data available for ATGL, skipping analysis.
+2026-11-27 14:48:14,400 [WARNING] bsa_orchestrator: No price data available for ASTERDM, skipping analysis.
+2026-11-27 14:48:14,400 [WARNING] bsa_orchestrator: No price data available for ASTRAL, skipping analysis.
+2026-11-27 14:48:14,400 [WARNING] bsa_orchestrator: No price data available for ATHERENERG, skipping analysis.
+2026-11-27 14:48:14,401 [WARNING] bsa_orchestrator: No price data available for AWL, skipping analysis.
+2026-11-27 14:48:14,401 [WARNING] bsa_orchestrator: No price data available for AUBANK, skipping analysis.
+2026-11-27 14:48:14,401 [WARNING] bsa_orchestrator: No price data available for AXISBANK, skipping analysis.
+2026-11-27 14:48:14,401 [WARNING] bsa_orchestrator: No price data available for AUROPHARMA, skipping analysis.
+2026-11-27 14:48:14,400 [WARNING] bsa_orchestrator: No price data available for ATUL, skipping analysis.
+2026-11-27 14:48:14,401 [WARNING] bsa_orchestrator: No price data available for AVANTIFEED, skipping analysis.
+2026-11-27 14:48:14,403 [WARNING] bsa_orchestrator: No price data available for BAJAJ-AUTO, skipping analysis.
+2026-11-27 14:48:14,402 [WARNING] bsa_orchestrator: No price data available for BAGMANE, skipping analysis.
+2026-11-27 14:48:14,402 [WARNING] bsa_orchestrator: No price data available for BAJAJFINSV, skipping analysis.
+2026-11-27 14:48:14,403 [WARNING] bsa_orchestrator: No price data available for BAJAJHFL, skipping analysis.
+2026-11-27 14:48:14,402 [WARNING] bsa_orchestrator: No price data available for AZAD, skipping analysis.
+2026-11-27 14:48:14,403 [WARNING] bsa_orchestrator: No price data available for BAJAJHLDNG, skipping analysis.
+2026-11-27 14:48:14,404 [WARNING] bsa_orchestrator: No price data available for BANKBARODA, skipping analysis.
+2026-11-27 14:48:14,404 [WARNING] bsa_orchestrator: No price data available for BAJFINANCE, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BALKRISIND, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BALRAMCHIN, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BANKINDIA, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BANKNIFTY, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BBOX, skipping analysis.
+2026-11-27 14:48:14,405 [WARNING] bsa_orchestrator: No price data available for BANKEX, skipping analysis.
+2026-11-27 14:48:14,406 [WARNING] bsa_orchestrator: No price data available for BATAINDIA, skipping analysis.
+2026-11-27 14:48:14,406 [WARNING] bsa_orchestrator: No price data available for BANDHANBNK, skipping analysis.
+2026-11-27 14:48:14,406 [WARNING] bsa_orchestrator: No price data available for BDL, skipping analysis.
+2026-11-27 14:48:14,407 [WARNING] bsa_orchestrator: No price data available for BEL, skipping analysis.
+2026-11-27 14:48:14,407 [WARNING] bsa_orchestrator: No price data available for BEML, skipping analysis.
+2026-11-27 14:48:14,407 [WARNING] bsa_orchestrator: No price data available for BERGEPAINT, skipping analysis.
+2026-11-27 14:48:14,408 [WARNING] bsa_orchestrator: No price data available for BELRISE, skipping analysis.
+2026-11-27 14:48:14,408 [WARNING] bsa_orchestrator: No price data available for BHARATFORG, skipping analysis.
+2026-11-27 14:48:14,408 [WARNING] bsa_orchestrator: No price data available for BHARTIARTL, skipping analysis.
+2026-11-27 14:48:14,408 [WARNING] bsa_orchestrator: No price data available for BHARATCOAL, skipping analysis.
+2026-11-27 14:48:14,408 [WARNING] bsa_orchestrator: No price data available for BHARTIHEXA, skipping analysis.
+2026-11-27 14:48:14,409 [WARNING] bsa_orchestrator: No price data available for BIOCON, skipping analysis.
+2026-11-27 14:48:14,409 [WARNING] bsa_orchestrator: No price data available for BLS, skipping analysis.
+2026-11-27 14:48:14,410 [WARNING] bsa_orchestrator: No price data available for BRIGADE, skipping analysis.
+2026-11-27 14:48:14,409 [WARNING] bsa_orchestrator: No price data available for BLUESTARCO, skipping analysis.
+2026-11-27 14:48:14,410 [WARNING] bsa_orchestrator: No price data available for BHEL, skipping analysis.
+2026-11-27 14:48:14,409 [WARNING] bsa_orchestrator: No price data available for BOSCHLTD, skipping analysis.
+2026-11-27 14:48:14,410 [WARNING] bsa_orchestrator: No price data available for BPCL, skipping analysis.
+2026-11-27 14:48:14,411 [WARNING] bsa_orchestrator: No price data available for CAMS, skipping analysis.
+2026-11-27 14:48:14,410 [WARNING] bsa_orchestrator: No price data available for BRITANNIA, skipping analysis.
+2026-11-27 14:48:14,411 [WARNING] bsa_orchestrator: No price data available for BSOFT, skipping analysis.
+2026-11-27 14:48:14,410 [WARNING] bsa_orchestrator: No price data available for BIRET, skipping analysis.
+2026-11-27 14:48:14,411 [WARNING] bsa_orchestrator: No price data available for BSE, skipping analysis.
+2026-11-27 14:48:14,411 [WARNING] bsa_orchestrator: No price data available for CANBK, skipping analysis.
+2026-11-27 14:48:14,411 [WARNING] bsa_orchestrator: No price data available for CANFINHOME, skipping analysis.
+2026-11-27 14:48:14,412 [WARNING] bsa_orchestrator: No price data available for CANHLIFE, skipping analysis.
+2026-11-27 14:48:14,412 [WARNING] bsa_orchestrator: No price data available for CAPLIPOINT, skipping analysis.
+2026-11-27 14:48:14,413 [WARNING] bsa_orchestrator: No price data available for CARBORUNIV, skipping analysis.
+2026-11-27 14:48:14,413 [WARNING] bsa_orchestrator: No price data available for CASTROLIND, skipping analysis.
+2026-11-27 14:48:14,414 [WARNING] bsa_orchestrator: No price data available for CENTRALBK, skipping analysis.
+2026-11-27 14:48:14,413 [WARNING] bsa_orchestrator: No price data available for CCL, skipping analysis.
+2026-11-27 14:48:14,413 [WARNING] bsa_orchestrator: No price data available for CEATLTD, skipping analysis.
+2026-11-27 14:48:14,414 [WARNING] bsa_orchestrator: No price data available for CDSL, skipping analysis.
+2026-11-27 14:48:14,413 [WARNING] bsa_orchestrator: No price data available for CARTRADE, skipping analysis.
+2026-11-27 14:48:14,414 [WARNING] bsa_orchestrator: No price data available for CEMPRO, skipping analysis.
+2026-11-27 14:48:14,414 [WARNING] bsa_orchestrator: No price data available for CESC, skipping analysis.
+2026-11-27 14:48:14,414 [WARNING] bsa_orchestrator: No price data available for CGCL, skipping analysis.
+2026-11-27 14:48:14,416 [WARNING] bsa_orchestrator: No price data available for CHOLAFIN, skipping analysis.
+2026-11-27 14:48:14,415 [WARNING] bsa_orchestrator: No price data available for CHOICEIN, skipping analysis.
+2026-11-27 14:48:14,416 [WARNING] bsa_orchestrator: No price data available for CHENNPETRO, skipping analysis.
+2026-11-27 14:48:14,416 [WARNING] bsa_orchestrator: No price data available for CHOLAHLDNG, skipping analysis.
+2026-11-27 14:48:14,415 [WARNING] bsa_orchestrator: No price data available for CGPOWER, skipping analysis.
+2026-11-27 14:48:14,415 [WARNING] bsa_orchestrator: No price data available for CHAMBLFERT, skipping analysis.
+2026-11-27 14:48:14,417 [WARNING] bsa_orchestrator: No price data available for CLEANMAX, skipping analysis.
+2026-11-27 14:48:14,417 [WARNING] bsa_orchestrator: No price data available for CIPLA, skipping analysis.
+2026-11-27 14:48:14,416 [WARNING] bsa_orchestrator: No price data available for CIEINDIA, skipping analysis.
+2026-11-27 14:48:14,417 [WARNING] bsa_orchestrator: No price data available for COCHINSHIP, skipping analysis.
+2026-11-27 14:48:14,417 [WARNING] bsa_orchestrator: No price data available for CLEAN, skipping analysis.
+2026-11-27 14:48:14,418 [WARNING] bsa_orchestrator: No price data available for COALINDIA, skipping analysis.
+2026-11-27 14:48:14,417 [WARNING] bsa_orchestrator: No price data available for CMPDI, skipping analysis.
+2026-11-27 14:48:14,418 [WARNING] bsa_orchestrator: No price data available for COHANCE, skipping analysis.
+2026-11-27 14:48:14,419 [WARNING] bsa_orchestrator: No price data available for COFORGE, skipping analysis.
+2026-11-27 14:48:14,419 [WARNING] bsa_orchestrator: No price data available for CONCOR, skipping analysis.
+2026-11-27 14:48:14,419 [WARNING] bsa_orchestrator: No price data available for COROMANDEL, skipping analysis.
+2026-11-27 14:48:14,419 [WARNING] bsa_orchestrator: No price data available for CONCORDBIO, skipping analysis.
+2026-11-27 14:48:14,420 [WARNING] bsa_orchestrator: No price data available for CPPLUS, skipping analysis.
+2026-11-27 14:48:14,420 [WARNING] bsa_orchestrator: No price data available for CRISIL, skipping analysis.
+2026-11-27 14:48:14,420 [WARNING] bsa_orchestrator: No price data available for CRAFTSMAN, skipping analysis.
+2026-11-27 14:48:14,420 [WARNING] bsa_orchestrator: No price data available for COLPAL, skipping analysis.
+2026-11-27 14:48:14,420 [WARNING] bsa_orchestrator: No price data available for CREDITACC, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for CUB, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for DABUR, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for CYIENT, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for CUMMINSIND, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for CROMPTON, skipping analysis.
+2026-11-27 14:48:14,422 [WARNING] bsa_orchestrator: No price data available for DALBHARAT, skipping analysis.
+2026-11-27 14:48:14,422 [WARNING] bsa_orchestrator: No price data available for DEEPAKFERT, skipping analysis.
+2026-11-27 14:48:14,421 [WARNING] bsa_orchestrator: No price data available for CUPID, skipping analysis.
+2026-11-27 14:48:14,422 [WARNING] bsa_orchestrator: No price data available for DATAPATTNS, skipping analysis.
+2026-11-27 14:48:14,423 [WARNING] bsa_orchestrator: No price data available for DELHIVERY, skipping analysis.
+2026-11-27 14:48:14,423 [WARNING] bsa_orchestrator: No price data available for DEEPAKNTR, skipping analysis.
+2026-11-27 14:48:14,424 [WARNING] bsa_orchestrator: No price data available for DIVISLAB, skipping analysis.
+2026-11-27 14:48:14,424 [WARNING] bsa_orchestrator: No price data available for DEVYANI, skipping analysis.
+2026-11-27 14:48:14,424 [WARNING] bsa_orchestrator: No price data available for DIXON, skipping analysis.
+2026-11-27 14:48:14,424 [WARNING] bsa_orchestrator: No price data available for DRREDDY, skipping analysis.
+2026-11-27 14:48:14,425 [WARNING] bsa_orchestrator: No price data available for DMART, skipping analysis.
+2026-11-27 14:48:14,424 [WARNING] bsa_orchestrator: No price data available for DLF, skipping analysis.
+2026-11-27 14:48:14,425 [WARNING] bsa_orchestrator: No price data available for DOMS, skipping analysis.
+2026-11-27 14:48:14,425 [WARNING] bsa_orchestrator: No price data available for ECLERX, skipping analysis.
+2026-11-27 14:48:14,426 [WARNING] bsa_orchestrator: No price data available for EICHERMOT, skipping analysis.
+2026-11-27 14:48:14,426 [WARNING] bsa_orchestrator: No price data available for EIDPARRY, skipping analysis.
+2026-11-27 14:48:14,426 [WARNING] bsa_orchestrator: No price data available for ELECON, skipping analysis.
+2026-11-27 14:48:14,426 [WARNING] bsa_orchestrator: No price data available for EMAMILTD, skipping analysis.
+2026-11-27 14:48:14,426 [WARNING] bsa_orchestrator: No price data available for EIHOTEL, skipping analysis.
+2026-11-27 14:48:14,427 [WARNING] bsa_orchestrator: No price data available for EMCURE, skipping analysis.
+2026-11-27 14:48:14,427 [WARNING] bsa_orchestrator: No price data available for ELGIEQUIP, skipping analysis.
+2026-11-27 14:48:14,428 [WARNING] bsa_orchestrator: No price data available for ENDURANCE, skipping analysis.
+2026-11-27 14:48:14,428 [WARNING] bsa_orchestrator: No price data available for ENRIN, skipping analysis.
+2026-11-27 14:48:14,428 [WARNING] bsa_orchestrator: No price data available for EMBASSY, skipping analysis.
+2026-11-27 14:48:14,428 [WARNING] bsa_orchestrator: No price data available for ENGINERSIN, skipping analysis.
+2026-11-27 14:48:14,428 [WARNING] bsa_orchestrator: No price data available for EMMVEE, skipping analysis.
+2026-11-27 14:48:14,429 [WARNING] bsa_orchestrator: No price data available for ESCORTS, skipping analysis.
+2026-11-27 14:48:14,429 [WARNING] bsa_orchestrator: No price data available for ETERNAL, skipping analysis.
+2026-11-27 14:48:14,429 [WARNING] bsa_orchestrator: No price data available for EXIDEIND, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FACT, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FEDERALBNK, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FINNIFTY, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FORCEMOT, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FORTIS, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FLUOROCHEM, skipping analysis.
+2026-11-27 14:48:14,431 [WARNING] bsa_orchestrator: No price data available for FIVESTAR, skipping analysis.
+2026-11-27 14:48:14,430 [WARNING] bsa_orchestrator: No price data available for FINCABLES, skipping analysis.
+2026-11-27 14:48:14,431 [WARNING] bsa_orchestrator: No price data available for FRACTAL, skipping analysis.
+2026-11-27 14:48:14,432 [WARNING] bsa_orchestrator: No price data available for FSL, skipping analysis.
+2026-11-27 14:48:14,431 [WARNING] bsa_orchestrator: No price data available for FIRSTCRY, skipping analysis.
+2026-11-27 14:48:14,432 [WARNING] bsa_orchestrator: No price data available for GESHIP, skipping analysis.
+2026-11-27 14:48:14,432 [WARNING] bsa_orchestrator: No price data available for GILLETTE, skipping analysis.
+2026-11-27 14:48:14,432 [WARNING] bsa_orchestrator: No price data available for GAIL, skipping analysis.
+2026-11-27 14:48:14,432 [WARNING] bsa_orchestrator: No price data available for GABRIEL, skipping analysis.
+2026-11-27 14:48:14,433 [WARNING] bsa_orchestrator: No price data available for GICRE, skipping analysis.
+2026-11-27 14:48:14,433 [WARNING] bsa_orchestrator: No price data available for GALLANTT, skipping analysis.
+2026-11-27 14:48:14,433 [WARNING] bsa_orchestrator: No price data available for GLAND, skipping analysis.
+2026-11-27 14:48:14,433 [WARNING] bsa_orchestrator: No price data available for GMDCLTD, skipping analysis.
+2026-11-27 14:48:14,434 [WARNING] bsa_orchestrator: No price data available for GODFRYPHLP, skipping analysis.
+2026-11-27 14:48:14,434 [WARNING] bsa_orchestrator: No price data available for GMRAIRPORT, skipping analysis.
+2026-11-27 14:48:14,435 [WARNING] bsa_orchestrator: No price data available for GPIL, skipping analysis.
+2026-11-27 14:48:14,434 [WARNING] bsa_orchestrator: No price data available for GODREJCP, skipping analysis.
+2026-11-27 14:48:14,433 [WARNING] bsa_orchestrator: No price data available for GLAXO, skipping analysis.
+2026-11-27 14:48:14,434 [WARNING] bsa_orchestrator: No price data available for GODREJPROP, skipping analysis.
+2026-11-27 14:48:14,435 [WARNING] bsa_orchestrator: No price data available for GODREJIND, skipping analysis.
+2026-11-27 14:48:14,434 [WARNING] bsa_orchestrator: No price data available for GLENMARK, skipping analysis.
+2026-11-27 14:48:14,435 [WARNING] bsa_orchestrator: No price data available for GRANULES, skipping analysis.
+2026-11-27 14:48:14,436 [WARNING] bsa_orchestrator: No price data available for GRAPHITE, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for GROWW, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for GRSE, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for GRASIM, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for GRAVITA, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for HBLENGINE, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for GVT&D, skipping analysis.
+2026-11-27 14:48:14,437 [WARNING] bsa_orchestrator: No price data available for HAL, skipping analysis.
+2026-11-27 14:48:14,438 [WARNING] bsa_orchestrator: No price data available for HAVELLS, skipping analysis.
+2026-11-27 14:48:14,438 [WARNING] bsa_orchestrator: No price data available for HCLTECH, skipping analysis.
+2026-11-27 14:48:14,438 [WARNING] bsa_orchestrator: No price data available for HDBFS, skipping analysis.
+2026-11-27 14:48:14,439 [WARNING] bsa_orchestrator: No price data available for HDFCAMC, skipping analysis.
+2026-11-27 14:48:14,439 [WARNING] bsa_orchestrator: No price data available for HDFCBANK, skipping analysis.
+2026-11-27 14:48:14,439 [WARNING] bsa_orchestrator: No price data available for HEGRAPHITE, skipping analysis.
+2026-11-27 14:48:14,439 [WARNING] bsa_orchestrator: No price data available for HEGAM, skipping analysis.
+2026-11-27 14:48:14,440 [WARNING] bsa_orchestrator: No price data available for HFCL, skipping analysis.
+2026-11-27 14:48:14,441 [WARNING] bsa_orchestrator: No price data available for HEXT, skipping analysis.
+2026-11-27 14:48:14,440 [WARNING] bsa_orchestrator: No price data available for HEROMOTOCO, skipping analysis.
+2026-11-27 14:48:14,440 [WARNING] bsa_orchestrator: No price data available for HDFCLIFE, skipping analysis.
+2026-11-27 14:48:14,441 [WARNING] bsa_orchestrator: No price data available for HINDALCO, skipping analysis.
+2026-11-27 14:48:14,442 [WARNING] bsa_orchestrator: No price data available for HINDUNILVR, skipping analysis.
+2026-11-27 14:48:14,441 [WARNING] bsa_orchestrator: No price data available for HINDCOPPER, skipping analysis.
+2026-11-27 14:48:14,442 [WARNING] bsa_orchestrator: No price data available for HONASA, skipping analysis.
+2026-11-27 14:48:14,442 [WARNING] bsa_orchestrator: No price data available for HONAUT, skipping analysis.
+2026-11-27 14:48:14,441 [WARNING] bsa_orchestrator: No price data available for HINDPETRO, skipping analysis.
+2026-11-27 14:48:14,443 [WARNING] bsa_orchestrator: No price data available for HINDZINC, skipping analysis.
+2026-11-27 14:48:14,443 [WARNING] bsa_orchestrator: No price data available for HSCL, skipping analysis.
+2026-11-27 14:48:14,443 [WARNING] bsa_orchestrator: No price data available for HUDCO, skipping analysis.
+2026-11-27 14:48:14,443 [WARNING] bsa_orchestrator: No price data available for HOMEFIRST, skipping analysis.
+2026-11-27 14:48:14,444 [WARNING] bsa_orchestrator: No price data available for ICICIBANK, skipping analysis.
+2026-11-27 14:48:14,444 [WARNING] bsa_orchestrator: No price data available for HYUNDAI, skipping analysis.
+2026-11-27 14:48:14,445 [WARNING] bsa_orchestrator: No price data available for ICICIGI, skipping analysis.
+2026-11-27 14:48:14,444 [WARNING] bsa_orchestrator: No price data available for ICICIAMC, skipping analysis.
+2026-11-27 14:48:14,445 [WARNING] bsa_orchestrator: No price data available for IDBI, skipping analysis.
+2026-11-27 14:48:14,445 [WARNING] bsa_orchestrator: No price data available for IDEA, skipping analysis.
+2026-11-27 14:48:14,445 [WARNING] bsa_orchestrator: No price data available for ICICILIFE, skipping analysis.
+2026-11-27 14:48:14,446 [WARNING] bsa_orchestrator: No price data available for IGIL, skipping analysis.
+2026-11-27 14:48:14,445 [WARNING] bsa_orchestrator: No price data available for IDFCFIRSTB, skipping analysis.
+2026-11-27 14:48:14,446 [WARNING] bsa_orchestrator: No price data available for IFCI, skipping analysis.
+2026-11-27 14:48:14,446 [WARNING] bsa_orchestrator: No price data available for IEX, skipping analysis.
+2026-11-27 14:48:14,446 [WARNING] bsa_orchestrator: No price data available for IKS, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDUSINDBK, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDIAMART, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDIGO, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDIANB, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for IIFL, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDIACEM, skipping analysis.
+2026-11-27 14:48:14,446 [WARNING] bsa_orchestrator: No price data available for IGL, skipping analysis.
+2026-11-27 14:48:14,447 [WARNING] bsa_orchestrator: No price data available for INDHOTEL, skipping analysis.
+2026-11-27 14:48:14,448 [WARNING] bsa_orchestrator: No price data available for INDUSTOWER, skipping analysis.
+2026-11-27 14:48:14,449 [WARNING] bsa_orchestrator: No price data available for INFY, skipping analysis.
+2026-11-27 14:48:14,449 [WARNING] bsa_orchestrator: No price data available for INOXINDIA, skipping analysis.
+2026-11-27 14:48:14,449 [WARNING] bsa_orchestrator: No price data available for INOXWIND, skipping analysis.
+2026-11-27 14:48:14,449 [WARNING] bsa_orchestrator: No price data available for INTELLECT, skipping analysis.
+2026-11-27 14:48:14,450 [WARNING] bsa_orchestrator: No price data available for IOC, skipping analysis.
+2026-11-27 14:48:14,450 [WARNING] bsa_orchestrator: No price data available for IOB, skipping analysis.
+2026-11-27 14:48:14,450 [WARNING] bsa_orchestrator: No price data available for IRB, skipping analysis.
+2026-11-27 14:48:14,451 [WARNING] bsa_orchestrator: No price data available for IPCALAB, skipping analysis.
+2026-11-27 14:48:14,451 [WARNING] bsa_orchestrator: No price data available for IREDA, skipping analysis.
+2026-11-27 14:48:14,451 [WARNING] bsa_orchestrator: No price data available for IRCTC, skipping analysis.
+2026-11-27 14:48:14,450 [WARNING] bsa_orchestrator: No price data available for IRCON, skipping analysis.
+2026-11-27 14:48:14,451 [WARNING] bsa_orchestrator: No price data available for ITC, skipping analysis.
+2026-11-27 14:48:14,452 [WARNING] bsa_orchestrator: No price data available for ITCHOTELS, skipping analysis.
+2026-11-27 14:48:14,452 [WARNING] bsa_orchestrator: No price data available for IRFC, skipping analysis.
+2026-11-27 14:48:14,453 [WARNING] bsa_orchestrator: No price data available for JBMA, skipping analysis.
+2026-11-27 14:48:14,452 [WARNING] bsa_orchestrator: No price data available for J&KBANK, skipping analysis.
+2026-11-27 14:48:14,452 [WARNING] bsa_orchestrator: No price data available for ITI, skipping analysis.
+2026-11-27 14:48:14,453 [WARNING] bsa_orchestrator: No price data available for JAINREC, skipping analysis.
+2026-11-27 14:48:14,453 [WARNING] bsa_orchestrator: No price data available for JINDALSAW, skipping analysis.
+2026-11-27 14:48:14,453 [WARNING] bsa_orchestrator: No price data available for JINDALSTEL, skipping analysis.
+2026-11-27 14:48:14,454 [WARNING] bsa_orchestrator: No price data available for JIOFIN, skipping analysis.
+2026-11-27 14:48:14,454 [WARNING] bsa_orchestrator: No price data available for JSL, skipping analysis.
+2026-11-27 14:48:14,454 [WARNING] bsa_orchestrator: No price data available for JMFINANCIL, skipping analysis.
+2026-11-27 14:48:14,454 [WARNING] bsa_orchestrator: No price data available for JKCEMENT, skipping analysis.
+2026-11-27 14:48:14,455 [WARNING] bsa_orchestrator: No price data available for JKTYRE, skipping analysis.
+2026-11-27 14:48:14,455 [WARNING] bsa_orchestrator: No price data available for JSWCEMENT, skipping analysis.
+2026-11-27 14:48:14,456 [WARNING] bsa_orchestrator: No price data available for JSWSTEEL, skipping analysis.
+2026-11-27 14:48:14,456 [WARNING] bsa_orchestrator: No price data available for JSWINFRA, skipping analysis.
+2026-11-27 14:48:14,455 [WARNING] bsa_orchestrator: No price data available for JPPOWER, skipping analysis.
+2026-11-27 14:48:14,456 [WARNING] bsa_orchestrator: No price data available for JUBLFOOD, skipping analysis.
+2026-11-27 14:48:14,457 [WARNING] bsa_orchestrator: No price data available for JYOTICNC, skipping analysis.
+2026-11-27 14:48:14,456 [WARNING] bsa_orchestrator: No price data available for JSWENERGY, skipping analysis.
+2026-11-27 14:48:14,457 [WARNING] bsa_orchestrator: No price data available for JWL, skipping analysis.
+2026-11-27 14:48:14,457 [WARNING] bsa_orchestrator: No price data available for KALYANKJIL, skipping analysis.
+2026-11-27 14:48:14,457 [WARNING] bsa_orchestrator: No price data available for KAJARIACER, skipping analysis.
+2026-11-27 14:48:14,456 [WARNING] bsa_orchestrator: No price data available for JUBLINGREA, skipping analysis.
+2026-11-27 14:48:14,458 [WARNING] bsa_orchestrator: No price data available for KARURVYSYA, skipping analysis.
+2026-11-27 14:48:14,458 [WARNING] bsa_orchestrator: No price data available for KEC, skipping analysis.
+2026-11-27 14:48:14,458 [WARNING] bsa_orchestrator: No price data available for KAYNES, skipping analysis.
+2026-11-27 14:48:14,458 [WARNING] bsa_orchestrator: No price data available for KEI, skipping analysis.
+2026-11-27 14:48:14,459 [WARNING] bsa_orchestrator: No price data available for KFINTECH, skipping analysis.
+2026-11-27 14:48:14,459 [WARNING] bsa_orchestrator: No price data available for KIMS, skipping analysis.
+2026-11-27 14:48:14,459 [WARNING] bsa_orchestrator: No price data available for KIRLOSBROS, skipping analysis.
+2026-11-27 14:48:14,460 [WARNING] bsa_orchestrator: No price data available for KOTAKBANK, skipping analysis.
+2026-11-27 14:48:14,460 [WARNING] bsa_orchestrator: No price data available for KIRLOSENG, skipping analysis.
+2026-11-27 14:48:14,460 [WARNING] bsa_orchestrator: No price data available for KPITTECH, skipping analysis.
+2026-11-27 14:48:14,460 [WARNING] bsa_orchestrator: No price data available for KPIL, skipping analysis.
+2026-11-27 14:48:14,461 [WARNING] bsa_orchestrator: No price data available for KPRMILL, skipping analysis.
+2026-11-27 14:48:14,461 [WARNING] bsa_orchestrator: No price data available for LALPATHLAB, skipping analysis.
+2026-11-27 14:48:14,461 [WARNING] bsa_orchestrator: No price data available for KSB, skipping analysis.
+2026-11-27 14:48:14,461 [WARNING] bsa_orchestrator: No price data available for LEMONTREE, skipping analysis.
+2026-11-27 14:48:14,461 [WARNING] bsa_orchestrator: No price data available for LAURUSLABS, skipping analysis.
+2026-11-27 14:48:14,462 [WARNING] bsa_orchestrator: No price data available for LICI, skipping analysis.
+2026-11-27 14:48:14,462 [WARNING] bsa_orchestrator: No price data available for LGEINDIA, skipping analysis.
+2026-11-27 14:48:14,462 [WARNING] bsa_orchestrator: No price data available for LICHSGFIN, skipping analysis.
+2026-11-27 14:48:14,462 [WARNING] bsa_orchestrator: No price data available for LENSKART, skipping analysis.
+2026-11-27 14:48:14,463 [WARNING] bsa_orchestrator: No price data available for LLOYDSME, skipping analysis.
+2026-11-27 14:48:14,463 [WARNING] bsa_orchestrator: No price data available for LODHA, skipping analysis.
+2026-11-27 14:48:14,463 [WARNING] bsa_orchestrator: No price data available for LINDEINDIA, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LTM, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LTF, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LTFOODS, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LTTS, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LT, skipping analysis.
+2026-11-27 14:48:14,464 [WARNING] bsa_orchestrator: No price data available for LUPIN, skipping analysis.
+2026-11-27 14:48:14,465 [WARNING] bsa_orchestrator: No price data available for M&M, skipping analysis.
+2026-11-27 14:48:14,465 [WARNING] bsa_orchestrator: No price data available for M&MFIN, skipping analysis.
+2026-11-27 14:48:14,465 [WARNING] bsa_orchestrator: No price data available for MAHABANK, skipping analysis.
+2026-11-27 14:48:14,465 [WARNING] bsa_orchestrator: No price data available for MANKIND, skipping analysis.
+2026-11-27 14:48:14,465 [WARNING] bsa_orchestrator: No price data available for MANAPPURAM, skipping analysis.
+2026-11-27 14:48:14,466 [WARNING] bsa_orchestrator: No price data available for MAXHEALTH, skipping analysis.
+2026-11-27 14:48:14,467 [WARNING] bsa_orchestrator: No price data available for MAZDOCK, skipping analysis.
+2026-11-27 14:48:14,466 [WARNING] bsa_orchestrator: No price data available for MARUTI, skipping analysis.
+2026-11-27 14:48:14,467 [WARNING] bsa_orchestrator: No price data available for MEESHO, skipping analysis.
+2026-11-27 14:48:14,467 [WARNING] bsa_orchestrator: No price data available for MEDANTA, skipping analysis.
+2026-11-27 14:48:14,466 [WARNING] bsa_orchestrator: No price data available for MARICO, skipping analysis.
+2026-11-27 14:48:14,467 [WARNING] bsa_orchestrator: No price data available for MFSL, skipping analysis.
+2026-11-27 14:48:14,468 [WARNING] bsa_orchestrator: No price data available for MCX, skipping analysis.
+2026-11-27 14:48:14,468 [WARNING] bsa_orchestrator: No price data available for MMTC, skipping analysis.
+2026-11-27 14:48:14,468 [WARNING] bsa_orchestrator: No price data available for MINDACORP, skipping analysis.
+2026-11-27 14:48:14,468 [WARNING] bsa_orchestrator: No price data available for MGL, skipping analysis.
+2026-11-27 14:48:14,469 [WARNING] bsa_orchestrator: No price data available for MOTHERSON, skipping analysis.
+2026-11-27 14:48:14,468 [WARNING] bsa_orchestrator: No price data available for MIDCPNIFTY, skipping analysis.
+2026-11-27 14:48:14,469 [WARNING] bsa_orchestrator: No price data available for MRPL, skipping analysis.
+2026-11-27 14:48:14,470 [WARNING] bsa_orchestrator: No price data available for MSUMI, skipping analysis.
+2026-11-27 14:48:14,469 [WARNING] bsa_orchestrator: No price data available for MPHASIS, skipping analysis.
+2026-11-27 14:48:14,469 [WARNING] bsa_orchestrator: No price data available for MOTILALOFS, skipping analysis.
+2026-11-27 14:48:14,470 [WARNING] bsa_orchestrator: No price data available for NAM-INDIA, skipping analysis.
+2026-11-27 14:48:14,470 [WARNING] bsa_orchestrator: No price data available for MTARTECH, skipping analysis.
+2026-11-27 14:48:14,470 [WARNING] bsa_orchestrator: No price data available for MRF, skipping analysis.
+2026-11-27 14:48:14,471 [WARNING] bsa_orchestrator: No price data available for NATIONALUM, skipping analysis.
+2026-11-27 14:48:14,471 [WARNING] bsa_orchestrator: No price data available for MUTHOOTFIN, skipping analysis.
+2026-11-27 14:48:14,472 [WARNING] bsa_orchestrator: No price data available for NAVA, skipping analysis.
+2026-11-27 14:48:14,472 [WARNING] bsa_orchestrator: No price data available for NAVINFLUOR, skipping analysis.
+2026-11-27 14:48:14,471 [WARNING] bsa_orchestrator: No price data available for NBCC, skipping analysis.
+2026-11-27 14:48:14,472 [WARNING] bsa_orchestrator: No price data available for NAUKRI, skipping analysis.
+2026-11-27 14:48:14,471 [WARNING] bsa_orchestrator: No price data available for NATCOPHARM, skipping analysis.
+2026-11-27 14:48:14,472 [WARNING] bsa_orchestrator: No price data available for NCC, skipping analysis.
+2026-11-27 14:48:14,473 [WARNING] bsa_orchestrator: No price data available for NETWEB, skipping analysis.
+2026-11-27 14:48:14,473 [WARNING] bsa_orchestrator: No price data available for NEULANDLAB, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NIACL, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NESTLEIND, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NHPC, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NIFTY AUTO, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NIFTY, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NIFTY FMCG, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NH, skipping analysis.
+2026-11-27 14:48:14,474 [WARNING] bsa_orchestrator: No price data available for NIFTY ENERGY, skipping analysis.
+2026-11-27 14:48:14,476 [WARNING] bsa_orchestrator: No price data available for NIFTY INFRA, skipping analysis.
+2026-11-27 14:48:14,477 [WARNING] bsa_orchestrator: No price data available for NIFTY IT, skipping analysis.
+2026-11-27 14:48:14,477 [WARNING] bsa_orchestrator: No price data available for NIFTY PHARMA, skipping analysis.
+2026-11-27 14:48:14,477 [WARNING] bsa_orchestrator: No price data available for NIFTY METAL, skipping analysis.
+2026-11-27 14:48:14,478 [WARNING] bsa_orchestrator: No price data available for NIFTY REALTY, skipping analysis.
+2026-11-27 14:48:14,478 [WARNING] bsa_orchestrator: No price data available for NIFTYNXT50, skipping analysis.
+2026-11-27 14:48:14,478 [WARNING] bsa_orchestrator: No price data available for NIFTY PVT BANK, skipping analysis.
+2026-11-27 14:48:14,478 [WARNING] bsa_orchestrator: No price data available for NIFTY PSU BANK, skipping analysis.
+2026-11-27 14:48:14,479 [WARNING] bsa_orchestrator: No price data available for NLCINDIA, skipping analysis.
+2026-11-27 14:48:14,479 [WARNING] bsa_orchestrator: No price data available for NMDC, skipping analysis.
+2026-11-27 14:48:14,479 [WARNING] bsa_orchestrator: No price data available for NSLNISP, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for NYKAA, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for NTPCGREEN, skipping analysis.
+2026-11-27 14:48:14,481 [WARNING] bsa_orchestrator: No price data available for OLAELEC, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for OIL, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for NUVAMA, skipping analysis.
+2026-11-27 14:48:14,479 [WARNING] bsa_orchestrator: No price data available for NTPC, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for NUVOCO, skipping analysis.
+2026-11-27 14:48:14,481 [WARNING] bsa_orchestrator: No price data available for OBEROIRLTY, skipping analysis.
+2026-11-27 14:48:14,480 [WARNING] bsa_orchestrator: No price data available for OFSS, skipping analysis.
+2026-11-27 14:48:14,482 [WARNING] bsa_orchestrator: No price data available for ONGC, skipping analysis.
+2026-11-27 14:48:14,482 [WARNING] bsa_orchestrator: No price data available for ONESOURCE, skipping analysis.
+2026-11-27 14:48:14,482 [WARNING] bsa_orchestrator: No price data available for PAGEIND, skipping analysis.
+2026-11-27 14:48:14,482 [WARNING] bsa_orchestrator: No price data available for OLECTRA, skipping analysis.
+2026-11-27 14:48:14,483 [WARNING] bsa_orchestrator: No price data available for PAYTM, skipping analysis.
+2026-11-27 14:48:14,483 [WARNING] bsa_orchestrator: No price data available for PCBL, skipping analysis.
+2026-11-27 14:48:14,484 [WARNING] bsa_orchestrator: No price data available for PETRONET, skipping analysis.
+2026-11-27 14:48:14,483 [WARNING] bsa_orchestrator: No price data available for PARADEEP, skipping analysis.
+2026-11-27 14:48:14,484 [WARNING] bsa_orchestrator: No price data available for PGEL, skipping analysis.
+2026-11-27 14:48:14,484 [WARNING] bsa_orchestrator: No price data available for PFOCUS, skipping analysis.
+2026-11-27 14:48:14,483 [WARNING] bsa_orchestrator: No price data available for PATANJALI, skipping analysis.
+2026-11-27 14:48:14,484 [WARNING] bsa_orchestrator: No price data available for PFC, skipping analysis.
+2026-11-27 14:48:14,483 [WARNING] bsa_orchestrator: No price data available for PERSISTENT, skipping analysis.
+2026-11-27 14:48:14,485 [WARNING] bsa_orchestrator: No price data available for PHOENIXLTD, skipping analysis.
+2026-11-27 14:48:14,485 [WARNING] bsa_orchestrator: No price data available for PNBHOUSING, skipping analysis.
+2026-11-27 14:48:14,485 [WARNING] bsa_orchestrator: No price data available for PINELABS, skipping analysis.
+2026-11-27 14:48:14,486 [WARNING] bsa_orchestrator: No price data available for PNB, skipping analysis.
+2026-11-27 14:48:14,485 [WARNING] bsa_orchestrator: No price data available for PIDILITIND, skipping analysis.
+2026-11-27 14:48:14,486 [WARNING] bsa_orchestrator: No price data available for POLYCAB, skipping analysis.
+2026-11-27 14:48:14,486 [WARNING] bsa_orchestrator: No price data available for PIRAMALFIN, skipping analysis.
+2026-11-27 14:48:14,485 [WARNING] bsa_orchestrator: No price data available for PIIND, skipping analysis.
+2026-11-27 14:48:14,486 [WARNING] bsa_orchestrator: No price data available for POLYMED, skipping analysis.
+2026-11-27 14:48:14,486 [WARNING] bsa_orchestrator: No price data available for POLICYBZR, skipping analysis.
+2026-11-27 14:48:14,487 [WARNING] bsa_orchestrator: No price data available for POONAWALLA, skipping analysis.
+2026-11-27 14:48:14,488 [WARNING] bsa_orchestrator: No price data available for POWERGRID, skipping analysis.
+2026-11-27 14:48:14,488 [WARNING] bsa_orchestrator: No price data available for POWERINDIA, skipping analysis.
+2026-11-27 14:48:14,488 [WARNING] bsa_orchestrator: No price data available for PREMIERENE, skipping analysis.
+2026-11-27 14:48:14,488 [WARNING] bsa_orchestrator: No price data available for PPLPHARMA, skipping analysis.
+2026-11-27 14:48:14,489 [WARNING] bsa_orchestrator: No price data available for PRESTIGE, skipping analysis.
+2026-11-27 14:48:14,489 [WARNING] bsa_orchestrator: No price data available for PTCIL, skipping analysis.
+2026-11-27 14:48:14,489 [WARNING] bsa_orchestrator: No price data available for PVRINOX, skipping analysis.
+2026-11-27 14:48:14,490 [WARNING] bsa_orchestrator: No price data available for PRIVISCL, skipping analysis.
+2026-11-27 14:48:14,490 [WARNING] bsa_orchestrator: No price data available for RAILTEL, skipping analysis.
+2026-11-27 14:48:14,489 [WARNING] bsa_orchestrator: No price data available for RADICO, skipping analysis.
+2026-11-27 14:48:14,491 [WARNING] bsa_orchestrator: No price data available for RBLBANK, skipping analysis.
+2026-11-27 14:48:14,490 [WARNING] bsa_orchestrator: No price data available for PWL, skipping analysis.
+2026-11-27 14:48:14,491 [WARNING] bsa_orchestrator: No price data available for RAMCOCEM, skipping analysis.
+2026-11-27 14:48:14,491 [WARNING] bsa_orchestrator: No price data available for RECLTD, skipping analysis.
+2026-11-27 14:48:14,490 [WARNING] bsa_orchestrator: No price data available for RAINBOW, skipping analysis.
+2026-11-27 14:48:14,491 [WARNING] bsa_orchestrator: No price data available for REDINGTON, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RUBICON, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RVNL, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RELIANCE, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RRKABEL, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RKFORGE, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RITES, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RHIM, skipping analysis.
+2026-11-27 14:48:14,492 [WARNING] bsa_orchestrator: No price data available for RPOWER, skipping analysis.
+2026-11-27 14:48:14,494 [WARNING] bsa_orchestrator: No price data available for SAIL, skipping analysis.
+2026-11-27 14:48:14,493 [WARNING] bsa_orchestrator: No price data available for SAGILITY, skipping analysis.
+2026-11-27 14:48:14,493 [WARNING] bsa_orchestrator: No price data available for SAILIFE, skipping analysis.
+2026-11-27 14:48:14,494 [WARNING] bsa_orchestrator: No price data available for SAMMAANCAP, skipping analysis.
+2026-11-27 14:48:14,495 [WARNING] bsa_orchestrator: No price data available for SBICARD, skipping analysis.
+2026-11-27 14:48:14,495 [WARNING] bsa_orchestrator: No price data available for SARDAEN, skipping analysis.
+2026-11-27 14:48:14,494 [WARNING] bsa_orchestrator: No price data available for SANSERA, skipping analysis.
+2026-11-27 14:48:14,495 [WARNING] bsa_orchestrator: No price data available for SBIN, skipping analysis.
+2026-11-27 14:48:14,495 [WARNING] bsa_orchestrator: No price data available for SBILIFE, skipping analysis.
+2026-11-27 14:48:14,495 [WARNING] bsa_orchestrator: No price data available for SCHAEFFLER, skipping analysis.
+2026-11-27 14:48:14,496 [WARNING] bsa_orchestrator: No price data available for SCHNEIDER, skipping analysis.
+2026-11-27 14:48:14,496 [WARNING] bsa_orchestrator: No price data available for SHRIPISTON, skipping analysis.
+2026-11-27 14:48:14,496 [WARNING] bsa_orchestrator: No price data available for SCI, skipping analysis.
+2026-11-27 14:48:14,496 [WARNING] bsa_orchestrator: No price data available for SENSEX, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SHREECEM, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SOLARINDS, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SIGNATURE, skipping analysis.
+2026-11-27 14:48:14,498 [WARNING] bsa_orchestrator: No price data available for SJVN, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SIEMENS, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SOBHA, skipping analysis.
+2026-11-27 14:48:14,499 [WARNING] bsa_orchestrator: No price data available for STARHEALTH, skipping analysis.
+2026-11-27 14:48:14,497 [WARNING] bsa_orchestrator: No price data available for SHRIRAMFIN, skipping analysis.
+2026-11-27 14:48:14,498 [WARNING] bsa_orchestrator: No price data available for SONACOMS, skipping analysis.
+2026-11-27 14:48:14,498 [WARNING] bsa_orchestrator: No price data available for SHYAMMETL, skipping analysis.
+2026-11-27 14:48:14,499 [WARNING] bsa_orchestrator: No price data available for SRF, skipping analysis.
+2026-11-27 14:48:14,499 [WARNING] bsa_orchestrator: No price data available for STLTECH, skipping analysis.
+2026-11-27 14:48:14,499 [WARNING] bsa_orchestrator: No price data available for SUNDARMFIN, skipping analysis.
+2026-11-27 14:48:14,500 [WARNING] bsa_orchestrator: No price data available for SUNTV, skipping analysis.
+2026-11-27 14:48:14,500 [WARNING] bsa_orchestrator: No price data available for SUNPHARMA, skipping analysis.
+2026-11-27 14:48:14,499 [WARNING] bsa_orchestrator: No price data available for SUMICHEM, skipping analysis.
+2026-11-27 14:48:14,500 [WARNING] bsa_orchestrator: No price data available for SUPREMEIND, skipping analysis.
+2026-11-27 14:48:14,501 [WARNING] bsa_orchestrator: No price data available for SYRMA, skipping analysis.
+2026-11-27 14:48:14,501 [WARNING] bsa_orchestrator: No price data available for SUZLON, skipping analysis.
+2026-11-27 14:48:14,501 [WARNING] bsa_orchestrator: No price data available for TARIL, skipping analysis.
+2026-11-27 14:48:14,501 [WARNING] bsa_orchestrator: No price data available for SYNGENE, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for SWIGGY, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for SWANCORP, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for TATACOMM, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for TATACHEM, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for TATAELXSI, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for TATACAP, skipping analysis.
+2026-11-27 14:48:14,502 [WARNING] bsa_orchestrator: No price data available for TATACONSUM, skipping analysis.
+2026-11-27 14:48:14,503 [WARNING] bsa_orchestrator: No price data available for TATAPOWER, skipping analysis.
+2026-11-27 14:48:14,503 [WARNING] bsa_orchestrator: No price data available for TATAINVEST, skipping analysis.
+2026-11-27 14:48:14,504 [WARNING] bsa_orchestrator: No price data available for TATASTEEL, skipping analysis.
+2026-11-27 14:48:14,504 [WARNING] bsa_orchestrator: No price data available for TATATECH, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TDPOWERSYS, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TCS, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TECHNOE, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TBOTEK, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TEGA, skipping analysis.
+2026-11-27 14:48:14,505 [WARNING] bsa_orchestrator: No price data available for TECHM, skipping analysis.
+2026-11-27 14:48:14,506 [WARNING] bsa_orchestrator: No price data available for TENNIND, skipping analysis.
+2026-11-27 14:48:14,506 [WARNING] bsa_orchestrator: No price data available for THANGAMAYL, skipping analysis.
+2026-11-27 14:48:14,506 [WARNING] bsa_orchestrator: No price data available for TEJASNET, skipping analysis.
+2026-11-27 14:48:14,506 [WARNING] bsa_orchestrator: No price data available for THERMAX, skipping analysis.
+2026-11-27 14:48:14,508 [WARNING] bsa_orchestrator: No price data available for TMCV, skipping analysis.
+2026-11-27 14:48:14,507 [WARNING] bsa_orchestrator: No price data available for TIINDIA, skipping analysis.
+2026-11-27 14:48:14,508 [WARNING] bsa_orchestrator: No price data available for TORNTPHARM, skipping analysis.
+2026-11-27 14:48:14,507 [WARNING] bsa_orchestrator: No price data available for TITAN, skipping analysis.
+2026-11-27 14:48:14,507 [WARNING] bsa_orchestrator: No price data available for TIMKEN, skipping analysis.
+2026-11-27 14:48:14,507 [WARNING] bsa_orchestrator: No price data available for TITAGARH, skipping analysis.
+2026-11-27 14:48:14,510 [WARNING] bsa_orchestrator: No price data available for UBL, skipping analysis.
+2026-11-27 14:48:14,509 [WARNING] bsa_orchestrator: No price data available for TRIDENT, skipping analysis.
+2026-11-27 14:48:14,509 [WARNING] bsa_orchestrator: No price data available for TORNTPOWER, skipping analysis.
+2026-11-27 14:48:14,509 [WARNING] bsa_orchestrator: No price data available for TRENT, skipping analysis.
+2026-11-27 14:48:14,509 [WARNING] bsa_orchestrator: No price data available for TMPV, skipping analysis.
+2026-11-27 14:48:14,510 [WARNING] bsa_orchestrator: No price data available for TTML, skipping analysis.
+2026-11-27 14:48:14,510 [WARNING] bsa_orchestrator: No price data available for TRITURBINE, skipping analysis.
+2026-11-27 14:48:14,510 [WARNING] bsa_orchestrator: No price data available for TVSMOTOR, skipping analysis.
+2026-11-27 14:48:14,511 [WARNING] bsa_orchestrator: No price data available for UCOBANK, skipping analysis.
+2026-11-27 14:48:14,511 [WARNING] bsa_orchestrator: No price data available for ULTRACEMCO, skipping analysis.
+2026-11-27 14:48:14,511 [WARNING] bsa_orchestrator: No price data available for UNIONBANK, skipping analysis.
+2026-11-27 14:48:14,511 [WARNING] bsa_orchestrator: No price data available for UNITDSPR, skipping analysis.
+2026-11-27 14:48:14,512 [WARNING] bsa_orchestrator: No price data available for UNOMINDA, skipping analysis.
+2026-11-27 14:48:14,513 [WARNING] bsa_orchestrator: No price data available for URBANCO, skipping analysis.
+2026-11-27 14:48:14,514 [WARNING] bsa_orchestrator: No price data available for VIJAYA, skipping analysis.
+2026-11-27 14:48:14,513 [WARNING] bsa_orchestrator: No price data available for USHAMART, skipping analysis.
+2026-11-27 14:48:14,513 [WARNING] bsa_orchestrator: No price data available for UPL, skipping analysis.
+2026-11-27 14:48:14,513 [WARNING] bsa_orchestrator: No price data available for VAML, skipping analysis.
+2026-11-27 14:48:14,514 [WARNING] bsa_orchestrator: No price data available for VEDPOWER, skipping analysis.
+2026-11-27 14:48:14,514 [WARNING] bsa_orchestrator: No price data available for VBL, skipping analysis.
+2026-11-27 14:48:14,513 [WARNING] bsa_orchestrator: No price data available for UTIAMC, skipping analysis.
+2026-11-27 14:48:14,514 [WARNING] bsa_orchestrator: No price data available for VEDL, skipping analysis.
+2026-11-27 14:48:14,514 [WARNING] bsa_orchestrator: No price data available for VISL, skipping analysis.
+2026-11-27 14:48:14,515 [WARNING] bsa_orchestrator: No price data available for VOLTAS, skipping analysis.
+2026-11-27 14:48:14,516 [WARNING] bsa_orchestrator: No price data available for VOGL, skipping analysis.
+2026-11-27 14:48:14,516 [WARNING] bsa_orchestrator: No price data available for VMM, skipping analysis.
+2026-11-27 14:48:14,516 [WARNING] bsa_orchestrator: No price data available for VTL, skipping analysis.
+2026-11-27 14:48:14,517 [WARNING] bsa_orchestrator: No price data available for WHIRLPOOL, skipping analysis.
+2026-11-27 14:48:14,517 [WARNING] bsa_orchestrator: No price data available for WAAREEENER, skipping analysis.
+2026-11-27 14:48:14,517 [WARNING] bsa_orchestrator: No price data available for WELCORP, skipping analysis.
+2026-11-27 14:48:14,518 [WARNING] bsa_orchestrator: No price data available for WELSPUNLIV, skipping analysis.
+2026-11-27 14:48:14,518 [WARNING] bsa_orchestrator: No price data available for WIPRO, skipping analysis.
+2026-11-27 14:48:14,518 [WARNING] bsa_orchestrator: No price data available for YESBANK, skipping analysis.
+2026-11-27 14:48:14,518 [WARNING] bsa_orchestrator: No price data available for WOCKPHARMA, skipping analysis.
+2026-11-27 14:48:14,519 [WARNING] bsa_orchestrator: No price data available for ZENTEC, skipping analysis.
+2026-11-27 14:48:14,520 [WARNING] bsa_orchestrator: No price data available for ZFCVINDIA, skipping analysis.
+2026-11-27 14:48:14,519 [WARNING] bsa_orchestrator: No price data available for ZENSARTECH, skipping analysis.
+2026-11-27 14:48:14,519 [WARNING] bsa_orchestrator: No price data available for ZEEL, skipping analysis.
+2026-11-27 14:48:14,520 [WARNING] bsa_orchestrator: No price data available for ZYDUSLIFE, skipping analysis.
+2026-11-27 14:48:14,520 [WARNING] bsa_orchestrator: No price data available for ZYDUSWELL, skipping analysis.
+2026-11-27 14:48:14,521 [INFO] bsa_orchestrator: Core Ticker Analysis completed. Total: 518, Succeeded: 0, Failed: 518, Time Taken: 0.15s
+2026-11-27 14:48:14,525 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 0.16s.
+2026-11-27 14:48:14,526 [INFO] bsa_cli: [OK] Phase 2 (Analyze All) fully completed in 0.89s.
+2026-11-27 14:48:14,526 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-11-27 14:48:14,527 [INFO] bsa_cli: [OK] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to D:\StockScanners\bsa_screener\data\historical_call_bkp.csv.
+2026-11-27 14:48:14,527 [INFO] bsa_cli: [OK] Full pipeline execution completed successfully!
+2026-11-27 14:56:32,444 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...
+2026-11-27 14:56:32,444 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-27 14:56:32,444 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 14:56:32,461 [INFO] bsa_cli: All 501 items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.
+2026-11-27 14:56:32,461 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 0.02s.
+2026-11-27 14:56:32,461 [INFO] bsa_cli: === Phase 1.2: Spot Data Download (Fundamentals) ===
+2026-11-27 14:56:32,474 [INFO] bsa_cli: All 501 items for Phase 1.2 (Download Fundamentals) are already completed. Use --fresh to re-download.
+2026-11-27 14:56:32,474 [INFO] bsa_cli: [OK] Phase 1.2 (Download Fundamentals) completed in 0.01s.
+2026-11-27 14:56:32,474 [INFO] bsa_cli: === Phase 1.3: Mutual Fund & FII Holdings Download ===
+2026-11-27 15:03:07,714 [INFO] bsa_cli: Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...
+2026-11-27 15:03:07,714 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-27 15:03:07,714 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 15:03:07,731 [INFO] bsa_cli: All 501 items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.
+2026-11-27 15:03:07,731 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 0.02s.
+2026-11-27 15:03:07,731 [INFO] bsa_cli: === Phase 1.2: Spot Data Download (Fundamentals) ===
+2026-11-27 15:03:07,743 [INFO] bsa_cli: All 501 items for Phase 1.2 (Download Fundamentals) are already completed. Use --fresh to re-download.
+2026-11-27 15:03:07,743 [INFO] bsa_cli: [OK] Phase 1.2 (Download Fundamentals) completed in 0.01s.
+2026-11-27 15:03:07,743 [INFO] bsa_cli: === Phase 1.3: Mutual Fund & FII Holdings Download ===
+2026-11-27 15:09:08,141 [INFO] bsa_cli: Today is Friday (Weekday). Executing Fast Market Pipeline (Spot Technicals, Chart Patterns, Quarterly Fundamentals, F&O Option Chains, PCR, Buildup & Automated Trading Signals) with MF/FII download skipped for maximum speed...
+2026-11-27 15:09:08,141 [INFO] bsa_cli: === Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===
+2026-11-27 15:09:08,141 [INFO] bsa_cli: === Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===
+2026-11-27 15:09:08,155 [INFO] bsa_cli: All 501 items for Phase 1.1 (Download Technicals) are already completed. Use --fresh or --force to re-download.
+2026-11-27 15:09:08,155 [INFO] bsa_cli: [OK] Phase 1.1 (Download Technicals) completed in 0.01s.
+2026-11-27 15:09:08,155 [INFO] bsa_cli: === Phase 1.2: Spot Data Download (Fundamentals) ===
+2026-11-27 15:09:08,168 [INFO] bsa_cli: All 501 items for Phase 1.2 (Download Fundamentals) are already completed. Use --fresh to re-download.
+2026-11-27 15:09:08,168 [INFO] bsa_cli: [OK] Phase 1.2 (Download Fundamentals) completed in 0.01s.
+2026-11-27 15:09:08,168 [INFO] bsa_cli: Skipping Phase 1.3 (Mutual Fund & FII Download) on weekday to maximize execution speed.
+2026-11-27 15:09:08,168 [INFO] bsa_cli: === Phase 1.4: F&O Derivatives Download ===
+2026-11-27 15:09:11,686 [INFO] bsa_cli: User requested fresh run ('y'). Clearing checkpoint for Phase 1.4 (Download F&O)...
+2026-11-27 15:09:56,921 [INFO] bsa_cli: [OK] Phase 1.4 (Download F&O) completed in 48.75s.
+2026-11-27 15:09:56,921 [INFO] bsa_cli: [OK] Phase 1 (Raw Data Ingestion) fully completed in 48.78s.
+2026-11-27 15:09:56,922 [INFO] bsa_cli: === Starting Phase 2: Consolidated Scoring, Scanners & Analysis Engine (--mode analyze-all) ===
+2026-11-27 15:09:56,922 [INFO] bsa_cli: [Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...
+2026-11-27 15:09:57,014 [INFO] bsa_cli: [Sub-task 2.1/2.8] Technical Analysis completed in 0.09s.
+2026-11-27 15:09:57,014 [INFO] bsa_cli: [Sub-task 2.2/2.8] Starting Fundamental Analysis (PAT Growth, PE, Debt/Equity)...
+2026-11-27 15:09:57,054 [INFO] bsa_cli: [Sub-task 2.2/2.8] Fundamental Analysis completed in 0.04s.
+2026-11-27 15:09:57,055 [INFO] bsa_cli: [Sub-task 2.3/2.8] Starting F&O Derivative Options Analysis (PCR, Max Pain, Active Buildup)...
+2026-11-27 15:09:57,127 [INFO] bsa_cli: [Sub-task 2.3/2.8] F&O Derivative Options Analysis completed in 0.07s.
+2026-11-27 15:09:57,128 [INFO] bsa_cli: [Sub-task 2.4/2.8] Starting Candlestick Chart Pattern Scanning & Respecting Patterns Analysis...
+2026-11-27 15:09:57,176 [INFO] bsa_cli: [Sub-task 2.4/2.8] Chart Pattern Analysis completed in 0.05s.
+2026-11-27 15:09:57,176 [INFO] bsa_cli: Skipping Phase 2.5 (Mutual Fund & FII Behavior Analysis) on weekday to maximize execution speed.
+2026-11-27 15:09:57,176 [INFO] bsa_cli: [Sub-task 2.6/2.8] Starting Elliot Wave W3/W5 Momentum Analysis...
+2026-11-27 15:09:57,265 [INFO] bsa_cli: [Sub-task 2.6/2.8] Elliot Wave Analysis completed in 0.09s.
+2026-11-27 15:09:57,266 [INFO] bsa_cli: [Sub-task 2.7/2.8] Starting Sectorwise Lead-Follow Relationship Groups Analysis...
+2026-11-27 15:09:57,287 [INFO] bsa_cli: [Sub-task 2.7/2.8] Sectorwise Lead-Follow Analysis completed in 0.02s.
+2026-11-27 15:09:57,287 [INFO] bsa_cli: [Sub-task 2.8/2.8] Starting Multi-Factor Hybrid Synthesis, Historical Calls & Efficiency Tracking...
+2026-11-27 15:09:57,313 [INFO] bsa_orchestrator: Starting analysis process. Total: 501, Completed: 0, Pending: 501
+2026-11-27 15:09:57,328 [WARNING] bsa_orchestrator: No price data available for AARTIIND, skipping analysis.
+2026-11-27 15:09:57,329 [WARNING] bsa_orchestrator: No price data available for ABBOTINDIA, skipping analysis.
+2026-11-27 15:09:57,329 [WARNING] bsa_orchestrator: No price data available for AADHARHFC, skipping analysis.
+2026-11-27 15:09:57,330 [WARNING] bsa_orchestrator: No price data available for ABCAPITAL, skipping analysis.
+2026-11-27 15:09:57,331 [WARNING] bsa_orchestrator: No price data available for ABSLAMC, skipping analysis.
+2026-11-27 15:09:57,332 [WARNING] bsa_orchestrator: No price data available for ABDL, skipping analysis.
+2026-11-27 15:09:57,333 [WARNING] bsa_orchestrator: No price data available for ACC, skipping analysis.
+2026-11-27 15:09:57,332 [WARNING] bsa_orchestrator: No price data available for 360ONE, skipping analysis.
+2026-11-27 15:09:57,332 [WARNING] bsa_orchestrator: No price data available for ABREL, skipping analysis.
+2026-11-27 15:09:57,334 [WARNING] bsa_orchestrator: No price data available for ACE, skipping analysis.
+2026-11-27 15:09:57,334 [WARNING] bsa_orchestrator: No price data available for ACMESOLAR, skipping analysis.
+2026-11-27 15:09:57,334 [WARNING] bsa_orchestrator: No price data available for AAVAS, skipping analysis.
+2026-11-27 15:09:57,334 [WARNING] bsa_orchestrator: No price data available for ADANIENSOL, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ADANIPORTS, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ADANIENT, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ADANIGREEN, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ADANIPOWER, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ACUTAAS, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for AEGISLOG, skipping analysis.
+2026-11-27 15:09:57,336 [WARNING] bsa_orchestrator: No price data available for AFCONS, skipping analysis.
+2026-11-27 15:09:57,335 [WARNING] bsa_orchestrator: No price data available for ABB, skipping analysis.
+2026-11-27 15:09:57,336 [WARNING] bsa_orchestrator: No price data available for AETHER, skipping analysis.
+2026-11-27 15:09:57,337 [WARNING] bsa_orchestrator: No price data available for AIAENG, skipping analysis.
+2026-11-27 15:09:57,336 [WARNING] bsa_orchestrator: No price data available for AEGISVOPAK, skipping analysis.
+2026-11-27 15:09:57,336 [WARNING] bsa_orchestrator: No price data available for AFFLE, skipping analysis.
+2026-11-27 15:09:57,337 [WARNING] bsa_orchestrator: No price data available for AIIL, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for ANANTRAJ, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for ANGELONE, skipping analysis.
+2026-11-27 15:09:57,339 [WARNING] bsa_orchestrator: No price data available for ANANDRATHI, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for AMBUJACEM, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for ALKEM, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for AJANTPHARM, skipping analysis.
+2026-11-27 15:09:57,338 [WARNING] bsa_orchestrator: No price data available for AMBER, skipping analysis.
+2026-11-27 15:09:57,339 [WARNING] bsa_orchestrator: No price data available for ANTHEM, skipping analysis.
+2026-11-27 15:09:57,340 [WARNING] bsa_orchestrator: No price data available for APOLLOHOSP, skipping analysis.
+2026-11-27 15:09:57,340 [WARNING] bsa_orchestrator: No price data available for ANURAS, skipping analysis.
+2026-11-27 15:09:57,341 [WARNING] bsa_orchestrator: No price data available for APLAPOLLO, skipping analysis.
+2026-11-27 15:09:57,341 [WARNING] bsa_orchestrator: No price data available for APARINDS, skipping analysis.
+2026-11-27 15:09:57,341 [WARNING] bsa_orchestrator: No price data available for APOLLOTYRE, skipping analysis.
+2026-11-27 15:09:57,341 [WARNING] bsa_orchestrator: No price data available for ARE&M, skipping analysis.
+2026-11-27 15:09:57,341 [WARNING] bsa_orchestrator: No price data available for APTUS, skipping analysis.
+2026-11-27 15:09:57,342 [WARNING] bsa_orchestrator: No price data available for ASAHIINDIA, skipping analysis.
+2026-11-27 15:09:57,342 [WARNING] bsa_orchestrator: No price data available for ASIANPAINT, skipping analysis.
+2026-11-27 15:09:57,342 [WARNING] bsa_orchestrator: No price data available for ASHOKLEY, skipping analysis.
+2026-11-27 15:09:57,343 [WARNING] bsa_orchestrator: No price data available for ASTRAL, skipping analysis.
+2026-11-27 15:09:57,343 [WARNING] bsa_orchestrator: No price data available for ATHERENERG, skipping analysis.
+2026-11-27 15:09:57,343 [WARNING] bsa_orchestrator: No price data available for ATGL, skipping analysis.
+2026-11-27 15:09:57,343 [WARNING] bsa_orchestrator: No price data available for ASTERDM, skipping analysis.
+2026-11-27 15:09:57,344 [WARNING] bsa_orchestrator: No price data available for ATUL, skipping analysis.
+2026-11-27 15:09:57,344 [WARNING] bsa_orchestrator: No price data available for AUBANK, skipping analysis.
+2026-11-27 15:09:57,345 [WARNING] bsa_orchestrator: No price data available for AUROPHARMA, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for AVANTIFEED, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for AZAD, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for AXISBANK, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for BAJAJ-AUTO, skipping analysis.
+2026-11-27 15:09:57,347 [WARNING] bsa_orchestrator: No price data available for BAJAJFINSV, skipping analysis.
+2026-11-27 15:09:57,345 [WARNING] bsa_orchestrator: No price data available for AWL, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for BAJAJHLDNG, skipping analysis.
+2026-11-27 15:09:57,347 [WARNING] bsa_orchestrator: No price data available for BALKRISIND, skipping analysis.
+2026-11-27 15:09:57,347 [WARNING] bsa_orchestrator: No price data available for BAJAJHFL, skipping analysis.
+2026-11-27 15:09:57,346 [WARNING] bsa_orchestrator: No price data available for BAGMANE, skipping analysis.
+2026-11-27 15:09:57,348 [WARNING] bsa_orchestrator: No price data available for BAJFINANCE, skipping analysis.
+2026-11-27 15:09:57,348 [WARNING] bsa_orchestrator: No price data available for BALRAMCHIN, skipping analysis.
+2026-11-27 15:09:57,348 [WARNING] bsa_orchestrator: No price data available for BANKBARODA, skipping analysis.
+2026-11-27 15:09:57,348 [WARNING] bsa_orchestrator: No price data available for BATAINDIA, skipping analysis.
+2026-11-27 15:09:57,348 [WARNING] bsa_orchestrator: No price data available for BANDHANBNK, skipping analysis.
+2026-11-27 15:09:57,349 [WARNING] bsa_orchestrator: No price data available for BANKINDIA, skipping analysis.
+2026-11-27 15:09:57,350 [WARNING] bsa_orchestrator: No price data available for BEML, skipping analysis.
+2026-11-27 15:09:57,349 [WARNING] bsa_orchestrator: No price data available for BEL, skipping analysis.
+2026-11-27 15:09:57,349 [WARNING] bsa_orchestrator: No price data available for BDL, skipping analysis.
+2026-11-27 15:09:57,349 [WARNING] bsa_orchestrator: No price data available for BELRISE, skipping analysis.
+2026-11-27 15:09:57,350 [WARNING] bsa_orchestrator: No price data available for BHARATFORG, skipping analysis.
+2026-11-27 15:09:57,349 [WARNING] bsa_orchestrator: No price data available for BBOX, skipping analysis.
+2026-11-27 15:09:57,350 [WARNING] bsa_orchestrator: No price data available for BHARTIARTL, skipping analysis.
+2026-11-27 15:09:57,350 [WARNING] bsa_orchestrator: No price data available for BHARATCOAL, skipping analysis.
+2026-11-27 15:09:57,351 [WARNING] bsa_orchestrator: No price data available for BERGEPAINT, skipping analysis.
+2026-11-27 15:09:57,351 [WARNING] bsa_orchestrator: No price data available for BHEL, skipping analysis.
+2026-11-27 15:09:57,352 [WARNING] bsa_orchestrator: No price data available for BLS, skipping analysis.
+2026-11-27 15:09:57,351 [WARNING] bsa_orchestrator: No price data available for BHARTIHEXA, skipping analysis.
+2026-11-27 15:09:57,353 [WARNING] bsa_orchestrator: No price data available for BLUESTARCO, skipping analysis.
+2026-11-27 15:09:57,351 [WARNING] bsa_orchestrator: No price data available for BIOCON, skipping analysis.
+2026-11-27 15:09:57,353 [WARNING] bsa_orchestrator: No price data available for BPCL, skipping analysis.
+2026-11-27 15:09:57,353 [WARNING] bsa_orchestrator: No price data available for BOSCHLTD, skipping analysis.
+2026-11-27 15:09:57,352 [WARNING] bsa_orchestrator: No price data available for BIRET, skipping analysis.
+2026-11-27 15:09:57,354 [WARNING] bsa_orchestrator: No price data available for BRITANNIA, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for BRIGADE, skipping analysis.
+2026-11-27 15:09:57,354 [WARNING] bsa_orchestrator: No price data available for BSE, skipping analysis.
+2026-11-27 15:09:57,354 [WARNING] bsa_orchestrator: No price data available for BSOFT, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for CAMS, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for CANBK, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for CAPLIPOINT, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for CANHLIFE, skipping analysis.
+2026-11-27 15:09:57,355 [WARNING] bsa_orchestrator: No price data available for CANFINHOME, skipping analysis.
+2026-11-27 15:09:57,356 [WARNING] bsa_orchestrator: No price data available for CARBORUNIV, skipping analysis.
+2026-11-27 15:09:57,357 [WARNING] bsa_orchestrator: No price data available for CCL, skipping analysis.
+2026-11-27 15:09:57,357 [WARNING] bsa_orchestrator: No price data available for CARTRADE, skipping analysis.
+2026-11-27 15:09:57,357 [WARNING] bsa_orchestrator: No price data available for CASTROLIND, skipping analysis.
+2026-11-27 15:09:57,357 [WARNING] bsa_orchestrator: No price data available for CDSL, skipping analysis.
+2026-11-27 15:09:57,357 [WARNING] bsa_orchestrator: No price data available for CEATLTD, skipping analysis.
+2026-11-27 15:09:57,358 [WARNING] bsa_orchestrator: No price data available for CESC, skipping analysis.
+2026-11-27 15:09:57,358 [WARNING] bsa_orchestrator: No price data available for CEMPRO, skipping analysis.
+2026-11-27 15:09:57,358 [WARNING] bsa_orchestrator: No price data available for CENTRALBK, skipping analysis.
+2026-11-27 15:09:57,358 [WARNING] bsa_orchestrator: No price data available for CGCL, skipping analysis.
+2026-11-27 15:09:57,358 [WARNING] bsa_orchestrator: No price data available for CGPOWER, skipping analysis.
+2026-11-27 15:09:57,359 [WARNING] bsa_orchestrator: No price data available for CHAMBLFERT, skipping analysis.
+2026-11-27 15:09:57,359 [WARNING] bsa_orchestrator: No price data available for CHENNPETRO, skipping analysis.
+2026-11-27 15:09:57,360 [WARNING] bsa_orchestrator: No price data available for CHOLAHLDNG, skipping analysis.
+2026-11-27 15:09:57,360 [WARNING] bsa_orchestrator: No price data available for CHOICEIN, skipping analysis.
+2026-11-27 15:09:57,360 [WARNING] bsa_orchestrator: No price data available for CHOLAFIN, skipping analysis.
+2026-11-27 15:09:57,360 [WARNING] bsa_orchestrator: No price data available for CIEINDIA, skipping analysis.
+2026-11-27 15:09:57,361 [WARNING] bsa_orchestrator: No price data available for CIPLA, skipping analysis.
+2026-11-27 15:09:57,361 [WARNING] bsa_orchestrator: No price data available for CLEAN, skipping analysis.
+2026-11-27 15:09:57,362 [WARNING] bsa_orchestrator: No price data available for CLEANMAX, skipping analysis.
+2026-11-27 15:09:57,362 [WARNING] bsa_orchestrator: No price data available for COALINDIA, skipping analysis.
+2026-11-27 15:09:57,362 [WARNING] bsa_orchestrator: No price data available for CMPDI, skipping analysis.
+2026-11-27 15:09:57,363 [WARNING] bsa_orchestrator: No price data available for COCHINSHIP, skipping analysis.
+2026-11-27 15:09:57,363 [WARNING] bsa_orchestrator: No price data available for COFORGE, skipping analysis.
+2026-11-27 15:09:57,364 [WARNING] bsa_orchestrator: No price data available for CONCORDBIO, skipping analysis.
+2026-11-27 15:09:57,364 [WARNING] bsa_orchestrator: No price data available for COROMANDEL, skipping analysis.
+2026-11-27 15:09:57,364 [WARNING] bsa_orchestrator: No price data available for COLPAL, skipping analysis.
+2026-11-27 15:09:57,365 [WARNING] bsa_orchestrator: No price data available for CONCOR, skipping analysis.
+2026-11-27 15:09:57,363 [WARNING] bsa_orchestrator: No price data available for COHANCE, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CRAFTSMAN, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CPPLUS, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CUB, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CROMPTON, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CUMMINSIND, skipping analysis.
+2026-11-27 15:09:57,367 [WARNING] bsa_orchestrator: No price data available for CREDITACC, skipping analysis.
+2026-11-27 15:09:57,366 [WARNING] bsa_orchestrator: No price data available for CRISIL, skipping analysis.
+2026-11-27 15:09:57,367 [WARNING] bsa_orchestrator: No price data available for CUPID, skipping analysis.
+2026-11-27 15:09:57,367 [WARNING] bsa_orchestrator: No price data available for DABUR, skipping analysis.
+2026-11-27 15:09:57,368 [WARNING] bsa_orchestrator: No price data available for CYIENT, skipping analysis.
+2026-11-27 15:09:57,368 [WARNING] bsa_orchestrator: No price data available for DALBHARAT, skipping analysis.
+2026-11-27 15:09:57,368 [WARNING] bsa_orchestrator: No price data available for DEEPAKNTR, skipping analysis.
+2026-11-27 15:09:57,369 [WARNING] bsa_orchestrator: No price data available for DEEPAKFERT, skipping analysis.
+2026-11-27 15:09:57,368 [WARNING] bsa_orchestrator: No price data available for DATAPATTNS, skipping analysis.
+2026-11-27 15:09:57,369 [WARNING] bsa_orchestrator: No price data available for DELHIVERY, skipping analysis.
+2026-11-27 15:09:57,370 [WARNING] bsa_orchestrator: No price data available for DEVYANI, skipping analysis.
+2026-11-27 15:09:57,370 [WARNING] bsa_orchestrator: No price data available for DMART, skipping analysis.
+2026-11-27 15:09:57,370 [WARNING] bsa_orchestrator: No price data available for DIVISLAB, skipping analysis.
+2026-11-27 15:09:57,370 [WARNING] bsa_orchestrator: No price data available for ECLERX, skipping analysis.
+2026-11-27 15:09:57,369 [WARNING] bsa_orchestrator: No price data available for DIXON, skipping analysis.
+2026-11-27 15:09:57,370 [WARNING] bsa_orchestrator: No price data available for DLF, skipping analysis.
+2026-11-27 15:09:57,371 [WARNING] bsa_orchestrator: No price data available for DOMS, skipping analysis.
+2026-11-27 15:09:57,371 [WARNING] bsa_orchestrator: No price data available for EIDPARRY, skipping analysis.
+2026-11-27 15:09:57,371 [WARNING] bsa_orchestrator: No price data available for DRREDDY, skipping analysis.
+2026-11-27 15:09:57,371 [WARNING] bsa_orchestrator: No price data available for EICHERMOT, skipping analysis.
+2026-11-27 15:09:57,371 [WARNING] bsa_orchestrator: No price data available for EIHOTEL, skipping analysis.
+2026-11-27 15:09:57,372 [WARNING] bsa_orchestrator: No price data available for ELECON, skipping analysis.
+2026-11-27 15:09:57,373 [WARNING] bsa_orchestrator: No price data available for EMBASSY, skipping analysis.
+2026-11-27 15:09:57,373 [WARNING] bsa_orchestrator: No price data available for ELGIEQUIP, skipping analysis.
+2026-11-27 15:09:57,373 [WARNING] bsa_orchestrator: No price data available for EMAMILTD, skipping analysis.
+2026-11-27 15:09:57,373 [WARNING] bsa_orchestrator: No price data available for EMMVEE, skipping analysis.
+2026-11-27 15:09:57,374 [WARNING] bsa_orchestrator: No price data available for ENDURANCE, skipping analysis.
+2026-11-27 15:09:57,373 [WARNING] bsa_orchestrator: No price data available for EMCURE, skipping analysis.
+2026-11-27 15:09:57,374 [WARNING] bsa_orchestrator: No price data available for ENRIN, skipping analysis.
+2026-11-27 15:09:57,375 [WARNING] bsa_orchestrator: No price data available for ESCORTS, skipping analysis.
+2026-11-27 15:09:57,375 [WARNING] bsa_orchestrator: No price data available for ENGINERSIN, skipping analysis.
+2026-11-27 15:09:57,375 [WARNING] bsa_orchestrator: No price data available for ETERNAL, skipping analysis.
+2026-11-27 15:09:57,375 [WARNING] bsa_orchestrator: No price data available for EXIDEIND, skipping analysis.
+2026-11-27 15:09:57,376 [WARNING] bsa_orchestrator: No price data available for FIRSTCRY, skipping analysis.
+2026-11-27 15:09:57,377 [WARNING] bsa_orchestrator: No price data available for FORTIS, skipping analysis.
+2026-11-27 15:09:57,376 [WARNING] bsa_orchestrator: No price data available for FINCABLES, skipping analysis.
+2026-11-27 15:09:57,376 [WARNING] bsa_orchestrator: No price data available for FIVESTAR, skipping analysis.
+2026-11-27 15:09:57,375 [WARNING] bsa_orchestrator: No price data available for FEDERALBNK, skipping analysis.
+2026-11-27 15:09:57,377 [WARNING] bsa_orchestrator: No price data available for FLUOROCHEM, skipping analysis.
+2026-11-27 15:09:57,376 [WARNING] bsa_orchestrator: No price data available for FACT, skipping analysis.
+2026-11-27 15:09:57,378 [WARNING] bsa_orchestrator: No price data available for FORCEMOT, skipping analysis.
+2026-11-27 15:09:57,379 [WARNING] bsa_orchestrator: No price data available for FSL, skipping analysis.
+2026-11-27 15:09:57,378 [WARNING] bsa_orchestrator: No price data available for FRACTAL, skipping analysis.
+2026-11-27 15:09:57,380 [WARNING] bsa_orchestrator: No price data available for GILLETTE, skipping analysis.
+2026-11-27 15:09:57,379 [WARNING] bsa_orchestrator: No price data available for GABRIEL, skipping analysis.
+2026-11-27 15:09:57,380 [WARNING] bsa_orchestrator: No price data available for GESHIP, skipping analysis.
+2026-11-27 15:09:57,380 [WARNING] bsa_orchestrator: No price data available for GICRE, skipping analysis.
+2026-11-27 15:09:57,380 [WARNING] bsa_orchestrator: No price data available for GALLANTT, skipping analysis.
+2026-11-27 15:09:57,379 [WARNING] bsa_orchestrator: No price data available for GAIL, skipping analysis.
+2026-11-27 15:09:57,381 [WARNING] bsa_orchestrator: No price data available for GLAXO, skipping analysis.
+2026-11-27 15:09:57,380 [WARNING] bsa_orchestrator: No price data available for GLAND, skipping analysis.
+2026-11-27 15:09:57,381 [WARNING] bsa_orchestrator: No price data available for GLENMARK, skipping analysis.
+2026-11-27 15:09:57,381 [WARNING] bsa_orchestrator: No price data available for GMDCLTD, skipping analysis.
+2026-11-27 15:09:57,382 [WARNING] bsa_orchestrator: No price data available for GODFRYPHLP, skipping analysis.
+2026-11-27 15:09:57,382 [WARNING] bsa_orchestrator: No price data available for GODREJIND, skipping analysis.
+2026-11-27 15:09:57,381 [WARNING] bsa_orchestrator: No price data available for GMRAIRPORT, skipping analysis.
+2026-11-27 15:09:57,382 [WARNING] bsa_orchestrator: No price data available for GODREJCP, skipping analysis.
+2026-11-27 15:09:57,383 [WARNING] bsa_orchestrator: No price data available for GRANULES, skipping analysis.
+2026-11-27 15:09:57,383 [WARNING] bsa_orchestrator: No price data available for GRAPHITE, skipping analysis.
+2026-11-27 15:09:57,383 [WARNING] bsa_orchestrator: No price data available for GODREJPROP, skipping analysis.
+2026-11-27 15:09:57,383 [WARNING] bsa_orchestrator: No price data available for GPIL, skipping analysis.
+2026-11-27 15:09:57,384 [WARNING] bsa_orchestrator: No price data available for GROWW, skipping analysis.
+2026-11-27 15:09:57,384 [WARNING] bsa_orchestrator: No price data available for GRSE, skipping analysis.
+2026-11-27 15:09:57,384 [WARNING] bsa_orchestrator: No price data available for GRAVITA, skipping analysis.
+2026-11-27 15:09:57,383 [WARNING] bsa_orchestrator: No price data available for GRASIM, skipping analysis.
+2026-11-27 15:09:57,384 [WARNING] bsa_orchestrator: No price data available for GVT&D, skipping analysis.
+2026-11-27 15:09:57,385 [WARNING] bsa_orchestrator: No price data available for HAL, skipping analysis.
+2026-11-27 15:09:57,385 [WARNING] bsa_orchestrator: No price data available for HDBFS, skipping analysis.
+2026-11-27 15:09:57,385 [WARNING] bsa_orchestrator: No price data available for HDFCBANK, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HDFCAMC, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HDFCLIFE, skipping analysis.
+2026-11-27 15:09:57,385 [WARNING] bsa_orchestrator: No price data available for HAVELLS, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HCLTECH, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HEGAM, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HEROMOTOCO, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HBLENGINE, skipping analysis.
+2026-11-27 15:09:57,386 [WARNING] bsa_orchestrator: No price data available for HEGRAPHITE, skipping analysis.
+2026-11-27 15:09:57,387 [WARNING] bsa_orchestrator: No price data available for HEXT, skipping analysis.
+2026-11-27 15:09:57,387 [WARNING] bsa_orchestrator: No price data available for HFCL, skipping analysis.
+2026-11-27 15:09:57,388 [WARNING] bsa_orchestrator: No price data available for HINDCOPPER, skipping analysis.
+2026-11-27 15:09:57,388 [WARNING] bsa_orchestrator: No price data available for HINDUNILVR, skipping analysis.
+2026-11-27 15:09:57,388 [WARNING] bsa_orchestrator: No price data available for HINDALCO, skipping analysis.
+2026-11-27 15:09:57,388 [WARNING] bsa_orchestrator: No price data available for HINDPETRO, skipping analysis.
+2026-11-27 15:09:57,389 [WARNING] bsa_orchestrator: No price data available for HONASA, skipping analysis.
+2026-11-27 15:09:57,389 [WARNING] bsa_orchestrator: No price data available for HUDCO, skipping analysis.
+2026-11-27 15:09:57,389 [WARNING] bsa_orchestrator: No price data available for HINDZINC, skipping analysis.
+2026-11-27 15:09:57,390 [WARNING] bsa_orchestrator: No price data available for HOMEFIRST, skipping analysis.
+2026-11-27 15:09:57,390 [WARNING] bsa_orchestrator: No price data available for HONAUT, skipping analysis.
+2026-11-27 15:09:57,390 [WARNING] bsa_orchestrator: No price data available for ICICIAMC, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for HYUNDAI, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for HSCL, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for IDBI, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for ICICIBANK, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for IDEA, skipping analysis.
+2026-11-27 15:09:57,391 [WARNING] bsa_orchestrator: No price data available for ICICILIFE, skipping analysis.
+2026-11-27 15:09:57,392 [WARNING] bsa_orchestrator: No price data available for ICICIGI, skipping analysis.
+2026-11-27 15:09:57,392 [WARNING] bsa_orchestrator: No price data available for IDFCFIRSTB, skipping analysis.
+2026-11-27 15:09:57,392 [WARNING] bsa_orchestrator: No price data available for IFCI, skipping analysis.
+2026-11-27 15:09:57,392 [WARNING] bsa_orchestrator: No price data available for IGIL, skipping analysis.
+2026-11-27 15:09:57,393 [WARNING] bsa_orchestrator: No price data available for IGL, skipping analysis.
+2026-11-27 15:09:57,392 [WARNING] bsa_orchestrator: No price data available for IEX, skipping analysis.
+2026-11-27 15:09:57,394 [WARNING] bsa_orchestrator: No price data available for IIFL, skipping analysis.
+2026-11-27 15:09:57,394 [WARNING] bsa_orchestrator: No price data available for IKS, skipping analysis.
+2026-11-27 15:09:57,394 [WARNING] bsa_orchestrator: No price data available for INDHOTEL, skipping analysis.
+2026-11-27 15:09:57,395 [WARNING] bsa_orchestrator: No price data available for INDUSINDBK, skipping analysis.
+2026-11-27 15:09:57,395 [WARNING] bsa_orchestrator: No price data available for INDIAMART, skipping analysis.
+2026-11-27 15:09:57,396 [WARNING] bsa_orchestrator: No price data available for INDIANB, skipping analysis.
+2026-11-27 15:09:57,395 [WARNING] bsa_orchestrator: No price data available for INDIACEM, skipping analysis.
+2026-11-27 15:09:57,396 [WARNING] bsa_orchestrator: No price data available for INDIGO, skipping analysis.
+2026-11-27 15:09:57,396 [WARNING] bsa_orchestrator: No price data available for INDUSTOWER, skipping analysis.
+2026-11-27 15:09:57,396 [WARNING] bsa_orchestrator: No price data available for INTELLECT, skipping analysis.
+2026-11-27 15:09:57,397 [WARNING] bsa_orchestrator: No price data available for INFY, skipping analysis.
+2026-11-27 15:09:57,397 [WARNING] bsa_orchestrator: No price data available for INOXINDIA, skipping analysis.
+2026-11-27 15:09:57,397 [WARNING] bsa_orchestrator: No price data available for IOC, skipping analysis.
+2026-11-27 15:09:57,396 [WARNING] bsa_orchestrator: No price data available for INOXWIND, skipping analysis.
+2026-11-27 15:09:57,397 [WARNING] bsa_orchestrator: No price data available for IOB, skipping analysis.
+2026-11-27 15:09:57,397 [WARNING] bsa_orchestrator: No price data available for IRB, skipping analysis.
+2026-11-27 15:09:57,398 [WARNING] bsa_orchestrator: No price data available for IPCALAB, skipping analysis.
+2026-11-27 15:09:57,398 [WARNING] bsa_orchestrator: No price data available for IRCON, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for IRCTC, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for IRFC, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for IREDA, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for ITI, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for ITC, skipping analysis.
+2026-11-27 15:09:57,400 [WARNING] bsa_orchestrator: No price data available for JAINREC, skipping analysis.
+2026-11-27 15:09:57,400 [WARNING] bsa_orchestrator: No price data available for J&KBANK, skipping analysis.
+2026-11-27 15:09:57,399 [WARNING] bsa_orchestrator: No price data available for ITCHOTELS, skipping analysis.
+2026-11-27 15:09:57,400 [WARNING] bsa_orchestrator: No price data available for JINDALSAW, skipping analysis.
+2026-11-27 15:09:57,400 [WARNING] bsa_orchestrator: No price data available for JINDALSTEL, skipping analysis.
+2026-11-27 15:09:57,401 [WARNING] bsa_orchestrator: No price data available for JMFINANCIL, skipping analysis.
+2026-11-27 15:09:57,401 [WARNING] bsa_orchestrator: No price data available for JKTYRE, skipping analysis.
+2026-11-27 15:09:57,401 [WARNING] bsa_orchestrator: No price data available for JBMA, skipping analysis.
+2026-11-27 15:09:57,402 [WARNING] bsa_orchestrator: No price data available for JKCEMENT, skipping analysis.
+2026-11-27 15:09:57,402 [WARNING] bsa_orchestrator: No price data available for JPPOWER, skipping analysis.
+2026-11-27 15:09:57,402 [WARNING] bsa_orchestrator: No price data available for JIOFIN, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JSWINFRA, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JSWENERGY, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JSWSTEEL, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JSL, skipping analysis.
+2026-11-27 15:09:57,404 [WARNING] bsa_orchestrator: No price data available for JUBLFOOD, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JSWCEMENT, skipping analysis.
+2026-11-27 15:09:57,403 [WARNING] bsa_orchestrator: No price data available for JUBLINGREA, skipping analysis.
+2026-11-27 15:09:57,404 [WARNING] bsa_orchestrator: No price data available for JWL, skipping analysis.
+2026-11-27 15:09:57,404 [WARNING] bsa_orchestrator: No price data available for JYOTICNC, skipping analysis.
+2026-11-27 15:09:57,405 [WARNING] bsa_orchestrator: No price data available for KAJARIACER, skipping analysis.
+2026-11-27 15:09:57,406 [WARNING] bsa_orchestrator: No price data available for KEC, skipping analysis.
+2026-11-27 15:09:57,405 [WARNING] bsa_orchestrator: No price data available for KAYNES, skipping analysis.
+2026-11-27 15:09:57,405 [WARNING] bsa_orchestrator: No price data available for KEI, skipping analysis.
+2026-11-27 15:09:57,405 [WARNING] bsa_orchestrator: No price data available for KARURVYSYA, skipping analysis.
+2026-11-27 15:09:57,405 [WARNING] bsa_orchestrator: No price data available for KALYANKJIL, skipping analysis.
+2026-11-27 15:09:57,406 [WARNING] bsa_orchestrator: No price data available for KFINTECH, skipping analysis.
+2026-11-27 15:09:57,406 [WARNING] bsa_orchestrator: No price data available for KIMS, skipping analysis.
+2026-11-27 15:09:57,406 [WARNING] bsa_orchestrator: No price data available for KIRLOSENG, skipping analysis.
+2026-11-27 15:09:57,407 [WARNING] bsa_orchestrator: No price data available for KIRLOSBROS, skipping analysis.
+2026-11-27 15:09:57,407 [WARNING] bsa_orchestrator: No price data available for KOTAKBANK, skipping analysis.
+2026-11-27 15:09:57,407 [WARNING] bsa_orchestrator: No price data available for KPIL, skipping analysis.
+2026-11-27 15:09:57,407 [WARNING] bsa_orchestrator: No price data available for KSB, skipping analysis.
+2026-11-27 15:09:57,407 [WARNING] bsa_orchestrator: No price data available for KPITTECH, skipping analysis.
+2026-11-27 15:09:57,408 [WARNING] bsa_orchestrator: No price data available for KPRMILL, skipping analysis.
+2026-11-27 15:09:57,409 [WARNING] bsa_orchestrator: No price data available for LENSKART, skipping analysis.
+2026-11-27 15:09:57,409 [WARNING] bsa_orchestrator: No price data available for LAURUSLABS, skipping analysis.
+2026-11-27 15:09:57,408 [WARNING] bsa_orchestrator: No price data available for LALPATHLAB, skipping analysis.
+2026-11-27 15:09:57,409 [WARNING] bsa_orchestrator: No price data available for LEMONTREE, skipping analysis.
+2026-11-27 15:09:57,409 [WARNING] bsa_orchestrator: No price data available for LGEINDIA, skipping analysis.
+2026-11-27 15:09:57,410 [WARNING] bsa_orchestrator: No price data available for LICHSGFIN, skipping analysis.
+2026-11-27 15:09:57,410 [WARNING] bsa_orchestrator: No price data available for LINDEINDIA, skipping analysis.
+2026-11-27 15:09:57,410 [WARNING] bsa_orchestrator: No price data available for LICI, skipping analysis.
+2026-11-27 15:09:57,410 [WARNING] bsa_orchestrator: No price data available for LLOYDSME, skipping analysis.
+2026-11-27 15:09:57,411 [WARNING] bsa_orchestrator: No price data available for LODHA, skipping analysis.
+2026-11-27 15:09:57,411 [WARNING] bsa_orchestrator: No price data available for LT, skipping analysis.
+2026-11-27 15:09:57,412 [WARNING] bsa_orchestrator: No price data available for LUPIN, skipping analysis.
+2026-11-27 15:09:57,412 [WARNING] bsa_orchestrator: No price data available for LTFOODS, skipping analysis.
+2026-11-27 15:09:57,412 [WARNING] bsa_orchestrator: No price data available for LTTS, skipping analysis.
+2026-11-27 15:09:57,412 [WARNING] bsa_orchestrator: No price data available for LTM, skipping analysis.
+2026-11-27 15:09:57,411 [WARNING] bsa_orchestrator: No price data available for LTF, skipping analysis.
+2026-11-27 15:09:57,412 [WARNING] bsa_orchestrator: No price data available for M&M, skipping analysis.
+2026-11-27 15:09:57,413 [WARNING] bsa_orchestrator: No price data available for M&MFIN, skipping analysis.
+2026-11-27 15:09:57,413 [WARNING] bsa_orchestrator: No price data available for MAHABANK, skipping analysis.
+2026-11-27 15:09:57,414 [WARNING] bsa_orchestrator: No price data available for MANAPPURAM, skipping analysis.
+2026-11-27 15:09:57,414 [WARNING] bsa_orchestrator: No price data available for MARICO, skipping analysis.
+2026-11-27 15:09:57,414 [WARNING] bsa_orchestrator: No price data available for MANKIND, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MAXHEALTH, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MARUTI, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MAZDOCK, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MGL, skipping analysis.
+2026-11-27 15:09:57,416 [WARNING] bsa_orchestrator: No price data available for MEDANTA, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MCX, skipping analysis.
+2026-11-27 15:09:57,416 [WARNING] bsa_orchestrator: No price data available for MEESHO, skipping analysis.
+2026-11-27 15:09:57,416 [WARNING] bsa_orchestrator: No price data available for MINDACORP, skipping analysis.
+2026-11-27 15:09:57,415 [WARNING] bsa_orchestrator: No price data available for MFSL, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MOTHERSON, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MMTC, skipping analysis.
+2026-11-27 15:09:57,418 [WARNING] bsa_orchestrator: No price data available for MTARTECH, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MPHASIS, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MRF, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MSUMI, skipping analysis.
+2026-11-27 15:09:57,417 [WARNING] bsa_orchestrator: No price data available for MOTILALOFS, skipping analysis.
+2026-11-27 15:09:57,418 [WARNING] bsa_orchestrator: No price data available for MRPL, skipping analysis.
+2026-11-27 15:09:57,418 [WARNING] bsa_orchestrator: No price data available for NAM-INDIA, skipping analysis.
+2026-11-27 15:09:57,418 [WARNING] bsa_orchestrator: No price data available for MUTHOOTFIN, skipping analysis.
+2026-11-27 15:09:57,420 [WARNING] bsa_orchestrator: No price data available for NAUKRI, skipping analysis.
+2026-11-27 15:09:57,419 [WARNING] bsa_orchestrator: No price data available for NATIONALUM, skipping analysis.
+2026-11-27 15:09:57,419 [WARNING] bsa_orchestrator: No price data available for NAVA, skipping analysis.
+2026-11-27 15:09:57,419 [WARNING] bsa_orchestrator: No price data available for NATCOPHARM, skipping analysis.
+2026-11-27 15:09:57,420 [WARNING] bsa_orchestrator: No price data available for NBCC, skipping analysis.
+2026-11-27 15:09:57,420 [WARNING] bsa_orchestrator: No price data available for NAVINFLUOR, skipping analysis.
+2026-11-27 15:09:57,421 [WARNING] bsa_orchestrator: No price data available for NETWEB, skipping analysis.
+2026-11-27 15:09:57,421 [WARNING] bsa_orchestrator: No price data available for NESTLEIND, skipping analysis.
+2026-11-27 15:09:57,421 [WARNING] bsa_orchestrator: No price data available for NEULANDLAB, skipping analysis.
+2026-11-27 15:09:57,422 [WARNING] bsa_orchestrator: No price data available for NIACL, skipping analysis.
+2026-11-27 15:09:57,421 [WARNING] bsa_orchestrator: No price data available for NCC, skipping analysis.
+2026-11-27 15:09:57,422 [WARNING] bsa_orchestrator: No price data available for NH, skipping analysis.
+2026-11-27 15:09:57,422 [WARNING] bsa_orchestrator: No price data available for NMDC, skipping analysis.
+2026-11-27 15:09:57,422 [WARNING] bsa_orchestrator: No price data available for NLCINDIA, skipping analysis.
+2026-11-27 15:09:57,423 [WARNING] bsa_orchestrator: No price data available for NSLNISP, skipping analysis.
+2026-11-27 15:09:57,423 [WARNING] bsa_orchestrator: No price data available for NHPC, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for NTPC, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for NTPCGREEN, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for NUVAMA, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for NUVOCO, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for OFSS, skipping analysis.
+2026-11-27 15:09:57,425 [WARNING] bsa_orchestrator: No price data available for OIL, skipping analysis.
+2026-11-27 15:09:57,424 [WARNING] bsa_orchestrator: No price data available for NYKAA, skipping analysis.
+2026-11-27 15:09:57,425 [WARNING] bsa_orchestrator: No price data available for OBEROIRLTY, skipping analysis.
+2026-11-27 15:09:57,425 [WARNING] bsa_orchestrator: No price data available for OLECTRA, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for ONGC, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for ONESOURCE, skipping analysis.
+2026-11-27 15:09:57,427 [WARNING] bsa_orchestrator: No price data available for PETRONET, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for OLAELEC, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for PAGEIND, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for PARADEEP, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for PERSISTENT, skipping analysis.
+2026-11-27 15:09:57,427 [WARNING] bsa_orchestrator: No price data available for PAYTM, skipping analysis.
+2026-11-27 15:09:57,427 [WARNING] bsa_orchestrator: No price data available for PCBL, skipping analysis.
+2026-11-27 15:09:57,426 [WARNING] bsa_orchestrator: No price data available for PATANJALI, skipping analysis.
+2026-11-27 15:09:57,430 [WARNING] bsa_orchestrator: No price data available for PGEL, skipping analysis.
+2026-11-27 15:09:57,430 [WARNING] bsa_orchestrator: No price data available for PIDILITIND, skipping analysis.
+2026-11-27 15:09:57,429 [WARNING] bsa_orchestrator: No price data available for PFC, skipping analysis.
+2026-11-27 15:09:57,431 [WARNING] bsa_orchestrator: No price data available for PHOENIXLTD, skipping analysis.
+2026-11-27 15:09:57,430 [WARNING] bsa_orchestrator: No price data available for PFOCUS, skipping analysis.
+2026-11-27 15:09:57,431 [WARNING] bsa_orchestrator: No price data available for PINELABS, skipping analysis.
+2026-11-27 15:09:57,432 [WARNING] bsa_orchestrator: No price data available for PNB, skipping analysis.
+2026-11-27 15:09:57,431 [WARNING] bsa_orchestrator: No price data available for PIRAMALFIN, skipping analysis.
+2026-11-27 15:09:57,432 [WARNING] bsa_orchestrator: No price data available for POLICYBZR, skipping analysis.
+2026-11-27 15:09:57,433 [WARNING] bsa_orchestrator: No price data available for POONAWALLA, skipping analysis.
+2026-11-27 15:09:57,432 [WARNING] bsa_orchestrator: No price data available for PNBHOUSING, skipping analysis.
+2026-11-27 15:09:57,433 [WARNING] bsa_orchestrator: No price data available for POLYMED, skipping analysis.
+2026-11-27 15:09:57,432 [WARNING] bsa_orchestrator: No price data available for PIIND, skipping analysis.
+2026-11-27 15:09:57,433 [WARNING] bsa_orchestrator: No price data available for POLYCAB, skipping analysis.
+2026-11-27 15:09:57,433 [WARNING] bsa_orchestrator: No price data available for POWERGRID, skipping analysis.
+2026-11-27 15:09:57,434 [WARNING] bsa_orchestrator: No price data available for PREMIERENE, skipping analysis.
+2026-11-27 15:09:57,434 [WARNING] bsa_orchestrator: No price data available for PRESTIGE, skipping analysis.
+2026-11-27 15:09:57,434 [WARNING] bsa_orchestrator: No price data available for PPLPHARMA, skipping analysis.
+2026-11-27 15:09:57,435 [WARNING] bsa_orchestrator: No price data available for RADICO, skipping analysis.
+2026-11-27 15:09:57,434 [WARNING] bsa_orchestrator: No price data available for POWERINDIA, skipping analysis.
+2026-11-27 15:09:57,435 [WARNING] bsa_orchestrator: No price data available for PVRINOX, skipping analysis.
+2026-11-27 15:09:57,435 [WARNING] bsa_orchestrator: No price data available for PTCIL, skipping analysis.
+2026-11-27 15:09:57,434 [WARNING] bsa_orchestrator: No price data available for PRIVISCL, skipping analysis.
+2026-11-27 15:09:57,436 [WARNING] bsa_orchestrator: No price data available for RAILTEL, skipping analysis.
+2026-11-27 15:09:57,436 [WARNING] bsa_orchestrator: No price data available for RBLBANK, skipping analysis.
+2026-11-27 15:09:57,435 [WARNING] bsa_orchestrator: No price data available for PWL, skipping analysis.
+2026-11-27 15:09:57,436 [WARNING] bsa_orchestrator: No price data available for RAMCOCEM, skipping analysis.
+2026-11-27 15:09:57,436 [WARNING] bsa_orchestrator: No price data available for RAINBOW, skipping analysis.
+2026-11-27 15:09:57,437 [WARNING] bsa_orchestrator: No price data available for RECLTD, skipping analysis.
+2026-11-27 15:09:57,437 [WARNING] bsa_orchestrator: No price data available for RITES, skipping analysis.
+2026-11-27 15:09:57,437 [WARNING] bsa_orchestrator: No price data available for REDINGTON, skipping analysis.
+2026-11-27 15:09:57,438 [WARNING] bsa_orchestrator: No price data available for RPOWER, skipping analysis.
+2026-11-27 15:09:57,438 [WARNING] bsa_orchestrator: No price data available for RKFORGE, skipping analysis.
+2026-11-27 15:09:57,438 [WARNING] bsa_orchestrator: No price data available for RHIM, skipping analysis.
+2026-11-27 15:09:57,439 [WARNING] bsa_orchestrator: No price data available for RUBICON, skipping analysis.
+2026-11-27 15:09:57,438 [WARNING] bsa_orchestrator: No price data available for RRKABEL, skipping analysis.
+2026-11-27 15:09:57,438 [WARNING] bsa_orchestrator: No price data available for RELIANCE, skipping analysis.
+2026-11-27 15:09:57,439 [WARNING] bsa_orchestrator: No price data available for SAGILITY, skipping analysis.
+2026-11-27 15:09:57,439 [WARNING] bsa_orchestrator: No price data available for RVNL, skipping analysis.
+2026-11-27 15:09:57,439 [WARNING] bsa_orchestrator: No price data available for SAIL, skipping analysis.
+2026-11-27 15:09:57,440 [WARNING] bsa_orchestrator: No price data available for SANSERA, skipping analysis.
+2026-11-27 15:09:57,440 [WARNING] bsa_orchestrator: No price data available for SAILIFE, skipping analysis.
+2026-11-27 15:09:57,440 [WARNING] bsa_orchestrator: No price data available for SARDAEN, skipping analysis.
+2026-11-27 15:09:57,441 [WARNING] bsa_orchestrator: No price data available for SBICARD, skipping analysis.
+2026-11-27 15:09:57,440 [WARNING] bsa_orchestrator: No price data available for SAMMAANCAP, skipping analysis.
+2026-11-27 15:09:57,441 [WARNING] bsa_orchestrator: No price data available for SBIN, skipping analysis.
+2026-11-27 15:09:57,441 [WARNING] bsa_orchestrator: No price data available for SCHAEFFLER, skipping analysis.
+2026-11-27 15:09:57,442 [WARNING] bsa_orchestrator: No price data available for SBILIFE, skipping analysis.
+2026-11-27 15:09:57,442 [WARNING] bsa_orchestrator: No price data available for SCHNEIDER, skipping analysis.
+2026-11-27 15:09:57,442 [WARNING] bsa_orchestrator: No price data available for SHREECEM, skipping analysis.
+2026-11-27 15:09:57,442 [WARNING] bsa_orchestrator: No price data available for SCI, skipping analysis.
+2026-11-27 15:09:57,442 [WARNING] bsa_orchestrator: No price data available for SHRIPISTON, skipping analysis.
+2026-11-27 15:09:57,443 [WARNING] bsa_orchestrator: No price data available for SHRIRAMFIN, skipping analysis.
+2026-11-27 15:09:57,443 [WARNING] bsa_orchestrator: No price data available for SIEMENS, skipping analysis.
+2026-11-27 15:09:57,443 [WARNING] bsa_orchestrator: No price data available for SOBHA, skipping analysis.
+2026-11-27 15:09:57,444 [WARNING] bsa_orchestrator: No price data available for SHYAMMETL, skipping analysis.
+2026-11-27 15:09:57,444 [WARNING] bsa_orchestrator: No price data available for SOLARINDS, skipping analysis.
+2026-11-27 15:09:57,444 [WARNING] bsa_orchestrator: No price data available for SIGNATURE, skipping analysis.
+2026-11-27 15:09:57,445 [WARNING] bsa_orchestrator: No price data available for SONACOMS, skipping analysis.
+2026-11-27 15:09:57,444 [WARNING] bsa_orchestrator: No price data available for SJVN, skipping analysis.
+2026-11-27 15:09:57,445 [WARNING] bsa_orchestrator: No price data available for SRF, skipping analysis.
+2026-11-27 15:09:57,446 [WARNING] bsa_orchestrator: No price data available for STARHEALTH, skipping analysis.
+2026-11-27 15:09:57,447 [WARNING] bsa_orchestrator: No price data available for STLTECH, skipping analysis.
+2026-11-27 15:09:57,446 [WARNING] bsa_orchestrator: No price data available for SUMICHEM, skipping analysis.
+2026-11-27 15:09:57,447 [WARNING] bsa_orchestrator: No price data available for SUPREMEIND, skipping analysis.
+2026-11-27 15:09:57,448 [WARNING] bsa_orchestrator: No price data available for SUZLON, skipping analysis.
+2026-11-27 15:09:57,447 [WARNING] bsa_orchestrator: No price data available for SUNDARMFIN, skipping analysis.
+2026-11-27 15:09:57,447 [WARNING] bsa_orchestrator: No price data available for SUNPHARMA, skipping analysis.
+2026-11-27 15:09:57,448 [WARNING] bsa_orchestrator: No price data available for SWIGGY, skipping analysis.
+2026-11-27 15:09:57,447 [WARNING] bsa_orchestrator: No price data available for SUNTV, skipping analysis.
+2026-11-27 15:09:57,449 [WARNING] bsa_orchestrator: No price data available for SYRMA, skipping analysis.
+2026-11-27 15:09:57,448 [WARNING] bsa_orchestrator: No price data available for SWANCORP, skipping analysis.
+2026-11-27 15:09:57,449 [WARNING] bsa_orchestrator: No price data available for TATACHEM, skipping analysis.
+2026-11-27 15:09:57,448 [WARNING] bsa_orchestrator: No price data available for SYNGENE, skipping analysis.
+2026-11-27 15:09:57,450 [WARNING] bsa_orchestrator: No price data available for TATAELXSI, skipping analysis.
+2026-11-27 15:09:57,448 [WARNING] bsa_orchestrator: No price data available for TATACAP, skipping analysis.
+2026-11-27 15:09:57,449 [WARNING] bsa_orchestrator: No price data available for TATACOMM, skipping analysis.
+2026-11-27 15:09:57,450 [WARNING] bsa_orchestrator: No price data available for TATAINVEST, skipping analysis.
+2026-11-27 15:09:57,449 [WARNING] bsa_orchestrator: No price data available for TARIL, skipping analysis.
+2026-11-27 15:09:57,450 [WARNING] bsa_orchestrator: No price data available for TATACONSUM, skipping analysis.
+2026-11-27 15:09:57,451 [WARNING] bsa_orchestrator: No price data available for TATASTEEL, skipping analysis.
+2026-11-27 15:09:57,450 [WARNING] bsa_orchestrator: No price data available for TATAPOWER, skipping analysis.
+2026-11-27 15:09:57,451 [WARNING] bsa_orchestrator: No price data available for TATATECH, skipping analysis.
+2026-11-27 15:09:57,452 [WARNING] bsa_orchestrator: No price data available for TCS, skipping analysis.
+2026-11-27 15:09:57,451 [WARNING] bsa_orchestrator: No price data available for TBOTEK, skipping analysis.
+2026-11-27 15:09:57,452 [WARNING] bsa_orchestrator: No price data available for TDPOWERSYS, skipping analysis.
+2026-11-27 15:09:57,453 [WARNING] bsa_orchestrator: No price data available for TENNIND, skipping analysis.
+2026-11-27 15:09:57,453 [WARNING] bsa_orchestrator: No price data available for TEJASNET, skipping analysis.
+2026-11-27 15:09:57,452 [WARNING] bsa_orchestrator: No price data available for TECHNOE, skipping analysis.
+2026-11-27 15:09:57,452 [WARNING] bsa_orchestrator: No price data available for TECHM, skipping analysis.
+2026-11-27 15:09:57,453 [WARNING] bsa_orchestrator: No price data available for TEGA, skipping analysis.
+2026-11-27 15:09:57,454 [WARNING] bsa_orchestrator: No price data available for THANGAMAYL, skipping analysis.
+2026-11-27 15:09:57,454 [WARNING] bsa_orchestrator: No price data available for THERMAX, skipping analysis.
+2026-11-27 15:09:57,454 [WARNING] bsa_orchestrator: No price data available for TITAGARH, skipping analysis.
+2026-11-27 15:09:57,454 [WARNING] bsa_orchestrator: No price data available for TIINDIA, skipping analysis.
+2026-11-27 15:09:57,454 [WARNING] bsa_orchestrator: No price data available for TIMKEN, skipping analysis.
+2026-11-27 15:09:57,455 [WARNING] bsa_orchestrator: No price data available for TMPV, skipping analysis.
+2026-11-27 15:09:57,455 [WARNING] bsa_orchestrator: No price data available for TMCV, skipping analysis.
+2026-11-27 15:09:57,455 [WARNING] bsa_orchestrator: No price data available for TITAN, skipping analysis.
+2026-11-27 15:09:57,455 [WARNING] bsa_orchestrator: No price data available for TORNTPHARM, skipping analysis.
+2026-11-27 15:09:57,456 [WARNING] bsa_orchestrator: No price data available for TRENT, skipping analysis.
+2026-11-27 15:09:57,456 [WARNING] bsa_orchestrator: No price data available for TRITURBINE, skipping analysis.
+2026-11-27 15:09:57,456 [WARNING] bsa_orchestrator: No price data available for TORNTPOWER, skipping analysis.
+2026-11-27 15:09:57,456 [WARNING] bsa_orchestrator: No price data available for TRIDENT, skipping analysis.
+2026-11-27 15:09:57,457 [WARNING] bsa_orchestrator: No price data available for TVSMOTOR, skipping analysis.
+2026-11-27 15:09:57,457 [WARNING] bsa_orchestrator: No price data available for UBL, skipping analysis.
+2026-11-27 15:09:57,458 [WARNING] bsa_orchestrator: No price data available for UNOMINDA, skipping analysis.
+2026-11-27 15:09:57,458 [WARNING] bsa_orchestrator: No price data available for ULTRACEMCO, skipping analysis.
+2026-11-27 15:09:57,458 [WARNING] bsa_orchestrator: No price data available for TTML, skipping analysis.
+2026-11-27 15:09:57,458 [WARNING] bsa_orchestrator: No price data available for UNITDSPR, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for UCOBANK, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for UNIONBANK, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for UTIAMC, skipping analysis.
+2026-11-27 15:09:57,460 [WARNING] bsa_orchestrator: No price data available for VIJAYA, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for UPL, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for VAML, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for USHAMART, skipping analysis.
+2026-11-27 15:09:57,460 [WARNING] bsa_orchestrator: No price data available for VEDL, skipping analysis.
+2026-11-27 15:09:57,460 [WARNING] bsa_orchestrator: No price data available for VBL, skipping analysis.
+2026-11-27 15:09:57,460 [WARNING] bsa_orchestrator: No price data available for VEDPOWER, skipping analysis.
+2026-11-27 15:09:57,459 [WARNING] bsa_orchestrator: No price data available for URBANCO, skipping analysis.
+2026-11-27 15:09:57,461 [WARNING] bsa_orchestrator: No price data available for VISL, skipping analysis.
+2026-11-27 15:09:57,461 [WARNING] bsa_orchestrator: No price data available for VMM, skipping analysis.
+2026-11-27 15:09:57,462 [WARNING] bsa_orchestrator: No price data available for VOLTAS, skipping analysis.
+2026-11-27 15:09:57,462 [WARNING] bsa_orchestrator: No price data available for VTL, skipping analysis.
+2026-11-27 15:09:57,462 [WARNING] bsa_orchestrator: No price data available for VOGL, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WHIRLPOOL, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WAAREEENER, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WELCORP, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WELSPUNLIV, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WIPRO, skipping analysis.
+2026-11-27 15:09:57,463 [WARNING] bsa_orchestrator: No price data available for WOCKPHARMA, skipping analysis.
+2026-11-27 15:09:57,464 [WARNING] bsa_orchestrator: No price data available for ZENSARTECH, skipping analysis.
+2026-11-27 15:09:57,465 [WARNING] bsa_orchestrator: No price data available for ZEEL, skipping analysis.
+2026-11-27 15:09:57,465 [WARNING] bsa_orchestrator: No price data available for ZYDUSLIFE, skipping analysis.
+2026-11-27 15:09:57,465 [WARNING] bsa_orchestrator: No price data available for ZYDUSWELL, skipping analysis.
+2026-11-27 15:09:57,464 [WARNING] bsa_orchestrator: No price data available for YESBANK, skipping analysis.
+2026-11-27 15:09:57,465 [WARNING] bsa_orchestrator: No price data available for ZENTEC, skipping analysis.
+2026-11-27 15:09:57,465 [WARNING] bsa_orchestrator: No price data available for ZFCVINDIA, skipping analysis.
+2026-11-27 15:09:57,466 [INFO] bsa_orchestrator: Core Ticker Analysis completed. Total: 501, Succeeded: 0, Failed: 501, Time Taken: 0.15s
+2026-11-27 15:09:57,468 [INFO] bsa_cli: [Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in 0.18s.
+2026-11-27 15:09:57,468 [INFO] bsa_cli: [OK] Phase 2 (Analyze All) fully completed in 0.55s.
+2026-11-27 15:09:57,468 [INFO] bsa_cli: Executing Historical Calls Data Retaining & Backup Mechanism...
+2026-11-27 15:09:57,469 [INFO] bsa_cli: [OK] Backup complete! Synchronized 0 new historical call records to 'historical_call_bkp' table and saved backup to D:\StockScanners\bsa_screener\data\historical_call_bkp.csv.
+2026-11-27 15:09:57,469 [INFO] bsa_cli: [OK] Full pipeline execution completed successfully!
+2026-11-27 15:11:46,192 [INFO] bsa_cli: Triggered Phase 1.3: Mutual Fund & FII Holdings Download...
+2026-11-27 15:11:46,192 [INFO] bsa_cli: === Phase 1.3: Mutual Fund & FII Holdings Download ===
+2026-11-27 15:35:45,957 [INFO] bsa_cli: [OK] Phase 1.3 (Download MF & FII) completed in 1439.77s.

@@ -126,6 +126,11 @@ def download_ticker_data(ticker_raw: str, period: str = None, force: bool = Fals
         return False
 
     ticker_clean = clean_ticker(ticker_raw)
+    from engine.utils.helpers import is_index_symbol
+    if is_index_symbol(ticker_clean) or is_index_symbol(ticker_raw):
+        logger.info(f"Skipping {ticker_raw}: symbol is an index and prevented from stock download.")
+        return True
+
     formatted = format_ticker(ticker_raw)
     now_str = datetime.now().isoformat(timespec="seconds")
     today_date = datetime.now().date()
@@ -405,9 +410,10 @@ from engine.utils.checkpoint import get_completed_tickers, mark_ticker_completed
 
 def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callback=None, resume: bool = True, force: bool = False, tickers: list = None, dl_technicals: bool = True, dl_fundamentals: bool = True, checkpoint_key: str = "spot_download"):
     """Download OHLCV and/or fundamentals for tickers in the database master list (or specified tickers list) with rate limit protection."""
+    from engine.utils.helpers import is_index_symbol
     all_tickers = []
     if tickers is not None:
-        all_tickers = [t.upper().strip() for t in tickers]
+        all_tickers = [t.upper().strip() for t in tickers if not is_index_symbol(t)]
     else:
         with get_db_connection() as conn:
             cur = conn.cursor()
@@ -417,7 +423,7 @@ def download_all_tickers(max_workers: int = DEFAULT_MAX_WORKERS, progress_callba
                 LEFT JOIN excluded_tickers et ON tm.ticker = et.ticker AND (UPPER(et.status) = 'EXCLUDED' OR et.status IS NULL)
                 WHERE et.ticker IS NULL
             """)
-            all_tickers = [row[0] for row in cur.fetchall()]
+            all_tickers = [row[0].upper().strip() for row in cur.fetchall() if row[0] and not is_index_symbol(row[0])]
 
     if not all_tickers:
         logger.warning("No tickers found in ticker_master!")

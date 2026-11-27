@@ -130,7 +130,7 @@ def main():
     def run_phase_1_1_tech():
         p_start = time.time()
         logger.info("=== Phase 1.1: Spot Data Download (Historical Prices & Technicals) ===")
-        all_spot = get_spot_tickers()
+        all_spot = [t for t in get_spot_tickers() if not is_index_symbol(t)]
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         total = len(valid_tickers)
         resume = resolve_resume_flag("Phase 1.1 (Download Technicals)", "tech_download", total, valid_tickers=valid_tickers)
@@ -208,12 +208,15 @@ def main():
         p_elapsed = time.time() - p_start
         logger.info(f"[OK] Phase 1.4 (Download F&O) completed in {p_elapsed:.2f}s.")
 
-    def run_phase_1():
+    def run_phase_1(include_mf: bool = True):
         p_start = time.time()
         logger.info("=== Starting Phase 1: Consolidated Raw Data Ingestion Pipeline ===")
         run_phase_1_1_tech()
         run_phase_1_1_fund()
-        run_phase_1_2()
+        if include_mf:
+            run_phase_1_2()
+        else:
+            logger.info("Skipping Phase 1.3 (Mutual Fund & FII Download) on weekday to maximize execution speed.")
         run_phase_1_3()
         p_elapsed = time.time() - p_start
         logger.info(f"[OK] Phase 1 (Raw Data Ingestion) fully completed in {p_elapsed:.2f}s.")
@@ -222,7 +225,7 @@ def main():
     def run_phase_2_1():
         p_start = time.time()
         logger.info("[Sub-task 2.1/2.8] Starting Technical Analysis & Scanners (HHHL, Cup & Handle, Retracement)...")
-        all_spot = get_spot_tickers()
+        all_spot = [t for t in get_spot_tickers() if not is_index_symbol(t)]
         valid_tickers = [t for t in all_spot if t in watchlist_tickers] if watchlist_tickers is not None else all_spot
         from engine.analysis.context import TickerContext
         from engine.analysis.hhhl_scanner import scan_and_store_hhhl, ensure_hhhl_table_exists
@@ -413,14 +416,17 @@ def main():
         p_elapsed = time.time() - p_start
         logger.info(f"[Sub-task 2.8/2.8] Multi-Factor Hybrid Synthesis completed in {p_elapsed:.2f}s.")
 
-    def run_phase_2():
+    def run_phase_2(include_mf: bool = True):
         phase2_start = time.time()
         logger.info("=== Starting Phase 2: Consolidated Scoring, Scanners & Analysis Engine (--mode analyze-all) ===")
         run_phase_2_1()
         run_phase_2_2()
         run_phase_2_3()
         run_phase_2_4()
-        run_phase_2_5()
+        if include_mf:
+            run_phase_2_5()
+        else:
+            logger.info("Skipping Phase 2.5 (Mutual Fund & FII Behavior Analysis) on weekday to maximize execution speed.")
         run_phase_2_6()
         run_phase_2_7()
         run_phase_2_8()
@@ -637,11 +643,28 @@ def main():
         logger.info("Triggered Phase 2.8: Multi-Factor Hybrid Synthesis...")
         run_phase_2_8()
     elif args.mode == "full-pipeline":
-        logger.info("Triggered Full End-to-End Pipeline (Phase 1 Download All -> Phase 2 Analyze All -> Backup)...")
-        run_phase_1()
-        run_phase_2()
-        backup_historical_calls()
-        logger.info("[OK] Full pipeline execution completed successfully!")
+        from datetime import datetime
+        now = datetime.now()
+        is_weekend = now.weekday() in (5, 6)  # 5 = Saturday, 6 = Sunday
+        day_name = now.strftime("%A")
+
+        if is_weekend and not args.force:
+            logger.info(f"Today is {day_name} (Weekend). As markets are closed, full-pipeline is scoped exclusively to 'Mutual Fund & FII inflow/outflow' download and analysis...")
+            p_start = time.time()
+            run_phase_1_2()  # Mutual Fund & FII Holdings Download
+            run_phase_2_5()  # Mutual Fund & FII Institutional Behavior Analysis
+            p_elapsed = time.time() - p_start
+            logger.info(f"[OK] Weekend Mutual Fund & FII pipeline completed in {p_elapsed:.2f}s! (Pass --force to run full weekday pipeline on weekends)")
+        else:
+            include_mf = bool(args.force)
+            if is_weekend and args.force:
+                logger.info(f"Today is {day_name} (Weekend), but --force flag is present. Executing full pipeline including MF/FII...")
+            else:
+                logger.info(f"Today is {day_name} (Weekday). Executing Fast Market Pipeline (Spot Technicals, Chart Patterns, Quarterly Fundamentals, F&O Option Chains, PCR, Buildup & Automated Trading Signals) with MF/FII download skipped for maximum speed...")
+            run_phase_1(include_mf=include_mf)
+            run_phase_2(include_mf=include_mf)
+            backup_historical_calls()
+            logger.info("[OK] Full pipeline execution completed successfully!")
     elif args.mode == "spot-pipeline":
         logger.info("Triggered Spot Stocks Pipeline (download-technicals -> download-fno -> analyze-technical -> analyze-fo -> analyze-patterns -> analyze-elliot -> analyze-sector -> analyze-summaries)...")
         p_start = time.time()

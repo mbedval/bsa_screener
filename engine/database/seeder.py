@@ -1,6 +1,7 @@
 """
 Database Seeder Utility Module (SQLite).
 Handles dynamic loading of CSV data files into the SQLite database tables.
+Synchronizes the official Nifty 500 stock universe from NSE.
 """
 
 import os
@@ -77,8 +78,17 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
     """
     Scans data_dir for files matching *<file_suffix> (e.g. '_sample.csv' or '_production.csv')
     and seeds them into corresponding SQLite tables.
+    Pulls and synchronizes the official Nifty 500 stock universe from NSE.
     """
     load_dotenv()
+
+    # Automatically pull and synchronize Nifty 500 master datasets
+    try:
+        from engine.utils.nifty_seeder import sync_nifty500_master_files
+        sync_nifty500_master_files(data_dir=data_dir, verbose=verbose)
+    except Exception as sync_nifty_err:
+        if verbose:
+            print(f"  [!] Nifty 500 master sync note: {sync_nifty_err}")
 
     db_path = get_sqlite_path()
     csv_pattern = os.path.join(data_dir, f"*{file_suffix}")
@@ -216,6 +226,14 @@ def load_csv_files(file_suffix: str, data_dir: str = "data", verbose: bool = Tru
             if verbose:
                 print(f"  [!] Warning synchronizing sector master: {sync_err}")
             conn.rollback()
+
+        # Prune legacy non-Nifty-500 stocks from database
+        try:
+            from engine.utils.nifty_seeder import prune_database_non_nifty500
+            prune_database_non_nifty500(db_path=db_path, verbose=verbose)
+        except Exception as prune_err:
+            if verbose:
+                print(f"  [!] Warning pruning non-Nifty-500 stocks: {prune_err}")
 
         cursor.close()
         conn.close()
